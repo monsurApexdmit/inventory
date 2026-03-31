@@ -1,0 +1,92 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║              ✅ DOCKER SETUP READY - LARAVEL 12 PROJECT                   ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📍 Location: /home/monsur/Documents/Go/
+
+🚀 TO GET STARTED:
+
+1. Run this command:
+   $ bash setup.sh
+
+2. Wait for completion (~10 minutes)
+
+3. Access your app:
+   http://localhost:8005
+
+That's it! ✨
+
+════════════════════════════════════════════════════════════════════════════
+
+📂 FILES CREATED:
+
+✅ Dockerfile              - PHP 8.2-FPM container
+✅ docker-compose.yml      - 4 services (PHP, MySQL, Nginx, Redis)
+✅ nginx.conf              - Web server configuration
+✅ .dockerignore            - Files to ignore in Docker
+✅ setup.sh                - Automated setup script
+✅ README.md               - Full documentation
+
+════════════════════════════════════════════════════════════════════════════
+
+🐳 WHAT WILL BE INSTALLED:
+
+Services:
+  • PHP 8.2-FPM
+  • MySQL 8.0
+  • Nginx (Alpine)
+  • Redis 7
+
+Laravel:
+  • Fresh Laravel 12 project
+  • Database configured
+  • All dependencies installed
+  • Ready to develop
+
+════════════════════════════════════════════════════════════════════════════
+
+⚡ QUICK COMMANDS:
+
+Setup & Start:
+$ bash setup.sh                    # Automated setup
+$ docker-compose up -d             # Manual start
+$ docker-compose down              # Stop services
+
+Development:
+$ docker-compose exec app bash     # Enter container
+$ docker-compose logs -f app       # View logs
+$ docker-compose ps                # Check status
+
+════════════════════════════════════════════════════════════════════════════
+
+📊 PROJECT DETAILS:
+
+Project Name:     inventory-laravel
+Location:         /home/monsur/Documents/Go/inventory-laravel/
+Framework:        Laravel 12
+PHP Version:      8.2
+Database:         MySQL 8.0
+Web Server:       Nginx
+Cache:            Redis 7
+
+Database Login:
+  Host:     localhost:3306
+  User:     laravel
+  Password: laravel_password
+  Database: laravel
+
+API Access:
+  http://localhost:8005
+
+════════════════════════════════════════════════════════════════════════════
+
+✨ READY TO START?
+
+$ cd /home/monsur/Documents/Go
+$ bash setup.sh
+
+Then visit: http://localhost:8005
+
+════════════════════════════════════════════════════════════════════════════

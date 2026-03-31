@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+yarn-error.log
+.DS_Store
+*.swp
+*.swo
+*~
+.git
+.gitignore
+.env.local
+.env.*.local
+.idea
+.vscode
+vendor/
+storage/logs/*
+bootstrap/cache/*
