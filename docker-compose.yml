@@ -18,6 +18,7 @@ services:
       - DB_PASSWORD=admin123
       - REDIS_HOST=central_redis
       - REDIS_PORT=6379
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -32,6 +33,7 @@ services:
       - app
     networks:
       - laravel
+    restart: unless-stopped
 
 networks:
   laravel:

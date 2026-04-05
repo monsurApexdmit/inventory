@@ -16,7 +16,7 @@ return [
     */
 
     'defaults' => [
-        'guard' => env('AUTH_GUARD', 'web'),
+        'guard'     => env('AUTH_GUARD', 'api'),
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
@@ -39,7 +39,19 @@ return [
 
     'guards' => [
         'web' => [
-            'driver' => 'session',
+            'driver'   => 'session',
+            'provider' => 'users',
+        ],
+
+        // SaaS guard — used by tymon/jwt-auth for all protected API routes
+        'api' => [
+            'driver'   => 'jwt',
+            'provider' => 'saas_users',
+        ],
+
+        // Legacy guard — simple token-based, used for /login /logout
+        'legacy' => [
+            'driver'   => 'jwt',
             'provider' => 'users',
         ],
     ],
@@ -64,13 +76,13 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', User::class),
+            'model'  => App\Models\User::class,
         ],
 
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
+        'saas_users' => [
+            'driver' => 'eloquent',
+            'model'  => App\Models\SaasUser::class,
+        ],
     ],
 
     /*
