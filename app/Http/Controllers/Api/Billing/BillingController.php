@@ -28,8 +28,9 @@ class BillingController extends Controller
     public function subscription(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
+        $subscription = $this->billingService->getSubscription($companyId);
 
-        return $this->success($this->billingService->getSubscription($companyId));
+        return $this->success($subscription ? $subscription->toArray() : null);
     }
 
     public function payments(Request $request): JsonResponse
@@ -43,31 +44,31 @@ class BillingController extends Controller
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
         $validated = $request->validated();
-        $dto = $this->billingService->renew(
+        $subscription = $this->billingService->renew(
             $companyId,
             $validated['subscriptionId'],
             $validated['autoRenew'] ?? null
         );
 
-        return $this->success($dto->toArray());
+        return $this->success($subscription ? $subscription->toArray() : null);
     }
 
     public function cancel(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
         $subscriptionId = (int) $request->input('subscriptionId');
-        $dto = $this->billingService->cancel($companyId, $subscriptionId);
+        $subscription = $this->billingService->cancel($companyId, $subscriptionId);
 
-        return $this->success($dto->toArray());
+        return $this->success($subscription ? $subscription->toArray() : null);
     }
 
     public function upgrade(UpgradeSubscriptionRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
         $validated = $request->validated();
-        $dto = $this->billingService->upgrade($companyId, $validated['planId']);
+        $subscription = $this->billingService->upgrade($companyId, $validated['planId']);
 
-        return $this->success($dto->toArray());
+        return $this->success($subscription ? $subscription->toArray() : null);
     }
 
     public function createSubscription(CreateSubscriptionRequest $request): JsonResponse

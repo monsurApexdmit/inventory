@@ -62,8 +62,18 @@ class BillingService
 
     public function getPayments(int $companyId): array
     {
-        $payments = $this->paymentRepository->findByCompanyId($companyId);
-        return array_map(fn ($payment) => $this->paymentMapper->toDTO($payment), $payments);
+        $paymentsPaginated = $this->paymentRepository->findByCompanyId($companyId);
+
+        $payments = $paymentsPaginated->getCollection()->map(
+            fn ($payment) => $this->paymentMapper->toDTO($payment)->toArray()
+        )->toArray();
+
+        return [
+            'payments' => $payments,
+            'total' => $paymentsPaginated->total(),
+            'page' => $paymentsPaginated->currentPage(),
+            'limit' => $paymentsPaginated->perPage(),
+        ];
     }
 
     public function renew(int $companyId, int $subscriptionId, ?bool $autoRenew = null): ?SubscriptionDTO
@@ -147,7 +157,23 @@ class BillingService
         $contact = $this->billingContactRepository->findByCompanyId($companyId);
 
         if (!$contact) {
-            throw new HttpException(404, 'Billing contact not found');
+            // Return default empty contact DTO for new companies
+            return new BillingContactDTO(
+                id: 0,
+                companyId: $companyId,
+                email: '',
+                phone: null,
+                address: null,
+                city: null,
+                state: null,
+                zipCode: null,
+                country: null,
+                taxId: null,
+                taxIdType: null,
+                isDefault: false,
+                createdAt: now()->toIso8601String(),
+                updatedAt: now()->toIso8601String(),
+            );
         }
 
         return $this->billingContactMapper->toDTO($contact);

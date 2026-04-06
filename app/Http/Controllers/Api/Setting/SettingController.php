@@ -33,6 +33,98 @@ class SettingController extends Controller
         return $this->success($this->settingService->updateSection($companyId, $section, $data));
     }
 
+    // Specific section endpoints
+    public function updateGeneral(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'general', $data);
+        return $this->success($data, 'General settings updated successfully');
+    }
+
+    public function updateTax(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'tax', $data);
+        return $this->success($data, 'Tax settings updated successfully');
+    }
+
+    public function updateShipping(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'shipping', $data);
+        return $this->success($data, 'Shipping settings updated successfully');
+    }
+
+    public function updatePayment(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'payment', $data);
+        return $this->success($data, 'Payment settings updated successfully');
+    }
+
+    public function updateBusiness(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'business', $data);
+        return $this->success($data, 'Business settings updated successfully');
+    }
+
+    public function updateRegional(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'regional', $data);
+        return $this->success($data, 'Regional settings updated successfully');
+    }
+
+    public function updateNotifications(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'notifications', $data);
+        return $this->success($data, 'Notification settings updated successfully');
+    }
+
+    public function updateStoreHours(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->all();
+        $this->settingService->updateSection($companyId, 'store-hours', $data);
+        return $this->success($data, 'Store hours updated successfully');
+    }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return $this->error('Unauthorized', 401);
+        }
+
+        $request->validate([
+            'currentPassword' => 'required|string',
+            'newPassword' => 'required|string|min:8',
+            'confirmPassword' => 'required|string|same:newPassword',
+        ]);
+
+        // Verify current password
+        if (!\Hash::check($request->input('currentPassword'), $user->password)) {
+            return $this->error('Current password is incorrect', 422);
+        }
+
+        // Update password
+        $user->update([
+            'password' => \Hash::make($request->input('newPassword')),
+        ]);
+
+        return $this->success(['message' => 'Password changed successfully']);
+    }
+
     public function uploadLogo(UploadImageRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');

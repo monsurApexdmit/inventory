@@ -19,11 +19,32 @@ class TeamService
     {
         // Get subscription to check max users
         $subscription = $this->subscriptionRepository->findByCompanyId($companyId);
+        $maxUsers = $subscription?->plan?->max_users ?? 10;
+
+        // Get all active users in the company
+        $users = \App\Models\SaasUser::where('company_id', $companyId)
+            ->where('status', 'active')
+            ->get()
+            ->map(fn($user) => [
+                'id' => $user->id,
+                'companyId' => $user->company_id,
+                'email' => $user->email,
+                'fullName' => $user->full_name,
+                'role' => $user->role,
+                'roleId' => $user->role_id,
+                'status' => $user->status,
+                'joinedDate' => $user->joined_date?->toIso8601String(),
+                'lastLogin' => $user->last_login?->toIso8601String(),
+                'avatar' => $user->avatar,
+            ])
+            ->all();
 
         return [
+            'users' => $users,
             'companyId' => $companyId,
-            'maxUsers' => $subscription?->plan?->max_users ?? 10,
-            'activeUsers' => 0, // Will be populated by controller if needed
+            'maxUsers' => $maxUsers,
+            'totalUsers' => count($users),
+            'canAddMore' => count($users) < $maxUsers,
         ];
     }
 

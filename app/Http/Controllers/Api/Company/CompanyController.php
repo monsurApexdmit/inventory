@@ -45,16 +45,16 @@ class CompanyController extends Controller
     public function settings(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->companyService->getSettings($companyId);
+        $settings = $this->companyService->getSettings($companyId);
 
-        return $this->success($dto->toArray());
+        return $this->success($settings);
     }
 
     public function upsertSettings(UpdateCompanySettingsRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->companyService->upsertSettings($companyId, $request->validated());
+        $settings = $this->companyService->upsertSettings($companyId, $request->validated());
 
-        return $this->success($dto->toArray());
+        return $this->success($settings);
     }
 }

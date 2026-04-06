@@ -179,9 +179,19 @@ Route::prefix('locations')->middleware(JwtAuthMiddleware::class)->group(function
 
 Route::prefix('settings')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',                      [SettingController::class, 'index']);
-    Route::put('/{section}',             [SettingController::class, 'updateSection']);
+    Route::put('/general',               [SettingController::class, 'updateGeneral']);
+    Route::patch('/general',             [SettingController::class, 'updateGeneral']);
+    Route::patch('/tax',                 [SettingController::class, 'updateTax']);
+    Route::patch('/shipping',            [SettingController::class, 'updateShipping']);
+    Route::patch('/payment',             [SettingController::class, 'updatePayment']);
+    Route::patch('/business',            [SettingController::class, 'updateBusiness']);
+    Route::patch('/regional',            [SettingController::class, 'updateRegional']);
+    Route::patch('/notifications',       [SettingController::class, 'updateNotifications']);
+    Route::patch('/store-hours',         [SettingController::class, 'updateStoreHours']);
+    Route::post('/change-password',      [SettingController::class, 'changePassword']);
     Route::post('/upload-logo',          [SettingController::class, 'uploadLogo']);
     Route::post('/upload-banner',        [SettingController::class, 'uploadBanner']);
+    Route::put('/{section}',             [SettingController::class, 'updateSection']);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

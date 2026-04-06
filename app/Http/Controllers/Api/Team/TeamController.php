@@ -29,10 +29,10 @@ class TeamController extends Controller
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
         $userId = (int) $request->attributes->get('auth_user_id');
-        $dto = $this->teamService->invite($companyId, $userId, $request->validated());
+        $invitation = $this->teamService->invite($companyId, $userId, $request->validated());
 
         return $this->success(
-            $dto->toArray(),
+            $invitation,
             'Invitation sent successfully',
             201
         );
@@ -52,9 +52,9 @@ class TeamController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
         $actorId = (int) $request->attributes->get('auth_user_id');
         $validated = $request->validated();
-        $dto = $this->teamService->updateRole($userId, $companyId, $actorId, $validated['role']);
+        $result = $this->teamService->updateRole($userId, $companyId, $actorId, $validated['role']);
 
-        return $this->success($dto->toArray());
+        return $this->success($result);
     }
 
     public function remove(Request $request, int $userId): JsonResponse
