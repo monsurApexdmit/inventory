@@ -20,4 +20,12 @@ class SubscriptionPlanRepository implements ISubscriptionPlanRepository
     {
         return $this->model->find($id);
     }
+
+    public function update(int $id, array $data): SubscriptionPlan
+    {
+        $plan = $this->model->findOrFail($id);
+        $plan->update($data);
+
+        return $plan->fresh();
+    }
 }

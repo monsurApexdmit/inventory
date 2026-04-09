@@ -22,7 +22,14 @@ class BillingController extends Controller
 
     public function plans(): JsonResponse
     {
-        return $this->success($this->billingService->getPlans());
+        return $this->success(['plans' => $this->billingService->getPlans()]);
+    }
+
+    public function updatePlan(Request $request, int $id): JsonResponse
+    {
+        $plan = $this->billingService->updatePlan($id, $request->all());
+
+        return $this->success($plan, 'Plan updated successfully');
     }
 
     public function subscription(Request $request): JsonResponse

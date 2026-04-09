@@ -13,7 +13,7 @@ class SubscriptionRepository implements ISubscriptionRepository
 
     public function findByCompanyId(int $companyId): ?Subscription
     {
-        return $this->model->where('company_id', $companyId)->first();
+        return $this->model->with('plan')->where('company_id', $companyId)->latest()->first();
     }
 
     public function create(array $data): Subscription
@@ -26,6 +26,6 @@ class SubscriptionRepository implements ISubscriptionRepository
         $record = $this->model->findOrFail($id);
         $record->update($data);
 
-        return $record;
+        return $this->model->with('plan')->findOrFail($id);
     }
 }

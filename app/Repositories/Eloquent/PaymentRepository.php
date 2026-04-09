@@ -17,4 +17,9 @@ class PaymentRepository implements IPaymentRepository
             ->where('company_id', $companyId)
             ->paginate($perPage);
     }
+
+    public function create(array $data): Payment
+    {
+        return $this->model->create($data);
+    }
 }

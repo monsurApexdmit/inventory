@@ -8,15 +8,26 @@ use App\Http\Requests\Product\UpdateProductRequest;
 use App\Http\Requests\Product\UpdateProductStatusRequest;
 use App\Http\Traits\ApiResponse;
 use App\Services\Product\ProductService;
+use App\Services\Barcode\BarcodeService;
+use App\Services\Barcode\BarcodeServicePOS;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ProductController extends Controller
 {
     use ApiResponse;
 
+    private ?BarcodeService $barcodeService = null;
+
     public function __construct(private readonly ProductService $productService)
     {
+        // Lazy-load BarcodeService if available
+        try {
+            $this->barcodeService = app(BarcodeService::class);
+        } catch (\Exception $e) {
+            $this->barcodeService = null;
+        }
     }
 
     public function index(Request $request): JsonResponse
@@ -142,6 +153,223 @@ class ProductController extends Controller
             return $this->success($stats, 'Statistics retrieved successfully');
         } catch (\Exception $e) {
             \Log::error('Product stats failed', ['message' => $e->getMessage()]);
+            return $this->error('Failed to retrieve statistics', 500);
+        }
+    }
+
+    /**
+     * Find product by barcode
+     * POST /api/v1/products/barcode/search
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function findByBarcode(Request $request): JsonResponse
+    {
+        if (!$this->barcodeService) {
+            return $this->error('Barcode service is not available', 503);
+        }
+
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $barcode = trim($request->input('barcode', ''));
+
+        if (empty($barcode)) {
+            return $this->error('Barcode is required', 400);
+        }
+
+        try {
+            $product = $this->barcodeService->findProductByBarcode($barcode, $companyId);
+
+            if (!$product) {
+                return $this->error('Product not found for barcode: ' . $barcode, 404);
+            }
+
+            return $this->success(
+                $this->productService->get($product->id, $companyId)->toArray(),
+                'Product found'
+            );
+        } catch (\Exception $e) {
+            \Log::error('Barcode search failed', [
+                'barcode' => $barcode,
+                'message' => $e->getMessage()
+            ]);
+            return $this->error('Failed to search by barcode', 500);
+        }
+    }
+
+    /**
+     * Regenerate barcode for a product
+     * POST /api/v1/products/{id}/barcode/regenerate
+     *
+     * @param Request $request
+     * @param int $id Product ID
+     * @return JsonResponse
+     */
+    public function regenerateBarcode(Request $request, int $id): JsonResponse
+    {
+        if (!$this->barcodeService) {
+            return $this->error('Barcode service is not available', 503);
+        }
+
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        try {
+            $product = $this->productService->getModel($id, $companyId);
+
+            if (!$product) {
+                return $this->error('Product not found', 404);
+            }
+
+            $barcodeNumber = $this->barcodeService->regenerateProductBarcode($product);
+
+            return $this->success(
+                [
+                    'barcode_number' => $barcodeNumber,
+                    'barcode_image_path' => $product->barcode_image_path,
+                ],
+                'Barcode regenerated successfully'
+            );
+        } catch (\Exception $e) {
+            \Log::error('Barcode regeneration failed', [
+                'product_id' => $id,
+                'message' => $e->getMessage()
+            ]);
+            return $this->error('Failed to regenerate barcode', 500);
+        }
+    }
+
+    /**
+     * Get product barcode details
+     * GET /api/v1/products/{id}/barcode
+     *
+     * @param Request $request
+     * @param int $id Product ID
+     * @return JsonResponse
+     */
+    public function getBarcode(Request $request, int $id): JsonResponse
+    {
+        if (!$this->barcodeService) {
+            return $this->error('Barcode service is not available', 503);
+        }
+
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        try {
+            $product = $this->productService->getModel($id, $companyId);
+
+            if (!$product) {
+                return $this->error('Product not found', 404);
+            }
+
+            $barcodeData = $this->barcodeService->getBarcodeData($product);
+
+            return $this->success($barcodeData, 'Barcode data retrieved');
+        } catch (\Exception $e) {
+            \Log::error('Barcode retrieval failed', [
+                'product_id' => $id,
+                'message' => $e->getMessage()
+            ]);
+            return $this->error('Failed to retrieve barcode', 500);
+        }
+    }
+
+    /**
+     * Bulk generate barcodes for products without barcodes
+     * POST /api/v1/products/barcode/bulk-generate
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function bulkGenerateBarcodes(Request $request): JsonResponse
+    {
+        if (!$this->barcodeService) {
+            return $this->error('Barcode service is not available', 503);
+        }
+
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $productIds = $request->input('product_ids', []);
+
+        if (empty($productIds) || !is_array($productIds)) {
+            return $this->error('product_ids array is required', 400);
+        }
+
+        try {
+            $result = $this->barcodeService->bulkGenerateBarcodes($productIds);
+
+            return $this->success($result, 'Barcode generation completed');
+        } catch (\Exception $e) {
+            \Log::error('Bulk barcode generation failed', [
+                'message' => $e->getMessage()
+            ]);
+            return $this->error('Failed to generate barcodes', 500);
+        }
+    }
+
+    /**
+     * POS: Find product or variant by barcode code
+     * Used for barcode scanning in POS system
+     */
+    public function findByBarcodeCode(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $barcodeCode = $request->input('barcode_code');
+
+        if (!$barcodeCode) {
+            return $this->error('Barcode code is required', 400);
+        }
+
+        try {
+            $barcodeService = new BarcodeServicePOS();
+            $result = $barcodeService->findByBarcode($barcodeCode, $companyId);
+
+            if (!$result) {
+                return $this->error('Barcode not found', 404);
+            }
+
+            return $this->success($result, 'Barcode found');
+        } catch (\Exception $e) {
+            \Log::error('Barcode search failed', [
+                'barcode_code' => $barcodeCode,
+                'error' => $e->getMessage()
+            ]);
+            return $this->error('Failed to search barcode', 500);
+        }
+    }
+
+    /**
+     * POS: Auto-generate missing barcodes for products and variants
+     * Generates barcodes for all products/variants without barcode_code
+     */
+    public function generateMissingBarcodes(Request $request): JsonResponse
+    {
+        try {
+            $barcodeService = new BarcodeServicePOS();
+            $result = $barcodeService->generateMissingBarcodes();
+
+            return $this->success($result, 'Barcodes generated successfully');
+        } catch (\Exception $e) {
+            \Log::error('Barcode generation failed', [
+                'error' => $e->getMessage()
+            ]);
+            return $this->error('Failed to generate barcodes', 500);
+        }
+    }
+
+    /**
+     * POS: Get barcode coverage statistics
+     * Shows how many products/variants have barcodes
+     */
+    public function getBarcodeStatistics(Request $request): JsonResponse
+    {
+        try {
+            $barcodeService = new BarcodeServicePOS();
+            $stats = $barcodeService->getStatistics();
+
+            return $this->success($stats, 'Barcode statistics retrieved');
+        } catch (\Exception $e) {
+            \Log::error('Barcode statistics retrieval failed', [
+                'error' => $e->getMessage()
+            ]);
             return $this->error('Failed to retrieve statistics', 500);
         }
     }

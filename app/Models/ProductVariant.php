@@ -19,6 +19,8 @@ class ProductVariant extends Model
         'price',
         'sale_price',
         'cost_price',
+        'profit_margin',
+        'margin_type',
         'stock',
         'sku',
         'barcode',
@@ -28,6 +30,7 @@ class ProductVariant extends Model
         'price' => 'float',
         'sale_price' => 'float',
         'cost_price' => 'float',
+        'profit_margin' => 'float',
         'stock' => 'integer',
     ];
 

@@ -48,6 +48,11 @@ class Company extends Model
         return $this->hasOne(Subscription::class, 'company_id');
     }
 
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class, 'company_id');
+    }
+
     public function staffRoles(): HasMany
     {
         return $this->hasMany(StaffRole::class, 'company_id');

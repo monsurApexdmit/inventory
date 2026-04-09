@@ -94,6 +94,7 @@ Route::prefix('auth/company')->middleware(JwtAuthMiddleware::class)->group(funct
 
 Route::prefix('billing')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/plans',                [BillingController::class, 'plans']);
+    Route::put('/plans/{id}',           [BillingController::class, 'updatePlan']);
     Route::get('/subscription',         [BillingController::class, 'subscription']);
     Route::get('/payments',             [BillingController::class, 'payments']);
     Route::post('/renew',               [BillingController::class, 'renew']);
@@ -202,6 +203,18 @@ Route::prefix('products')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::get('/',                  [ProductController::class, 'index']);
     Route::post('/',                 [ProductController::class, 'store']);
     Route::get('/stats',             [ProductController::class, 'stats']);
+
+    // Barcode endpoints (Display)
+    Route::post('/barcode/search',                [ProductController::class, 'findByBarcode']);
+    Route::post('/barcode/bulk-generate',        [ProductController::class, 'bulkGenerateBarcodes']);
+    Route::get('/{id}/barcode',                  [ProductController::class, 'getBarcode']);
+    Route::post('/{id}/barcode/regenerate',      [ProductController::class, 'regenerateBarcode']);
+
+    // Barcode endpoints (POS Scanning)
+    Route::post('/barcode/find-by-code',         [ProductController::class, 'findByBarcodeCode']);
+    Route::post('/barcode/generate-missing',     [ProductController::class, 'generateMissingBarcodes']);
+    Route::get('/barcode/statistics',            [ProductController::class, 'getBarcodeStatistics']);
+
     Route::get('/{id}',              [ProductController::class, 'show']);
     Route::put('/{id}',              [ProductController::class, 'update']);
     Route::patch('/{id}/status',     [ProductController::class, 'updateStatus']);

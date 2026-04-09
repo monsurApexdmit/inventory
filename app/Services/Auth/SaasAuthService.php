@@ -285,11 +285,38 @@ class SaasAuthService
 
     public function me(int $userId): array
     {
-        $user    = $this->saasUserRepository->findByIdWithCompany($userId);
+        $user = $this->saasUserRepository->findByIdWithCompany($userId);
+
+        if (!$user) {
+            throw new HttpException(404, 'User not found.');
+        }
+
         $company = $user->company;
+
+        if (!$company) {
+            throw new HttpException(404, 'Company not found.');
+        }
+
+        // Get subscription with plan
+        $subscription = $company->subscriptions()->latest()->first();
+        $plan = $subscription?->plan;
 
         $trialEnd           = now()->addDays(10);
         $trialDaysRemaining = max(0, (int) now()->diffInDays($trialEnd));
+
+        // Get plan features and limits
+        $planFeatures = [];
+        $maxUsers = 10;
+        $maxProducts = 1000;
+        $maxBranches = 1;
+
+        if ($plan) {
+            $features = $plan->features;
+            $planFeatures = is_string($features) ? (json_decode($features, true) ?? []) : ($features ?? []);
+            $maxUsers = (int) ($plan->max_users ?? 10);
+            $maxProducts = (int) ($plan->max_products ?? 1000);
+            $maxBranches = (int) ($plan->max_branches ?? 1);
+        }
 
         return [
             'user' => [
@@ -309,7 +336,13 @@ class SaasAuthService
                 'createdAt'           => $company->created_at->toIso8601String(),
                 'updatedAt'           => $company->updated_at->toIso8601String(),
                 'trialDaysRemaining'  => $trialDaysRemaining,
-                'subscriptionEndDate' => $trialEnd->toIso8601String(),
+                'subscriptionEndDate' => $subscription?->current_period_end?->toIso8601String() ?? $trialEnd->toIso8601String(),
+                'planId'              => $plan?->id,
+                'planName'            => $plan?->name,
+                'planFeatures'        => $planFeatures,
+                'maxUsers'            => $maxUsers,
+                'maxProducts'         => $maxProducts,
+                'maxBranches'         => $maxBranches,
             ],
         ];
     }

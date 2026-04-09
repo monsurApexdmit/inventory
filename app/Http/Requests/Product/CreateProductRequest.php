@@ -22,6 +22,8 @@ class CreateProductRequest extends FormRequest
             'locationId' => 'location_id',
             'salePrice' => 'sale_price',
             'costPrice' => 'cost_price',
+            'profitMargin' => 'profit_margin',
+            'marginType' => 'margin_type',
             'receiptNumber' => 'receipt_number',
         ];
 
@@ -73,6 +75,8 @@ class CreateProductRequest extends FormRequest
             'price' => 'nullable|numeric|min:0',
             'sale_price' => 'nullable|numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',
+            'profit_margin' => 'nullable|numeric|min:0',
+            'margin_type' => 'nullable|in:percentage,flat',
             'stock' => 'nullable|integer|min:0',
             'sku' => 'nullable|string|max:100',
             'barcode' => 'nullable|string|max:100',
@@ -85,6 +89,8 @@ class CreateProductRequest extends FormRequest
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.sale_price' => 'nullable|numeric|min:0',
             'variants.*.cost_price' => 'nullable|numeric|min:0',
+            'variants.*.profit_margin' => 'nullable|numeric|min:0',
+            'variants.*.margin_type' => 'nullable|in:percentage,flat',
             'variants.*.stock' => 'nullable|integer|min:0',
             'variants.*.sku' => 'nullable|string|max:100',
             'variants.*.barcode' => 'nullable|string|max:100',

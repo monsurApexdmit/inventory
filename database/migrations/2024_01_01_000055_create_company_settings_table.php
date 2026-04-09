@@ -14,7 +14,7 @@ return new class extends Migration
                 ->unique()
                 ->constrained('companies')
                 ->onDelete('cascade');
-            $table->string('company_name');
+            $table->string('company_name')->nullable();
             $table->string('tax_id')->nullable();
             $table->string('tax_id_type')->nullable();
             $table->float('tax_rate')->default(0);

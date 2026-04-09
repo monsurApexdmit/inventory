@@ -13,6 +13,8 @@ use App\Models\ProductVariant;
 use App\Models\User;
 use App\Models\VariantInventory;
 use App\Repositories\Contracts\IProductRepository;
+use App\Services\Barcode\BarcodeService;
+use App\Services\Barcode\BarcodeServicePOS;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -21,10 +23,21 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class ProductService
 {
     private readonly ProductMapper $mapper;
+    private ?BarcodeService $barcodeService = null;
+    private BarcodeServicePOS $barcodeServicePOS;
 
     public function __construct(private readonly IProductRepository $repository)
     {
         $this->mapper = new ProductMapper();
+        // Lazy-load BarcodeService if available
+        try {
+            $this->barcodeService = app(BarcodeService::class);
+        } catch (\Exception $e) {
+            // BarcodeService not available, that's okay
+            $this->barcodeService = null;
+        }
+        // Initialize BarcodeServicePOS for POS barcode generation
+        $this->barcodeServicePOS = new BarcodeServicePOS();
     }
 
     public function list(int $companyId, array $filters): array
@@ -51,6 +64,14 @@ class ProductService
         return $this->mapper->toDTO($product);
     }
 
+    /**
+     * Get product model directly (for internal service use)
+     */
+    public function getModel(int $id, int $companyId): ?Product
+    {
+        return $this->repository->findByIdAndCompany($id, $companyId);
+    }
+
     public function create(int $companyId, array $data): ProductDTO
     {
         // Validate foreign keys
@@ -73,6 +94,16 @@ class ProductService
             $product = Product::create($dbData);
             $productId = $product->id;
 
+            // Auto-generate barcode if not provided and service is available
+            if (!$product->barcode && $this->barcodeService) {
+                try {
+                    $this->barcodeService->createProductBarcode($product);
+                } catch (\Exception $e) {
+                    Log::warning('Barcode generation failed', ['error' => $e->getMessage()]);
+                    // Continue without barcode if generation fails
+                }
+            }
+
             if (!empty($variants)) {
                 // Use only the product's specified location, not all company locations
                 $locations = Location::where('company_id', $companyId)
@@ -83,6 +114,20 @@ class ProductService
                     $variantDbData = $this->mapVariantInputToDb($variantData);
                     $variantDbData['product_id'] = $product->id;
                     $variant = ProductVariant::create($variantDbData);
+
+                    // Auto-generate barcode if not provided
+                    if (!$variant->barcode_code) {
+                        try {
+                            $barcodeCode = $this->barcodeServicePOS->generateBarcodeCode('VAR');
+                            $variant->update([
+                                'barcode_code' => $barcodeCode,
+                                'barcode_format' => 'CODE128',
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::warning('Variant barcode generation failed', ['error' => $e->getMessage()]);
+                            // Continue without barcode if generation fails
+                        }
+                    }
 
                     // Create inventory record for the product's location with full stock
                     $variantStock = $variantData['stock'] ?? 0;
@@ -162,6 +207,20 @@ class ProductService
                     $variantDbData = $this->mapVariantInputToDb($variantData);
                     $variantDbData['product_id'] = $product->id;
                     $variant = ProductVariant::create($variantDbData);
+
+                    // Auto-generate barcode if not provided
+                    if (!$variant->barcode_code) {
+                        try {
+                            $barcodeCode = $this->barcodeServicePOS->generateBarcodeCode('VAR');
+                            $variant->update([
+                                'barcode_code' => $barcodeCode,
+                                'barcode_format' => 'CODE128',
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::warning('Variant barcode generation failed', ['error' => $e->getMessage()]);
+                            // Continue without barcode if generation fails
+                        }
+                    }
 
                     // Create inventory record for the product's location with full stock
                     $variantStock = $variantData['stock'] ?? 0;
@@ -319,6 +378,20 @@ class ProductService
             $dbData['cost_price'] = $data['cost_price'];
         }
 
+        // Accept both camelCase and snake_case for profit_margin
+        if (isset($data['profitMargin'])) {
+            $dbData['profit_margin'] = $data['profitMargin'];
+        } elseif (isset($data['profit_margin'])) {
+            $dbData['profit_margin'] = $data['profit_margin'];
+        }
+
+        // Accept both camelCase and snake_case for margin_type
+        if (isset($data['marginType'])) {
+            $dbData['margin_type'] = $data['marginType'];
+        } elseif (isset($data['margin_type'])) {
+            $dbData['margin_type'] = $data['margin_type'];
+        }
+
         if (isset($data['stock'])) {
             $dbData['stock'] = $data['stock'];
         }
@@ -372,6 +445,20 @@ class ProductService
             $dbData['cost_price'] = $data['costPrice'];
         } elseif (isset($data['cost_price'])) {
             $dbData['cost_price'] = $data['cost_price'];
+        }
+
+        // Accept both camelCase and snake_case for profit_margin
+        if (isset($data['profitMargin'])) {
+            $dbData['profit_margin'] = $data['profitMargin'];
+        } elseif (isset($data['profit_margin'])) {
+            $dbData['profit_margin'] = $data['profit_margin'];
+        }
+
+        // Accept both camelCase and snake_case for margin_type
+        if (isset($data['marginType'])) {
+            $dbData['margin_type'] = $data['marginType'];
+        } elseif (isset($data['margin_type'])) {
+            $dbData['margin_type'] = $data['margin_type'];
         }
 
         if (isset($data['stock'])) {

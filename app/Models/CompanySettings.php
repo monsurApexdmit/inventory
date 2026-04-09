@@ -21,6 +21,14 @@ class CompanySettings extends Model
         'currency',
         'timezone',
         'language',
+        'currency_symbol_position',
+        'currency_decimal_separator',
+        'currency_thousands_separator',
+        'currency_decimal_places',
+        'weight_unit',
+        'dimension_unit',
+        'date_format',
+        'time_format',
     ];
 
     public function company(): BelongsTo

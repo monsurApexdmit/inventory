@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Setting;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Setting\UpdateSettingRequest;
+use App\Http\Requests\Setting\UpdateRegionalSettingRequest;
 use App\Http\Requests\Setting\UploadImageRequest;
 use App\Http\Traits\ApiResponse;
 use App\Services\Setting\SettingService;
@@ -74,10 +75,10 @@ class SettingController extends Controller
         return $this->success($data, 'Business settings updated successfully');
     }
 
-    public function updateRegional(Request $request): JsonResponse
+    public function updateRegional(UpdateRegionalSettingRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
+        $data = $request->validated();
         $this->settingService->updateSection($companyId, 'regional', $data);
         return $this->success($data, 'Regional settings updated successfully');
     }
