@@ -19,6 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \App\Http\Middleware\ParseMultipartPutRequest::class,
         ]);
+        $middleware->alias([
+            'customer.auth' => \App\Http\Middleware\CustomerAuthMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
 

@@ -28,7 +28,7 @@ class ShippingAddressRepository implements IShippingAddressRepository
             $query->where('is_default', true);
         }
 
-        return $query->get()->map(fn($a) => $this->formatAddress($a))->toArray();
+        return $query->get()->all();
     }
 
     public function findByIdAndCompany(int $id, int $companyId): ?ShippingAddress

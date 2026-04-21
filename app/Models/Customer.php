@@ -17,6 +17,7 @@ class Customer extends Model
         'user_id',
         'name',
         'email',
+        'password',
         'phone',
         'address',
         'city',
@@ -28,6 +29,8 @@ class Customer extends Model
         'notes',
         'store_credit',
     ];
+
+    protected $hidden = ['password'];
 
     protected $casts = [
         'store_credit' => 'float',

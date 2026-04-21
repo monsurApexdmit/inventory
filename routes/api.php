@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\Customer\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerReturn\CustomerReturnController;
 use App\Http\Controllers\Api\V1\Product\ProductController;
 use App\Http\Controllers\Api\V1\Shipping\ShippingAddressController;
+use App\Http\Controllers\Api\V1\ShippingMethodController;
 use App\Http\Controllers\Api\V1\Shipping\OrderShipmentController;
 use App\Http\Controllers\Api\V1\StockTransfer\StockTransferController;
 use App\Http\Controllers\Api\V1\Vendor\VendorController;
@@ -24,8 +25,44 @@ use App\Http\Controllers\Api\V1\Salary\SalaryPaymentController;
 use App\Http\Controllers\Api\V1\Coupon\CouponController;
 use App\Http\Controllers\Api\V1\Inventory\InventoryController;
 use App\Http\Controllers\Api\V1\Sell\SellController;
+use App\Http\Controllers\Api\Storefront\CustomerAuthController;
+use App\Http\Controllers\Api\Storefront\StorefrontController;
+use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
+use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
 use App\Http\Middleware\JwtAuthMiddleware;
 use Illuminate\Support\Facades\Route;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public Storefront API — scoped by company_id query param
+// ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('store')->group(function () {
+
+    // Catalog (no auth)
+    Route::get('/products',           [StorefrontController::class, 'products']);
+    Route::get('/products/{id}',      [StorefrontController::class, 'product']);
+    Route::get('/categories',         [StorefrontController::class, 'categories']);
+    Route::get('/coupons/validate',   [StorefrontController::class, 'validateCoupon']);
+    Route::get('/coupons/active',     [StorefrontController::class, 'activeCoupons']);
+    Route::get('/shipping-methods',   [StorefrontController::class, 'shippingMethods']);
+
+    // Customer auth (no auth)
+    Route::post('/customer/register', [CustomerAuthController::class, 'register']);
+    Route::post('/customer/login',    [CustomerAuthController::class, 'login']);
+
+    // Customer protected routes
+    Route::middleware('customer.auth')->group(function () {
+        Route::get('/orders',          [StorefrontOrderController::class, 'index']);
+        Route::post('/orders',         [StorefrontOrderController::class, 'store']);
+        Route::get('/orders/{id}',     [StorefrontOrderController::class, 'show']);
+        Route::get('/profile',         [StorefrontCustomerController::class, 'show']);
+        Route::put('/profile',         [StorefrontCustomerController::class, 'update']);
+        Route::get('/addresses',          [StorefrontCustomerController::class, 'addresses']);
+        Route::post('/addresses',         [StorefrontCustomerController::class, 'addAddress']);
+        Route::put('/addresses/{id}',     [StorefrontCustomerController::class, 'updateAddress']);
+        Route::delete('/addresses/{id}',  [StorefrontCustomerController::class, 'deleteAddress']);
+    });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy Auth
@@ -284,6 +321,14 @@ Route::prefix('customer-returns')->middleware(JwtAuthMiddleware::class)->group(f
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 7: Shipping & Fulfillment
 // ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('shipping-methods')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',              [ShippingMethodController::class, 'index']);
+    Route::post('/',             [ShippingMethodController::class, 'store']);
+    Route::put('/{id}',         [ShippingMethodController::class, 'update']);
+    Route::delete('/{id}',      [ShippingMethodController::class, 'destroy']);
+    Route::patch('/{id}/toggle', [ShippingMethodController::class, 'toggle']);
+});
 
 Route::prefix('shipping-addresses')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',                  [ShippingAddressController::class, 'index']);
