@@ -25,6 +25,18 @@ class OrderShipmentRepository implements IOrderShipmentRepository
             $query->where('status', $filters['status']);
         }
 
+        if (!empty($filters['search'])) {
+            $term = '%' . $filters['search'] . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('tracking_number', 'like', $term)
+                  ->orWhere('carrier', 'like', $term)
+                  ->orWhereHas('sell', fn($sq) =>
+                      $sq->where('invoice_no', 'like', $term)
+                         ->orWhere('customer_name', 'like', $term)
+                  );
+            });
+        }
+
         if (isset($filters['tracking_number'])) {
             $query->where('tracking_number', 'like', '%' . $filters['tracking_number'] . '%');
         }

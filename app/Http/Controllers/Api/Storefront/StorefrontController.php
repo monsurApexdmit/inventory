@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Product;
+use App\Models\PaymentMethod;
 use App\Models\ShippingMethod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -156,6 +157,30 @@ class StorefrontController extends Controller
             ]);
 
         return response()->json(['success' => true, 'data' => $coupons]);
+    }
+
+    // GET /api/store/payment-methods?company_id=11
+    public function paymentMethods(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $methods = PaymentMethod::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn($m) => [
+                'id'          => $m->id,
+                'name'        => $m->name,
+                'description' => $m->description,
+                'icon'        => $m->icon,
+            ]);
+
+        return response()->json(['success' => true, 'data' => $methods]);
     }
 
     // GET /api/store/shipping-methods?company_id=11

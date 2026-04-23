@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\SaasUser;
 use App\Services\Auth\JwtService;
 use Closure;
 use Illuminate\Http\Request;
@@ -52,6 +53,7 @@ class JwtAuthMiddleware
         $request->attributes->set('auth_company_id', $payload->get('company_id'));
         $request->attributes->set('auth_email',      $payload->get('email'));
         $request->attributes->set('auth_token',      $token);
+        $request->setUserResolver(static fn() => SaasUser::find($payload->get('sub')));
 
         return $next($request);
     }

@@ -13,6 +13,7 @@ use App\Models\Sell;
 use App\Models\ShippingAddress;
 use App\Models\VariantInventory;
 use App\Repositories\Contracts\ISellRepository;
+use App\Services\Notification\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -20,8 +21,10 @@ class SellService
 {
     private readonly SellMapper $mapper;
 
-    public function __construct(private readonly ISellRepository $repository)
-    {
+    public function __construct(
+        private readonly ISellRepository $repository,
+        private readonly NotificationService $notificationService,
+    ) {
         $this->mapper = new SellMapper();
     }
 
@@ -198,7 +201,21 @@ class SellService
                     'final_amount' => $sell->amount,
                     'used_at' => now(),
                 ]);
+
+                $this->notificationService->notifyCouponUsed(
+                    $companyId,
+                    $sell->coupon?->code ?? 'unknown',
+                    $sell->invoice_no
+                );
             }
+
+            // Notify new order
+            $this->notificationService->notifyOrderPlaced(
+                $companyId,
+                $sell->invoice_no,
+                $sell->customer_name,
+                $sell->amount
+            );
 
             return $this->mapper->toDTO($sell->fresh(['customer', 'shippingAddress', 'coupon', 'items', 'shipments']));
         });
@@ -241,8 +258,18 @@ class SellService
             throw new HttpException(400, 'Invalid status. Must be one of: Pending, Processing, Delivered');
         }
 
+        $oldStatus = $sell->status;
         $this->repository->update($id, ['status' => $status]);
         $sell = $this->repository->findByIdAndCompany($id, $companyId);
+
+        if ($oldStatus !== $status) {
+            $this->notificationService->notifyOrderStatusChanged(
+                $companyId,
+                $sell->invoice_no,
+                $oldStatus,
+                $status
+            );
+        }
 
         return $this->mapper->toDTO($sell);
     }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Builder;
 
 class Sell extends Model
 {
@@ -95,5 +96,10 @@ class Sell extends Model
     public function shipments(): HasMany
     {
         return $this->hasMany(OrderShipment::class, 'sell_id');
+    }
+
+    public function shippingMethodModel(): BelongsTo
+    {
+        return $this->belongsTo(ShippingMethod::class, 'shipping_method');
     }
 }

@@ -32,6 +32,8 @@ use App\Repositories\Contracts\ISalaryPaymentRepository;
 use App\Repositories\Contracts\IStockTransferRepository;
 use App\Repositories\Contracts\ICouponRepository;
 use App\Repositories\Contracts\ISellRepository;
+use App\Repositories\Contracts\INotificationRepository;
+use App\Repositories\Contracts\ISupportTicketRepository;
 use App\Repositories\Eloquent\AttributeRepository;
 use App\Repositories\Eloquent\BillingContactRepository;
 use App\Repositories\Eloquent\CategoryRepository;
@@ -62,6 +64,8 @@ use App\Repositories\Eloquent\SalaryPaymentRepository;
 use App\Repositories\Eloquent\StockTransferRepository;
 use App\Repositories\Eloquent\CouponRepository;
 use App\Repositories\Eloquent\SellRepository;
+use App\Repositories\Eloquent\NotificationRepository;
+use App\Repositories\Eloquent\SupportTicketRepository;
 use Illuminate\Support\ServiceProvider;
 
 class RepositoryServiceProvider extends ServiceProvider
@@ -119,5 +123,11 @@ class RepositoryServiceProvider extends ServiceProvider
 
         // Phase 11 bindings (Orders/Sells)
         $this->app->bind(ISellRepository::class, SellRepository::class);
+
+        // Phase 12 bindings (Notifications)
+        $this->app->bind(INotificationRepository::class, NotificationRepository::class);
+
+        // Phase 13 bindings (Support Tickets)
+        $this->app->bind(ISupportTicketRepository::class, SupportTicketRepository::class);
     }
 }

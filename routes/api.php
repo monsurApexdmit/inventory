@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\CustomerReturn\CustomerReturnController;
 use App\Http\Controllers\Api\V1\Product\ProductController;
 use App\Http\Controllers\Api\V1\Shipping\ShippingAddressController;
 use App\Http\Controllers\Api\V1\ShippingMethodController;
+use App\Http\Controllers\Api\V1\PaymentMethodController;
 use App\Http\Controllers\Api\V1\Shipping\OrderShipmentController;
 use App\Http\Controllers\Api\V1\StockTransfer\StockTransferController;
 use App\Http\Controllers\Api\V1\Vendor\VendorController;
@@ -25,10 +26,16 @@ use App\Http\Controllers\Api\V1\Salary\SalaryPaymentController;
 use App\Http\Controllers\Api\V1\Coupon\CouponController;
 use App\Http\Controllers\Api\V1\Inventory\InventoryController;
 use App\Http\Controllers\Api\V1\Sell\SellController;
+use App\Http\Controllers\Api\Notification\NotificationController;
+use App\Http\Controllers\Api\Realtime\BroadcastAuthController;
+use App\Http\Controllers\Api\Support\SupportTicketController;
 use App\Http\Controllers\Api\Storefront\CustomerAuthController;
 use App\Http\Controllers\Api\Storefront\StorefrontController;
 use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
+use App\Http\Controllers\Api\Storefront\StorefrontSupportController;
+use App\Http\Controllers\Api\Storefront\WishlistController;
+use App\Http\Controllers\Api\Storefront\WishlistAnalyticsController;
 use App\Http\Middleware\JwtAuthMiddleware;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +52,10 @@ Route::prefix('store')->group(function () {
     Route::get('/coupons/validate',   [StorefrontController::class, 'validateCoupon']);
     Route::get('/coupons/active',     [StorefrontController::class, 'activeCoupons']);
     Route::get('/shipping-methods',   [StorefrontController::class, 'shippingMethods']);
+    Route::get('/payment-methods',    [StorefrontController::class, 'paymentMethods']);
+
+    // Public order tracking (no auth)
+    Route::get('/orders/track',        [StorefrontOrderController::class, 'trackOrder']);
 
     // Customer auth (no auth)
     Route::post('/customer/register', [CustomerAuthController::class, 'register']);
@@ -61,6 +72,21 @@ Route::prefix('store')->group(function () {
         Route::post('/addresses',         [StorefrontCustomerController::class, 'addAddress']);
         Route::put('/addresses/{id}',     [StorefrontCustomerController::class, 'updateAddress']);
         Route::delete('/addresses/{id}',  [StorefrontCustomerController::class, 'deleteAddress']);
+
+        // Wishlist
+        Route::get('/wishlist',                   [WishlistController::class, 'index']);
+        Route::get('/wishlist/ids',               [WishlistController::class, 'ids']);
+        Route::get('/wishlist/check/{productId}', [WishlistController::class, 'check']);
+        Route::post('/wishlist',                  [WishlistController::class, 'store']);
+        Route::delete('/wishlist',                [WishlistController::class, 'clear']);
+        Route::delete('/wishlist/{productId}',    [WishlistController::class, 'destroy']);
+
+        // Support tickets (customer)
+        Route::get('/support/tickets',             [StorefrontSupportController::class, 'index']);
+        Route::post('/support/tickets',            [StorefrontSupportController::class, 'store']);
+        Route::get('/support/tickets/{id}',        [StorefrontSupportController::class, 'show']);
+        Route::post('/support/tickets/{id}/reply', [StorefrontSupportController::class, 'reply']);
+        Route::post('/realtime/auth',              BroadcastAuthController::class);
     });
 });
 
@@ -96,6 +122,8 @@ Route::prefix('auth')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::post('/update-password',  [SaasAuthController::class, 'updatePassword']);
     Route::get('/me',                [SaasAuthController::class, 'me']);
 });
+
+Route::post('/realtime/auth', BroadcastAuthController::class)->middleware(JwtAuthMiddleware::class);
 
 // Public accept invitation endpoint
 Route::post('/auth/accept-invitation', [SaasAuthController::class, 'acceptInvitation']);
@@ -322,6 +350,14 @@ Route::prefix('customer-returns')->middleware(JwtAuthMiddleware::class)->group(f
 // Phase 7: Shipping & Fulfillment
 // ─────────────────────────────────────────────────────────────────────────────
 
+Route::prefix('payment-methods')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',               [PaymentMethodController::class, 'index']);
+    Route::post('/',              [PaymentMethodController::class, 'store']);
+    Route::put('/{id}',          [PaymentMethodController::class, 'update']);
+    Route::delete('/{id}',       [PaymentMethodController::class, 'destroy']);
+    Route::patch('/{id}/toggle', [PaymentMethodController::class, 'toggle']);
+});
+
 Route::prefix('shipping-methods')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',              [ShippingMethodController::class, 'index']);
     Route::post('/',             [ShippingMethodController::class, 'store']);
@@ -399,4 +435,40 @@ Route::prefix('coupons')->middleware(JwtAuthMiddleware::class)->group(function (
 
 Route::prefix('inventory')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/', [InventoryController::class, 'index']);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 12: Wishlist Analytics (admin)
+// ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('wishlists')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/analytics', [WishlistAnalyticsController::class, 'analytics']);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 12: Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('notifications')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',                    [NotificationController::class, 'index']);
+    Route::get('/unread-count',        [NotificationController::class, 'unreadCount']);
+    Route::patch('/read-all',          [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/bulk',             [NotificationController::class, 'bulkDelete']);
+    Route::patch('/{id}/read',         [NotificationController::class, 'markAsRead']);
+    Route::patch('/{id}/unread',       [NotificationController::class, 'markAsUnread']);
+    Route::delete('/{id}',             [NotificationController::class, 'destroy']);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 13: Customer Support
+// ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('support/tickets')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',                  [SupportTicketController::class, 'index']);
+    Route::get('/stats',             [SupportTicketController::class, 'stats']);
+    Route::get('/{id}',              [SupportTicketController::class, 'show']);
+    Route::post('/{id}/reply',       [SupportTicketController::class, 'reply']);
+    Route::patch('/{id}/status',     [SupportTicketController::class, 'updateStatus']);
+    Route::patch('/{id}/priority',   [SupportTicketController::class, 'updatePriority']);
+    Route::delete('/{id}',           [SupportTicketController::class, 'destroy']);
 });

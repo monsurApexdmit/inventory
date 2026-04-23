@@ -49,6 +49,7 @@ class CustomerAuthMiddleware
         }
 
         $request->attributes->set('storefront_customer', $customer);
+        $request->setUserResolver(static fn() => $customer);
 
         return $next($request);
     }

@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install PHP extensions
 RUN docker-php-ext-install \
+    pcntl \
     pdo \
     pdo_mysql \
     zip \

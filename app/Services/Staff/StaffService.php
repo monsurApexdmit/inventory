@@ -6,6 +6,7 @@ use App\DTOs\Staff\StaffDTO;
 use App\DTOs\Staff\StaffMapper;
 use App\Repositories\Contracts\IStaffRepository;
 use App\Repositories\Contracts\IUserRepository;
+use App\Services\Notification\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -16,6 +17,7 @@ class StaffService
     public function __construct(
         private readonly IStaffRepository $staffRepository,
         private readonly IUserRepository $userRepository,
+        private readonly NotificationService $notificationService,
     ) {
         $this->mapper = new StaffMapper();
     }
@@ -75,6 +77,12 @@ class StaffService
 
             return $staff;
         });
+
+        $this->notificationService->notifyStaffJoined(
+            $companyId,
+            $staff->name,
+            $staff->role ?? 'Staff'
+        );
 
         return $this->mapper->toDTO($staff);
     }

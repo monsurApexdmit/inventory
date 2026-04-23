@@ -67,6 +67,14 @@ class SellMapper extends BaseMapper
             ];
         }
 
+        // Resolve shipping method name: prefer relationship, fall back to raw string
+        $shippingMethodName = null;
+        if ($model->relationLoaded('shippingMethodModel') && $model->shippingMethodModel) {
+            $shippingMethodName = $model->shippingMethodModel->name;
+        } elseif ($model->shipping_method) {
+            $shippingMethodName = $model->shipping_method;
+        }
+
         return new SellDTO(
             id: $model->id,
             companyId: $model->company_id,
@@ -91,6 +99,7 @@ class SellMapper extends BaseMapper
             amount: $model->amount,
             shippingCost: $model->shipping_cost,
             shippingMethod: $model->shipping_method,
+            shippingMethodName: $shippingMethodName,
             couponId: $model->coupon_id,
             couponCode: $model->coupon_code,
             discount: $model->discount,

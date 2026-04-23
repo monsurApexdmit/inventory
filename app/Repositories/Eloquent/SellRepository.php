@@ -19,7 +19,7 @@ class SellRepository implements ISellRepository
     {
         $query = $this->model
             ->where('company_id', $companyId)
-            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments']);
+            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel']);
 
         // Search by customer name or invoice number
         if (!empty($filters['search'])) {
@@ -80,7 +80,7 @@ class SellRepository implements ISellRepository
     {
         return $this->model
             ->where('company_id', $companyId)
-            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments'])
+            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel'])
             ->find($id);
     }
 
@@ -92,7 +92,7 @@ class SellRepository implements ISellRepository
         return $this->model
             ->where('company_id', $companyId)
             ->where('invoice_no', $invoiceNo)
-            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments'])
+            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel'])
             ->first();
     }
 

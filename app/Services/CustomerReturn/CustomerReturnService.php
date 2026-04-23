@@ -10,6 +10,7 @@ use App\Models\VariantInventory;
 use App\Models\CustomerReturn;
 use App\Models\CustomerReturnItem;
 use App\Repositories\Contracts\ICustomerReturnRepository;
+use App\Services\Notification\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -17,7 +18,10 @@ class CustomerReturnService
 {
     private readonly CustomerReturnMapper $mapper;
 
-    public function __construct(private readonly ICustomerReturnRepository $repository)
+    public function __construct(
+        private readonly ICustomerReturnRepository $repository,
+        private readonly NotificationService $notificationService,
+    )
     {
         $this->mapper = new CustomerReturnMapper();
     }
@@ -118,7 +122,15 @@ class CustomerReturnService
             }
         });
 
-        return $this->get($returnId, $companyId);
+        $createdReturn = $this->get($returnId, $companyId);
+
+        $this->notificationService->notifyReturnRequested(
+            $companyId,
+            $dbData['return_number'] ?? "RET-{$returnId}",
+            $dbData['customer_name'] ?? 'Customer'
+        );
+
+        return $createdReturn;
     }
 
     public function update(int $id, int $companyId, array $data): CustomerReturnDTO

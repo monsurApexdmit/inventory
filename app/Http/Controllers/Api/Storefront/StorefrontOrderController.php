@@ -3,13 +3,19 @@
 namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\OrderShipment;
 use App\Models\Product;
 use App\Models\Sell;
+use App\Services\Notification\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StorefrontOrderController extends Controller
 {
+    public function __construct(private readonly NotificationService $notificationService)
+    {
+    }
+
     // GET /api/store/orders
     public function index(Request $request): JsonResponse
     {
@@ -47,6 +53,28 @@ class StorefrontOrderController extends Controller
         }
 
         return response()->json(['success' => true, 'data' => $this->formatOrder($order)]);
+    }
+
+    // GET /api/store/orders/track?company_id=11&invoice=ORD-XXXX  (public, no auth)
+    public function trackOrder(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+        $invoice   = trim($request->query('invoice', ''));
+
+        if (!$companyId || !$invoice) {
+            return response()->json(['success' => false, 'message' => 'company_id and invoice are required'], 400);
+        }
+
+        $order = Sell::with(['items', 'shipments.trackingHistory'])
+            ->where('company_id', $companyId)
+            ->where('invoice_no', $invoice)
+            ->first();
+
+        if (!$order) {
+            return response()->json(['success' => false, 'message' => 'Order not found'], 404);
+        }
+
+        return response()->json(['success' => true, 'data' => $this->formatOrderWithShipment($order)]);
     }
 
     // POST /api/store/orders
@@ -126,6 +154,13 @@ class StorefrontOrderController extends Controller
             $sell->items()->create($item);
         }
 
+        $this->notificationService->notifyOrderPlaced(
+            $customer->company_id,
+            $sell->invoice_no,
+            $customer->name,
+            $total
+        );
+
         return response()->json([
             'success' => true,
             'data'    => $this->formatOrder($sell->load('items')),
@@ -167,5 +202,31 @@ class StorefrontOrderController extends Controller
                 'total_price'  => $item->total_price,
             ])->values(),
         ];
+    }
+
+    private function formatOrderWithShipment(Sell $order): array
+    {
+        $base     = $this->formatOrder($order);
+        $shipment = $order->shipments?->sortByDesc('created_at')->first();
+
+        $base['shipment'] = $shipment ? [
+            'tracking_number'    => $shipment->tracking_number,
+            'carrier'            => $shipment->carrier,
+            'shipping_method'    => $shipment->shipping_method,
+            'status'             => $shipment->status,
+            'shipped_at'         => $shipment->shipped_at,
+            'estimated_delivery' => $shipment->estimated_delivery,
+            'delivered_at'       => $shipment->delivered_at,
+            'tracking_history'   => $shipment->trackingHistory
+                ->sortByDesc('event_time')
+                ->map(fn($h) => [
+                    'status'      => $h->status,
+                    'location'    => $h->location,
+                    'description' => $h->description,
+                    'event_time'  => $h->event_time,
+                ])->values(),
+        ] : null;
+
+        return $base;
     }
 }
