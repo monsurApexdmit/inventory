@@ -23,6 +23,10 @@ interface INotificationRepository
 
     public function bulkDelete(int $companyId, array $ids): int;
 
+    public function findUnreadIdsByCompany(int $companyId): array;
+
+    public function findExistingIdsByCompany(int $companyId, array $ids): array;
+
     public function deleteOld(int $companyId, int $keepDays): int;
 
     public function countUnread(int $companyId): int;

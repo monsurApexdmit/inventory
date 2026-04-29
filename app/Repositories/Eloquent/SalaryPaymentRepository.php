@@ -56,6 +56,7 @@ class SalaryPaymentRepository implements ISalaryPaymentRepository
     public function findByStaffAndMonth(int $staffId, string $month): ?SalaryPayment
     {
         return $this->model
+            ->withTrashed()
             ->where('staff_id', $staffId)
             ->where('month', $month)
             ->first();
@@ -86,7 +87,7 @@ class SalaryPaymentRepository implements ISalaryPaymentRepository
             'month' => $payment->month,
             'amount' => (float) $payment->amount,
             'paidAmount' => (float) $payment->paid_amount,
-            'status' => $payment->status,
+            'status' => ucfirst(strtolower($payment->status)),
             'paymentDate' => $payment->payment_date?->toIso8601String(),
             'paymentMethod' => $payment->payment_method,
             'notes' => $payment->notes,

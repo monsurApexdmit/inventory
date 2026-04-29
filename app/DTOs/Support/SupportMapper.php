@@ -4,6 +4,7 @@ namespace App\DTOs\Support;
 
 use App\DTOs\BaseMapper;
 use App\Models\SupportMessage;
+use App\Models\SupportMessageAttachment;
 use App\Models\SupportTicket;
 use Illuminate\Database\Eloquent\Model;
 
@@ -25,6 +26,18 @@ class SupportMapper extends BaseMapper
                 senderType: $m->sender_type,
                 senderName: $m->sender_name,
                 createdAt:  $this->formatTimestamp($m->created_at),
+                attachments: $m->relationLoaded('attachments')
+                    ? $m->attachments->map(fn(SupportMessageAttachment $attachment) => (new SupportAttachmentDTO(
+                        id: $attachment->id,
+                        name: $attachment->original_name,
+                        url: $this->attachmentUrl($attachment->stored_path),
+                        mimeType: $attachment->mime_type,
+                        sizeBytes: (int) $attachment->size_bytes,
+                        type: $attachment->attachment_type,
+                        isImage: $attachment->attachment_type === 'image',
+                        isAudio: $attachment->attachment_type === 'voice',
+                    ))->toArray())->values()->all()
+                    : [],
             ))->toArray())->values()->all();
         }
 
@@ -46,5 +59,11 @@ class SupportMapper extends BaseMapper
             createdAt:     $this->formatTimestamp($model->created_at),
             messages:      $messages,
         );
+    }
+
+    private function attachmentUrl(string $storedPath): string
+    {
+        $baseUrl = rtrim(request()?->getSchemeAndHttpHost() ?? config('app.url'), '/');
+        return $baseUrl . '/storage/' . ltrim($storedPath, '/');
     }
 }

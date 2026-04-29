@@ -15,6 +15,9 @@ class NotificationDTO extends BaseDTO
         'stock_transfer'        => 'stock_alert',
         'staff_joined'          => 'system',
         'return_requested'      => 'payment',
+        'support_ticket'        => 'support',
+        'support_message'       => 'support',
+        'product_review'        => 'review',
     ];
 
     // Maps internal types → frontend NotificationPriority
@@ -26,6 +29,9 @@ class NotificationDTO extends BaseDTO
         'stock_transfer'        => 'low',
         'staff_joined'          => 'low',
         'return_requested'      => 'high',
+        'support_ticket'        => 'medium',
+        'support_message'       => 'medium',
+        'product_review'        => 'medium',
     ];
 
     public function __construct(
@@ -72,6 +78,14 @@ class NotificationDTO extends BaseDTO
                 => '/dashboard/inventory',
             'staff_joined'
                 => '/dashboard/staff',
+            'support_ticket', 'support_message'
+                => isset($this->data['ticketId'])
+                    ? "/dashboard/support?ticket={$this->data['ticketId']}"
+                    : '/dashboard/support',
+            'product_review'
+                => isset($this->data['productId'])
+                    ? "/dashboard/products/{$this->data['productId']}/reviews"
+                    : '/dashboard/products',
             default => null,
         };
     }

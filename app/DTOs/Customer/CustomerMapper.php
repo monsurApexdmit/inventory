@@ -36,6 +36,8 @@ class CustomerMapper extends BaseMapper
             status: $model->status,
             notes: $model->notes,
             storeCredit: (float) $model->store_credit,
+            totalOrders: (int) ($model->getAttribute('total_orders') ?? 0),
+            totalSpent: (float) ($model->getAttribute('total_spent') ?? 0),
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
         );

@@ -3,17 +3,25 @@
 namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\Coupon;
+use App\Models\CouponUsage;
 use App\Models\OrderShipment;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Sell;
+use App\Models\VariantInventory;
+use App\Services\Coupon\CouponService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class StorefrontOrderController extends Controller
 {
-    public function __construct(private readonly NotificationService $notificationService)
-    {
+    public function __construct(
+        private readonly NotificationService $notificationService,
+        private readonly CouponService $couponService,
+    ) {
     }
 
     // GET /api/store/orders
@@ -94,7 +102,7 @@ class StorefrontOrderController extends Controller
         ]);
 
         $orderItems = [];
-        $total      = 0;
+        $subtotal   = 0;
 
         foreach ($request->items as $item) {
             $product = Product::where('company_id', $customer->company_id)
@@ -110,7 +118,7 @@ class StorefrontOrderController extends Controller
 
             $price     = ($product->sale_price && $product->sale_price > 0) ? $product->sale_price : $product->price;
             $lineTotal = $price * $item['quantity'];
-            $total    += $lineTotal;
+            $subtotal += $lineTotal;
 
             $orderItems[] = [
                 'product_id'   => $product->id,
@@ -123,6 +131,37 @@ class StorefrontOrderController extends Controller
                 'total_cost'   => ($product->cost_price ?? 0) * $item['quantity'],
             ];
         }
+
+        // Validate and apply coupon
+        $discount      = 0;
+        $couponCode    = null;
+        $appliedCoupon = null;
+
+        if ($request->filled('coupon_code')) {
+            try {
+                $couponData    = $this->couponService->validate($customer->company_id, [
+                    'code'        => $request->coupon_code,
+                    'orderAmount' => $subtotal,
+                    'customerId'  => $customer->id,
+                ]);
+                $discount      = $couponData['discountAmount'] ?? 0;
+                $couponCode    = $request->coupon_code;
+                // Fetch the Coupon model for usage recording and free_shipping check
+                $appliedCoupon = Coupon::where('company_id', $customer->company_id)
+                    ->where('code', $request->coupon_code)
+                    ->first();
+            } catch (HttpException $e) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], $e->getStatusCode());
+            }
+        }
+
+        $shippingCost = (float) ($request->shipping_cost ?? 0);
+        // Free shipping coupon overrides shipping cost
+        if ($appliedCoupon?->free_shipping) {
+            $shippingCost = 0;
+        }
+
+        $total = max(0, $subtotal - $discount) + $shippingCost;
 
         $addr = $request->shipping_address;
 
@@ -145,13 +184,53 @@ class StorefrontOrderController extends Controller
             'shipping_state'         => $addr['state'] ?? null,
             'shipping_postal_code'   => $addr['zip'] ?? null,
             'shipping_country'       => $addr['country'] ?? null,
-            'coupon_code'            => $request->coupon_code ?? null,
-            'discount'               => $request->discount ?? 0,
-            'shipping_cost'          => $request->shipping_cost ?? 0,
+            'coupon_code'            => $couponCode,
+            'discount'               => $discount,
+            'shipping_cost'          => $shippingCost,
         ]);
 
         foreach ($orderItems as $item) {
             $sell->items()->create($item);
+        }
+
+        // Deduct stock
+        foreach ($request->items as $item) {
+            $qty = (int) $item['quantity'];
+            if (!empty($item['variant_id'])) {
+                // Deduct from variant inventory (sum across all locations)
+                VariantInventory::where('variant_id', $item['variant_id'])
+                    ->orderByDesc('quantity')
+                    ->get()
+                    ->each(function (VariantInventory $inv) use (&$qty) {
+                        if ($qty <= 0) return false;
+                        $deduct = min($qty, $inv->quantity);
+                        $inv->decrement('quantity', $deduct);
+                        $qty -= $deduct;
+                    });
+                // Also keep variant stock field in sync
+                ProductVariant::where('id', $item['variant_id'])
+                    ->decrement('stock', (int) $item['quantity']);
+            } else {
+                // Simple product — decrement product stock
+                Product::where('id', $item['product_id'])
+                    ->where('company_id', $customer->company_id)
+                    ->decrement('stock', $qty);
+            }
+        }
+
+        // Record coupon usage
+        if ($appliedCoupon) {
+            CouponUsage::create([
+                'coupon_id'        => $appliedCoupon->id,
+                'customer_id'      => $customer->id,
+                'sell_id'          => $sell->id,
+                'coupon_code'      => $appliedCoupon->code,
+                'discount_applied' => $discount,
+                'original_amount'  => $subtotal,
+                'final_amount'     => $total,
+                'used_at'          => now(),
+            ]);
+            $appliedCoupon->increment('usage_count');
         }
 
         $this->notificationService->notifyOrderPlaced(

@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Auth\SaasAuthController;
 use App\Http\Controllers\Api\V1\Customer\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerReturn\CustomerReturnController;
 use App\Http\Controllers\Api\V1\Product\ProductController;
+use App\Http\Controllers\Api\V1\Product\ProductReviewReplyController;
 use App\Http\Controllers\Api\V1\Shipping\ShippingAddressController;
 use App\Http\Controllers\Api\V1\ShippingMethodController;
 use App\Http\Controllers\Api\V1\PaymentMethodController;
@@ -33,9 +34,11 @@ use App\Http\Controllers\Api\Storefront\CustomerAuthController;
 use App\Http\Controllers\Api\Storefront\StorefrontController;
 use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
+use App\Http\Controllers\Api\Storefront\StorefrontProductReviewController;
 use App\Http\Controllers\Api\Storefront\StorefrontSupportController;
 use App\Http\Controllers\Api\Storefront\WishlistController;
 use App\Http\Controllers\Api\Storefront\WishlistAnalyticsController;
+use App\Http\Controllers\Api\V1\ContentPageController;
 use App\Http\Middleware\JwtAuthMiddleware;
 use Illuminate\Support\Facades\Route;
 
@@ -47,12 +50,17 @@ Route::prefix('store')->group(function () {
 
     // Catalog (no auth)
     Route::get('/products',           [StorefrontController::class, 'products']);
+    Route::get('/deals',              [StorefrontController::class, 'deals']);
     Route::get('/products/{id}',      [StorefrontController::class, 'product']);
+    Route::get('/products/{id}/reviews', [StorefrontProductReviewController::class, 'index']);
     Route::get('/categories',         [StorefrontController::class, 'categories']);
     Route::get('/coupons/validate',   [StorefrontController::class, 'validateCoupon']);
     Route::get('/coupons/active',     [StorefrontController::class, 'activeCoupons']);
     Route::get('/shipping-methods',   [StorefrontController::class, 'shippingMethods']);
     Route::get('/payment-methods',    [StorefrontController::class, 'paymentMethods']);
+    Route::get('/pages/{slug}',       [StorefrontController::class, 'page']);
+    Route::get('/settings/company',   [StorefrontController::class, 'companySettings']);
+    Route::get('/settings/homepage-hero', [StorefrontController::class, 'homepageHero']);
 
     // Public order tracking (no auth)
     Route::get('/orders/track',        [StorefrontOrderController::class, 'trackOrder']);
@@ -60,6 +68,10 @@ Route::prefix('store')->group(function () {
     // Customer auth (no auth)
     Route::post('/customer/register', [CustomerAuthController::class, 'register']);
     Route::post('/customer/login',    [CustomerAuthController::class, 'login']);
+    Route::post('/contact',           [StorefrontSupportController::class, 'contact']);
+    Route::post('/realtime/auth',     BroadcastAuthController::class);
+    Route::get('/support/guest/{ticketNumber}', [StorefrontSupportController::class, 'showGuest']);
+    Route::post('/support/guest/{ticketNumber}/reply', [StorefrontSupportController::class, 'replyGuest']);
 
     // Customer protected routes
     Route::middleware('customer.auth')->group(function () {
@@ -80,13 +92,13 @@ Route::prefix('store')->group(function () {
         Route::post('/wishlist',                  [WishlistController::class, 'store']);
         Route::delete('/wishlist',                [WishlistController::class, 'clear']);
         Route::delete('/wishlist/{productId}',    [WishlistController::class, 'destroy']);
+        Route::post('/products/{id}/reviews',     [StorefrontProductReviewController::class, 'store']);
 
         // Support tickets (customer)
         Route::get('/support/tickets',             [StorefrontSupportController::class, 'index']);
         Route::post('/support/tickets',            [StorefrontSupportController::class, 'store']);
         Route::get('/support/tickets/{id}',        [StorefrontSupportController::class, 'show']);
         Route::post('/support/tickets/{id}/reply', [StorefrontSupportController::class, 'reply']);
-        Route::post('/realtime/auth',              BroadcastAuthController::class);
     });
 });
 
@@ -257,6 +269,7 @@ Route::prefix('settings')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::post('/change-password',      [SettingController::class, 'changePassword']);
     Route::post('/upload-logo',          [SettingController::class, 'uploadLogo']);
     Route::post('/upload-banner',        [SettingController::class, 'uploadBanner']);
+    Route::post('/upload-storefront-image', [SettingController::class, 'uploadStorefrontImage']);
     Route::put('/{section}',             [SettingController::class, 'updateSection']);
 });
 
@@ -283,6 +296,7 @@ Route::prefix('products')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::get('/{id}',              [ProductController::class, 'show']);
     Route::put('/{id}',              [ProductController::class, 'update']);
     Route::patch('/{id}/status',     [ProductController::class, 'updateStatus']);
+    Route::post('/{productId}/reviews/{reviewId}/reply', [ProductReviewReplyController::class, 'store']);
     Route::delete('/{id}',           [ProductController::class, 'destroy']);
 });
 
@@ -364,6 +378,13 @@ Route::prefix('shipping-methods')->middleware(JwtAuthMiddleware::class)->group(f
     Route::put('/{id}',         [ShippingMethodController::class, 'update']);
     Route::delete('/{id}',      [ShippingMethodController::class, 'destroy']);
     Route::patch('/{id}/toggle', [ShippingMethodController::class, 'toggle']);
+});
+
+Route::prefix('pages')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',         [ContentPageController::class, 'index']);
+    Route::post('/',        [ContentPageController::class, 'store']);
+    Route::put('/{id}',     [ContentPageController::class, 'update']);
+    Route::delete('/{id}',  [ContentPageController::class, 'destroy']);
 });
 
 Route::prefix('shipping-addresses')->middleware(JwtAuthMiddleware::class)->group(function () {

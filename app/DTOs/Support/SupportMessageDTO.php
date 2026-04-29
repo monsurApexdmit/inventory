@@ -10,10 +10,11 @@ class SupportMessageDTO extends BaseDTO
         public readonly int     $id,
         public readonly int     $ticketId,
         public readonly ?int    $customerId,
-        public readonly string  $body,
+        public readonly ?string $body,
         public readonly string  $senderType,
         public readonly ?string $senderName,
         public readonly string  $createdAt,
+        public readonly array   $attachments,
     ) {}
 
     public function toArray(): array
@@ -26,6 +27,7 @@ class SupportMessageDTO extends BaseDTO
             'senderType' => $this->senderType,
             'senderName' => $this->senderName,
             'createdAt'  => $this->createdAt,
+            'attachments' => $this->attachments,
         ];
     }
 }

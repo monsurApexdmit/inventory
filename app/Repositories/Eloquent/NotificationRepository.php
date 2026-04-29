@@ -88,6 +88,24 @@ class NotificationRepository implements INotificationRepository
             ->delete();
     }
 
+    public function findUnreadIdsByCompany(int $companyId): array
+    {
+        return $this->model
+            ->where('company_id', $companyId)
+            ->whereNull('read_at')
+            ->pluck('id')
+            ->all();
+    }
+
+    public function findExistingIdsByCompany(int $companyId, array $ids): array
+    {
+        return $this->model
+            ->where('company_id', $companyId)
+            ->whereIn('id', $ids)
+            ->pluck('id')
+            ->all();
+    }
+
     public function deleteOld(int $companyId, int $keepDays): int
     {
         return $this->model

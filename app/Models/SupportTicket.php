@@ -20,6 +20,7 @@ class SupportTicket extends Model
         'category',
         'customer_name',
         'customer_email',
+        'guest_access_token',
         'resolved_at',
     ];
 

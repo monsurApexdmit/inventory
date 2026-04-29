@@ -9,6 +9,10 @@ Broadcast::channel('support.company.{companyId}', function (mixed $user, int $co
     return $user instanceof SaasUser && (int) $user->company_id === $companyId;
 });
 
+Broadcast::channel('notifications.company.{companyId}', function (mixed $user, int $companyId): bool {
+    return $user instanceof SaasUser && (int) $user->company_id === $companyId;
+});
+
 Broadcast::channel('support.ticket.{ticketId}', function (mixed $user, int $ticketId): bool {
     $ticket = SupportTicket::query()->select(['id', 'company_id', 'customer_id'])->find($ticketId);
 

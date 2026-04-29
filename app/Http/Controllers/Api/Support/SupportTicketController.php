@@ -13,6 +13,11 @@ class SupportTicketController extends Controller
 {
     use ApiResponse;
 
+    private const SUPPORT_ATTACHMENT_RULES = [
+        'attachments' => 'sometimes|array|max:5',
+        'attachments.*' => 'file|max:10240|mimes:jpg,jpeg,png,webp,gif,pdf,txt,csv,xls,xlsx,doc,docx,webm,mp3,mp4,m4a,wav,ogg',
+    ];
+
     public function __construct(private readonly SupportTicketService $service) {}
 
     // GET /api/support/tickets
@@ -53,7 +58,9 @@ class SupportTicketController extends Controller
     // POST /api/support/tickets/{id}/reply
     public function reply(Request $request, int $id): JsonResponse
     {
-        $request->validate(['body' => 'required|string|max:5000']);
+        $request->validate([
+            'body' => 'nullable|string|max:5000|required_without:attachments',
+        ] + self::SUPPORT_ATTACHMENT_RULES);
 
         try {
             $companyId = $request->query('company_id');
@@ -62,10 +69,11 @@ class SupportTicketController extends Controller
             $ticket = $this->service->reply(
                 id:         $id,
                 companyId:  $companyId,
-                body:       $request->body,
+                body:       $request->input('body'),
                 senderType: 'staff',
                 customerId: null,
                 senderName: $staffName,
+                attachments: $request->file('attachments', []),
             );
             return $this->success($ticket, 'Reply sent');
         } catch (HttpException $e) {

@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\CompanySettings;
+use App\Models\ContentPage;
 use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\PaymentMethod;
+use App\Models\Setting;
 use App\Models\ShippingMethod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +26,8 @@ class StorefrontController extends Controller
         }
 
         $query = Product::with(['category', 'images', 'variants'])
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
             ->where('company_id', $companyId)
             ->where('published', true);
 
@@ -33,6 +38,12 @@ class StorefrontController extends Controller
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         }
+
+        // Deal filters
+        if ($request->boolean('is_hot_deal'))    $query->where('is_hot_deal', true);
+        if ($request->boolean('is_best_seller')) $query->where('is_best_seller', true);
+        if ($request->boolean('is_featured'))    $query->where('is_featured', true);
+        if ($request->boolean('on_sale'))        $query->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price');
 
         $limit    = min((int) $request->query('limit', 20), 100);
         $products = $query->orderBy('created_at', 'desc')->paginate($limit);
@@ -49,8 +60,8 @@ class StorefrontController extends Controller
         ]);
     }
 
-    // GET /api/store/products/{id}?company_id=11
-    public function product(Request $request, int $id): JsonResponse
+    // GET /api/store/deals?company_id=11&filter=hot_deal|best_seller|on_sale|featured|all
+    public function deals(Request $request): JsonResponse
     {
         $companyId = $request->query('company_id');
 
@@ -58,10 +69,70 @@ class StorefrontController extends Controller
             return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
         }
 
-        $product = Product::with(['category', 'images', 'variants', 'attributes'])
+        $filter = $request->query('filter', 'all');
+
+        $query = Product::with(['category', 'images', 'variants'])
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
             ->where('company_id', $companyId)
-            ->where('published', true)
-            ->find($id);
+            ->where('published', true);
+
+        match ($filter) {
+            'hot_deal'    => $query->where('is_hot_deal', true),
+            'best_seller' => $query->where('is_best_seller', true),
+            'featured'    => $query->where('is_featured', true),
+            'on_sale'     => $query->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'),
+            default       => $query->where(function ($q) {
+                $q->where('is_hot_deal', true)
+                  ->orWhere('is_best_seller', true)
+                  ->orWhere('is_featured', true)
+                  ->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'));
+            }),
+        };
+
+        $limit    = min((int) $request->query('limit', 48), 100);
+        $products = $query->orderByDesc('is_hot_deal')
+            ->orderByDesc('is_best_seller')
+            ->orderByDesc('updated_at')
+            ->paginate($limit);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $products->map(fn($p) => $this->formatProduct($p)),
+            'meta'    => [
+                'current_page' => $products->currentPage(),
+                'last_page'    => $products->lastPage(),
+                'per_page'     => $products->perPage(),
+                'total'        => $products->total(),
+            ],
+        ]);
+    }
+
+    // GET /api/store/products/{slugOrId}?company_id=11
+    public function product(Request $request, string $slugOrId): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $query = Product::with(['category', 'images', 'variants', 'attributes'])
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
+            ->where('company_id', $companyId)
+            ->where('published', true);
+
+        if (ctype_digit($slugOrId)) {
+            $query->where(function ($builder) use ($slugOrId) {
+                $builder->where('id', (int) $slugOrId)
+                    ->orWhere('slug', $slugOrId);
+            });
+        } else {
+            $query->where('slug', $slugOrId);
+        }
+
+        $product = $query->first();
 
         if (!$product) {
             return response()->json(['success' => false, 'message' => 'Product not found'], 404);
@@ -209,6 +280,117 @@ class StorefrontController extends Controller
         return response()->json(['success' => true, 'data' => $methods]);
     }
 
+    // GET /api/store/pages/{slug}?company_id=11
+    public function page(Request $request, string $slug): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $page = ContentPage::where('company_id', $companyId)
+            ->where('slug', $slug)
+            ->where('is_published', true)
+            ->first();
+
+        if (!$page) {
+            return response()->json(['success' => false, 'message' => 'Page not found'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $page->id,
+                'title' => $page->title,
+                'slug' => $page->slug,
+                'summary' => $page->summary,
+                'content' => $page->content,
+                'publishedAt' => optional($page->published_at)?->toIso8601String(),
+                'updatedAt' => optional($page->updated_at)?->toIso8601String(),
+            ],
+        ]);
+    }
+
+    // GET /api/store/settings/company?company_id=11
+    public function companySettings(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $settings = CompanySettings::where('company_id', $companyId)->first();
+
+        if (!$settings) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'companyId' => (int) $companyId,
+                    'taxRate' => 0.0,
+                    'currency' => 'USD',
+                    'timezone' => 'UTC',
+                    'language' => 'en',
+                    'currencySymbolPosition' => 'before',
+                    'currencyDecimalSeparator' => '.',
+                    'currencyThousandsSeparator' => ',',
+                    'currencyDecimalPlaces' => 2,
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'companyId' => $settings->company_id,
+                'taxRate' => (float) ($settings->tax_rate ?? 0),
+                'currency' => $settings->currency ?? 'USD',
+                'timezone' => $settings->timezone ?? 'UTC',
+                'language' => $settings->language ?? 'en',
+                'currencySymbolPosition' => $settings->getAttribute('currency_symbol_position') ?? 'before',
+                'currencyDecimalSeparator' => $settings->getAttribute('currency_decimal_separator') ?? '.',
+                'currencyThousandsSeparator' => $settings->getAttribute('currency_thousands_separator') ?? ',',
+                'currencyDecimalPlaces' => (int) ($settings->getAttribute('currency_decimal_places') ?? 2),
+            ],
+        ]);
+    }
+
+    // GET /api/store/settings/homepage-hero?company_id=11
+    public function homepageHero(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $setting = Setting::where('company_id', $companyId)->first();
+        $hero = data_get($setting?->business_settings, 'auraShopHero', []);
+        $slides = collect($hero['slides'] ?? [])
+            ->filter(fn($slide) => is_array($slide))
+            ->map(fn($slide) => [
+                'imagePath' => $slide['imagePath'] ?? null,
+                'tag' => $slide['tag'] ?? '',
+                'title' => $slide['title'] ?? '',
+                'subtitle' => $slide['subtitle'] ?? '',
+                'cta' => $slide['cta'] ?? '',
+                'link' => $slide['link'] ?? '/shop',
+                'gradient' => $slide['gradient'] ?? 'from-primary/80 via-primary/40 to-transparent',
+                'enabled' => (bool) ($slide['enabled'] ?? true),
+            ])
+            ->values()
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'autoplayMs' => max(2000, (int) ($hero['autoplayMs'] ?? 6000)),
+                'slides' => $slides,
+            ],
+        ]);
+    }
+
     private function formatProduct(Product $product): array
     {
         $primaryImage = $product->images->firstWhere('is_primary', true)?->path
@@ -217,6 +399,7 @@ class StorefrontController extends Controller
 
         return [
             'id'            => $product->id,
+            'slug'          => $product->slug,
             'name'          => $product->name,
             'description'   => $product->description,
             'price'         => $product->price,
@@ -227,7 +410,13 @@ class StorefrontController extends Controller
             'images'        => $product->images->sortBy('position')->pluck('path')->values(),
             'category_id'   => $product->category_id,
             'category_name' => $product->category?->category_name,
-            'variants'      => $product->variants->map(fn($v) => [
+            'rating'         => round((float) ($product->reviews_avg_rating ?? 0), 1),
+            'reviews_count'  => (int) ($product->reviews_count ?? 0),
+            'is_featured'    => (bool) $product->is_featured,
+            'is_hot_deal'    => (bool) $product->is_hot_deal,
+            'is_best_seller' => (bool) $product->is_best_seller,
+            'deal_label'     => $product->deal_label,
+            'variants'       => $product->variants->map(fn($v) => [
                 'id'         => $v->id,
                 'name'       => $v->name,
                 'price'      => $v->price,

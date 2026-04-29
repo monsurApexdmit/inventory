@@ -25,6 +25,8 @@ class CustomerDTO extends BaseDTO
         public readonly string $status,
         public readonly ?string $notes,
         public readonly float $storeCredit,
+        public readonly int $totalOrders,
+        public readonly float $totalSpent,
         public readonly string $createdAt,
         public readonly string $updatedAt,
     ) {}
@@ -47,6 +49,8 @@ class CustomerDTO extends BaseDTO
             'status' => $this->status,
             'notes' => $this->notes,
             'storeCredit' => $this->storeCredit,
+            'totalOrders' => $this->totalOrders,
+            'totalSpent' => $this->totalSpent,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
         ];

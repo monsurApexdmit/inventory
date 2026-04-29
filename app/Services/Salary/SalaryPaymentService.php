@@ -41,10 +41,8 @@ class SalaryPaymentService
 
     public function create(int $companyId, array $data): SalaryPaymentDTO
     {
-        // Map input to database format first
         $dbData = $this->mapInputToDb($data);
 
-        // Validate staff belongs to company
         $staff = Staff::where('id', $dbData['staff_id'])
             ->where('company_id', $companyId)
             ->first();
@@ -53,14 +51,16 @@ class SalaryPaymentService
             throw new HttpException(400, 'Staff member not found');
         }
 
-        // Check for duplicate month entry
+        $dbData['status'] = $this->calculateStatus($dbData['amount'], $dbData['paid_amount'] ?? 0);
+
         $existing = $this->repository->findByStaffAndMonth($dbData['staff_id'], $dbData['month']);
         if ($existing) {
-            throw new HttpException(409, 'Salary payment for this month already exists');
+            if ($existing->trashed()) {
+                $existing->restore();
+            }
+            $updated = $this->repository->update($existing->id, $dbData);
+            return $this->mapper->toDTO($updated->load('staff'));
         }
-
-        // Auto-calculate status based on amount and paid_amount
-        $dbData['status'] = $this->calculateStatus($dbData['amount'], $dbData['paid_amount'] ?? 0);
 
         $payment = $this->repository->create($dbData);
 
@@ -103,11 +103,11 @@ class SalaryPaymentService
     private function calculateStatus(float $amount, float $paidAmount): string
     {
         if ($paidAmount >= $amount) {
-            return 'paid';
+            return 'Paid';
         } elseif ($paidAmount > 0) {
-            return 'partial';
+            return 'Partial';
         }
-        return 'pending';
+        return 'Pending';
     }
 
     private function mapInputToDb(array $data): array

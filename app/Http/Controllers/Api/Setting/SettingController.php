@@ -136,10 +136,10 @@ class SettingController extends Controller
             return $this->error('Logo file size must not exceed 5MB', 422);
         }
 
-        $dto = $this->settingService->uploadLogo($companyId, $request->file('file'), $uploadedBy);
+        $payload = $this->settingService->uploadLogo($companyId, $request->file('file'), $uploadedBy);
 
         return $this->success(
-            $dto->toArray(),
+            $payload,
             'Logo uploaded successfully',
             201
         );
@@ -155,11 +155,26 @@ class SettingController extends Controller
             return $this->error('Banner file size must not exceed 10MB', 422);
         }
 
-        $dto = $this->settingService->uploadBanner($companyId, $request->file('file'), $uploadedBy);
+        $payload = $this->settingService->uploadBanner($companyId, $request->file('file'), $uploadedBy);
 
         return $this->success(
-            $dto->toArray(),
+            $payload,
             'Banner uploaded successfully',
+            201
+        );
+    }
+
+    public function uploadStorefrontImage(UploadImageRequest $request): JsonResponse
+    {
+        if ($request->file('file')->getSize() > 10 * 1024 * 1024) {
+            return $this->error('Image file size must not exceed 10MB', 422);
+        }
+
+        $payload = $this->settingService->uploadStorefrontImage($request->file('file'));
+
+        return $this->success(
+            $payload,
+            'Storefront image uploaded successfully',
             201
         );
     }

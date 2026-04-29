@@ -96,6 +96,16 @@ class SettingService
         ];
     }
 
+    public function uploadStorefrontImage($file): array
+    {
+        $path = $file->store('uploads/storefront', 'public');
+
+        return [
+            'imagePath' => $path,
+            'imageUrl' => Storage::url($path),
+        ];
+    }
+
     private function formatAll($setting): array
     {
         return [

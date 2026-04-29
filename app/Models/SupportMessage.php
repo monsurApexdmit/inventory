@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SupportMessage extends Model
 {
@@ -25,5 +26,10 @@ class SupportMessage extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(SupportMessageAttachment::class, 'support_message_id');
     }
 }

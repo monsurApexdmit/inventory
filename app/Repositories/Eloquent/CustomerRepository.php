@@ -15,7 +15,13 @@ class CustomerRepository implements ICustomerRepository
     {
         $query = $this->model
             ->where('company_id', $companyId)
-            ->with(['user', 'user.role']);
+            ->with(['user', 'user.role'])
+            ->withCount(['sells as total_orders' => function ($q) use ($companyId) {
+                $q->where('company_id', $companyId);
+            }])
+            ->withSum(['sells as total_spent' => function ($q) use ($companyId) {
+                $q->where('company_id', $companyId);
+            }], 'amount');
 
         if (isset($filters['search'])) {
             $search = $filters['search'];
@@ -43,6 +49,12 @@ class CustomerRepository implements ICustomerRepository
         return $this->model
             ->where('company_id', $companyId)
             ->with(['user', 'user.role'])
+            ->withCount(['sells as total_orders' => function ($q) use ($companyId) {
+                $q->where('company_id', $companyId);
+            }])
+            ->withSum(['sells as total_spent' => function ($q) use ($companyId) {
+                $q->where('company_id', $companyId);
+            }], 'amount')
             ->find($id);
     }
 

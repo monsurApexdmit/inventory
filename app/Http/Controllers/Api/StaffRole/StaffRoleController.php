@@ -15,6 +15,46 @@ class StaffRoleController extends Controller
 {
     use ApiResponse;
 
+    private const DEFAULT_PERMISSIONS = [
+        'Dashboard',
+        'Products',
+        'Categories',
+        'Attributes',
+        'Coupons',
+        'Print Barcode',
+        'Customers',
+        'Orders',
+        'Shipments',
+        'Vendors',
+        'POS',
+        'Sells',
+        'Inventory',
+        'Transfers',
+        'Customer Returns',
+        'Vendor Returns',
+        'Staff',
+        'Role & Permission',
+        'Salary Management',
+        'Settings',
+        'Aura Shop',
+        'Company Profile',
+        'Company Settings',
+        'Billing Contact',
+        'Team Members',
+        'Subscriptions',
+        'Billing Plans',
+        'Store',
+        'Shipping Methods',
+        'Payment Methods',
+        'Shipping Addresses',
+        'Store Locations',
+        'Store Wishlist',
+        'Pages',
+        'International',
+        'Notifications',
+        'Support',
+    ];
+
     public function __construct(private readonly StaffRoleService $staffRoleService)
     {
     }
@@ -65,6 +105,10 @@ class StaffRoleController extends Controller
 
     public function permissions(): JsonResponse
     {
+        foreach (self::DEFAULT_PERMISSIONS as $permission) {
+            Permission::firstOrCreate(['name' => $permission]);
+        }
+
         $permissions = Permission::all(['id', 'name'])->map(fn($p) => [
             'id' => $p->id,
             'name' => $p->name,

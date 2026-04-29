@@ -7,6 +7,7 @@ use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 class CustomerAuthController extends Controller
 {
@@ -61,7 +62,7 @@ class CustomerAuthController extends Controller
             ->where('status', 'active')
             ->first();
 
-        if (!$customer || !$customer->password || !Hash::check($request->password, $customer->password)) {
+        if (!$customer || !$this->passwordMatches($request->password, $customer)) {
             return response()->json(['success' => false, 'message' => 'Invalid credentials'], 401);
         }
 
@@ -79,6 +80,30 @@ class CustomerAuthController extends Controller
         $payload = base64_encode("{$customer->id}|{$customer->company_id}|" . time());
         $sig     = hash_hmac('sha256', $payload, config('app.key'));
         return "{$payload}.{$sig}";
+    }
+
+    private function passwordMatches(string $plainPassword, Customer $customer): bool
+    {
+        $hashedPassword = $customer->password;
+
+        if (!$hashedPassword) {
+            return false;
+        }
+
+        try {
+            return Hash::check($plainPassword, $hashedPassword);
+        } catch (RuntimeException) {
+            // Accept legacy bcrypt variants like $2a$ without crashing login.
+            $matches = password_verify($plainPassword, $hashedPassword);
+
+            if ($matches && Hash::needsRehash($hashedPassword)) {
+                $customer->forceFill([
+                    'password' => Hash::make($plainPassword),
+                ])->save();
+            }
+
+            return $matches;
+        }
     }
 
     private function formatCustomer(Customer $customer): array

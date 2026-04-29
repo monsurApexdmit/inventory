@@ -18,6 +18,7 @@ use App\Services\Barcode\BarcodeServicePOS;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ProductService
@@ -78,7 +79,9 @@ class ProductService
         $this->validateForeignKeys($companyId, $data);
 
         // Map camelCase to snake_case
-        $dbData = $this->mapInputToDb($data);
+        $dbData = $this->mapInputToDb(array_merge($data, [
+            'company_id' => $companyId,
+        ]));
         $dbData['company_id'] = $companyId;
 
         $variants = $data['variants'] ?? [];
@@ -180,7 +183,10 @@ class ProductService
         $variants = $data['variants'] ?? [];
         $attributeIds = $data['attributes'] ?? [];
 
-        $dbData = $this->mapInputToDb($data);
+        $dbData = $this->mapInputToDb(array_merge($data, [
+            'company_id' => $companyId,
+            'ignore_product_id' => $product->id,
+        ]));
         // Don't pass image array to fill()
         unset($dbData['image']);
 
@@ -338,6 +344,11 @@ class ProductService
 
         if (isset($data['name'])) {
             $dbData['name'] = $data['name'];
+            $dbData['slug'] = $this->generateUniqueSlug(
+                companyId: (int) ($data['company_id'] ?? 0),
+                name: (string) $data['name'],
+                ignoreProductId: $data['ignore_product_id'] ?? null,
+            );
         }
         if (isset($data['description'])) {
             $dbData['description'] = $data['description'];
@@ -411,12 +422,57 @@ class ProductService
             $dbData['receipt_number'] = $data['receipt_number'];
         }
 
+        if (isset($data['is_hot_deal'])) {
+            $dbData['is_hot_deal'] = filter_var($data['is_hot_deal'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (isset($data['is_best_seller'])) {
+            $dbData['is_best_seller'] = filter_var($data['is_best_seller'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (isset($data['is_featured'])) {
+            $dbData['is_featured'] = filter_var($data['is_featured'], FILTER_VALIDATE_BOOLEAN);
+        }
+        if (array_key_exists('deal_label', $data)) {
+            $dbData['deal_label'] = $data['deal_label'] !== '' ? $data['deal_label'] : null;
+        }
+
         // Skip image if it's an array (file uploads) - will be synced separately
         if (isset($data['image']) && !is_array($data['image'])) {
             $dbData['image'] = $data['image'];
         }
 
         return $dbData;
+    }
+
+    private function generateUniqueSlug(int $companyId, string $name, ?int $ignoreProductId = null): string
+    {
+        $baseSlug = Str::slug($name);
+
+        if ($baseSlug === '') {
+            $baseSlug = 'product';
+        }
+
+        $slug = $baseSlug;
+        $suffix = 2;
+
+        while ($this->slugExists($companyId, $slug, $ignoreProductId)) {
+            $slug = "{$baseSlug}-{$suffix}";
+            $suffix++;
+        }
+
+        return $slug;
+    }
+
+    private function slugExists(int $companyId, string $slug, ?int $ignoreProductId = null): bool
+    {
+        $query = Product::withTrashed()
+            ->where('company_id', $companyId)
+            ->where('slug', $slug);
+
+        if ($ignoreProductId) {
+            $query->where('id', '<>', $ignoreProductId);
+        }
+
+        return $query->exists();
     }
 
     private function mapVariantInputToDb(array $data): array

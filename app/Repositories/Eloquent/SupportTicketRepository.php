@@ -17,7 +17,7 @@ class SupportTicketRepository implements ISupportTicketRepository
     public function findByCompany(int $companyId, array $filters): LengthAwarePaginator
     {
         $query = $this->model->where('company_id', $companyId)
-            ->with(['customer', 'messages' => fn($q) => $q->latest()->limit(1)]);
+            ->with(['customer', 'messages' => fn($q) => $q->latest()->limit(1)->with('attachments')]);
 
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
@@ -49,7 +49,7 @@ class SupportTicketRepository implements ISupportTicketRepository
         return $this->model
             ->where('id', $id)
             ->where('company_id', $companyId)
-            ->with(['customer', 'messages' => fn($q) => $q->orderBy('created_at')])
+            ->with(['customer', 'messages' => fn($q) => $q->orderBy('created_at')->with('attachments')])
             ->first();
     }
 
@@ -58,7 +58,17 @@ class SupportTicketRepository implements ISupportTicketRepository
         return $this->model
             ->where('ticket_number', $ticketNumber)
             ->where('company_id', $companyId)
-            ->with(['messages' => fn($q) => $q->orderBy('created_at')])
+            ->with(['messages' => fn($q) => $q->orderBy('created_at')->with('attachments')])
+            ->first();
+    }
+
+    public function findByNumberAndGuestToken(string $ticketNumber, int $companyId, string $guestAccessToken): ?SupportTicket
+    {
+        return $this->model
+            ->where('ticket_number', $ticketNumber)
+            ->where('company_id', $companyId)
+            ->where('guest_access_token', $guestAccessToken)
+            ->with(['messages' => fn($q) => $q->orderBy('created_at')->with('attachments')])
             ->first();
     }
 
@@ -67,7 +77,7 @@ class SupportTicketRepository implements ISupportTicketRepository
         $query = $this->model
             ->where('customer_id', $customerId)
             ->where('company_id', $companyId)
-            ->with(['messages' => fn($q) => $q->latest()->limit(1)]);
+            ->with(['messages' => fn($q) => $q->latest()->limit(1)->with('attachments')]);
 
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
@@ -101,9 +111,9 @@ class SupportTicketRepository implements ISupportTicketRepository
             ->update(['priority' => $priority]);
     }
 
-    public function addMessage(int $ticketId, string $body, string $senderType, ?int $customerId, ?string $senderName): void
+    public function addMessage(int $ticketId, ?string $body, string $senderType, ?int $customerId, ?string $senderName): SupportMessage
     {
-        $this->messageModel->create([
+        return $this->messageModel->create([
             'ticket_id'   => $ticketId,
             'body'        => $body,
             'sender_type' => $senderType,

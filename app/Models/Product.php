@@ -19,6 +19,7 @@ class Product extends Model
         'vendor_id',
         'location_id',
         'name',
+        'slug',
         'description',
         'price',
         'sale_price',
@@ -30,6 +31,10 @@ class Product extends Model
         'barcode',
         'barcode_image_path',
         'published',
+        'is_featured',
+        'is_hot_deal',
+        'is_best_seller',
+        'deal_label',
         'receipt_number',
         'image',
     ];
@@ -41,6 +46,9 @@ class Product extends Model
         'profit_margin' => 'float',
         'stock' => 'integer',
         'published' => 'boolean',
+        'is_featured' => 'boolean',
+        'is_hot_deal' => 'boolean',
+        'is_best_seller' => 'boolean',
     ];
 
     public function category(): BelongsTo
@@ -66,6 +74,11 @@ class Product extends Model
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class);
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class)->latest();
     }
 
     public function attributes(): BelongsToMany
