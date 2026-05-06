@@ -9,6 +9,10 @@ use App\Repositories\Contracts\ICompanyRepository;
 use App\Repositories\Contracts\IEmailVerificationRepository;
 use App\Repositories\Contracts\IPasswordResetRepository;
 use App\Repositories\Contracts\ISaasUserRepository;
+use App\Repositories\Contracts\IStaffRepository;
+use App\Repositories\Contracts\IUserRepository;
+use App\Models\Staff;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -22,6 +26,8 @@ class SaasAuthService
         private readonly IEmailVerificationRepository $emailVerificationRepository,
         private readonly IPasswordResetRepository $passwordResetRepository,
         private readonly JwtService $jwtService,
+        private readonly IUserRepository $userRepository,
+        private readonly IStaffRepository $staffRepository,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -152,36 +158,75 @@ class SaasAuthService
 
     public function login(string $email, string $password): array
     {
-        $user = $this->saasUserRepository->findByEmail($email);
+        // Try SaaS owner/team login first
+        $saasUser = $this->saasUserRepository->findByEmail($email);
 
-        if (!$user || !$user->verifyPassword($password)) {
+        if ($saasUser) {
+            if (!$saasUser->verifyPassword($password)) {
+                throw new HttpException(401, 'Invalid email or password.');
+            }
+
+            if ($saasUser->status === 'unverified') {
+                throw new HttpException(403, 'Please verify your email before logging in.');
+            }
+
+            if ($saasUser->status === 'inactive') {
+                throw new HttpException(403, 'Your account has been deactivated.');
+            }
+
+            $this->saasUserRepository->updateLastLogin($saasUser->id);
+
+            $issued  = $this->jwtService->issueSaasToken($saasUser);
+            $company = $this->companyRepository->findById($saasUser->company_id);
+
+            return [
+                'userId'        => $saasUser->id,
+                'userEmail'     => $saasUser->email,
+                'companyId'     => $saasUser->company_id,
+                'companyName'   => $company->name,
+                'companyStatus' => $company->status,
+                'userRole'      => $saasUser->role,
+                'token'         => $issued['token'],
+                'licenseKey'    => 'trial-' . $saasUser->company_id,
+                'licenseType'   => $company->status,
+                'email'         => $saasUser->email,
+                'company'       => [
+                    'id'        => $company->id,
+                    'name'      => $company->name,
+                    'status'    => $company->status,
+                    'createdAt' => $company->created_at->toIso8601String(),
+                    'updatedAt' => $company->updated_at->toIso8601String(),
+                ],
+            ];
+        }
+
+        // Fallback: staff account in legacy users table
+        $legacyUser = $this->userRepository->findByEmail($email);
+
+        if (!$legacyUser || !$legacyUser->verifyPassword($password)) {
             throw new HttpException(401, 'Invalid email or password.');
         }
 
-        if ($user->status === 'unverified') {
-            throw new HttpException(403, 'Please verify your email before logging in.');
+        $staff = $this->staffRepository->findByUserId($legacyUser->id);
+
+        if (!$staff) {
+            throw new HttpException(401, 'Invalid email or password.');
         }
 
-        if ($user->status === 'inactive') {
-            throw new HttpException(403, 'Your account has been deactivated.');
-        }
-
-        $this->saasUserRepository->updateLastLogin($user->id);
-
-        $issued  = $this->jwtService->issueSaasToken($user);
-        $company = $this->companyRepository->findById($user->company_id);
+        $issued  = $this->jwtService->issueLegacyToken($legacyUser);
+        $company = $this->companyRepository->findById($staff->company_id);
 
         return [
-            'userId'        => $user->id,
-            'userEmail'     => $user->email,
-            'companyId'     => $user->company_id,
+            'userId'        => $legacyUser->id,
+            'userEmail'     => $legacyUser->email,
+            'companyId'     => $staff->company_id,
             'companyName'   => $company->name,
             'companyStatus' => $company->status,
-            'userRole'      => $user->role,
+            'userRole'      => $staff->role ?? 'staff',
             'token'         => $issued['token'],
-            'licenseKey'    => 'trial-' . $user->company_id,
+            'licenseKey'    => 'trial-' . $staff->company_id,
             'licenseType'   => $company->status,
-            'email'         => $user->email,
+            'email'         => $legacyUser->email,
             'company'       => [
                 'id'        => $company->id,
                 'name'      => $company->name,

@@ -10,6 +10,8 @@ interface IStaffRepository
 
     public function findByIdAndCompany(int $id, int $companyId): ?Staff;
 
+    public function findByUserId(int $userId): ?Staff;
+
     public function create(array $data): Staff;
 
     public function update(int $id, array $data): Staff;

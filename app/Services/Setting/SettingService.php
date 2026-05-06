@@ -47,6 +47,17 @@ class SettingService
         return $this->formatAll($setting);
     }
 
+    public function getStoreHours(int $companyId): array
+    {
+        $setting = $this->settingRepository->findByCompany($companyId);
+
+        if (!$setting) {
+            return [];
+        }
+
+        return $setting->store_hours ?? [];
+    }
+
     public function updateSection(int $companyId, string $section, array $data): array
     {
         if (!isset(self::SECTION_COLUMN_MAP[$section])) {
@@ -116,7 +127,7 @@ class SettingService
             'business' => $setting->business_settings ?? [],
             'regional' => $setting->regional_settings ?? [],
             'notifications' => $setting->notification_settings ?? [],
-            'store-hours' => $setting->store_hours ?? [],
+            'storeHours' => $setting->store_hours ?? [],
             'logoUrl' => $setting->logo_url,
             'bannerUrl' => $setting->banner_url,
             'uploadedBy' => $setting->uploaded_by,

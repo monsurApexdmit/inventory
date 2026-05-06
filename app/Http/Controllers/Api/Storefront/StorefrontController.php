@@ -43,7 +43,7 @@ class StorefrontController extends Controller
         if ($request->boolean('is_hot_deal'))    $query->where('is_hot_deal', true);
         if ($request->boolean('is_best_seller')) $query->where('is_best_seller', true);
         if ($request->boolean('is_featured'))    $query->where('is_featured', true);
-        if ($request->boolean('on_sale'))        $query->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price');
+        if ($request->boolean('on_sale'))        $query->where(fn($q) => $q->where(fn($q2) => $q2->where('offer_price', '>', 0))->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price')));
 
         $limit    = min((int) $request->query('limit', 20), 100);
         $products = $query->orderBy('created_at', 'desc')->paginate($limit);
@@ -81,11 +81,12 @@ class StorefrontController extends Controller
             'hot_deal'    => $query->where('is_hot_deal', true),
             'best_seller' => $query->where('is_best_seller', true),
             'featured'    => $query->where('is_featured', true),
-            'on_sale'     => $query->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'),
+            'on_sale'     => $query->where(fn($q) => $q->where('offer_price', '>', 0)->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'))),
             default       => $query->where(function ($q) {
                 $q->where('is_hot_deal', true)
                   ->orWhere('is_best_seller', true)
                   ->orWhere('is_featured', true)
+                  ->orWhere('offer_price', '>', 0)
                   ->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'));
             }),
         };
@@ -404,6 +405,8 @@ class StorefrontController extends Controller
             'description'   => $product->description,
             'price'         => $product->price,
             'sale_price'    => $product->sale_price,
+            'offer_price'   => $product->offer_price,
+            'offer_type'    => $product->offer_type,
             'sku'           => $product->sku,
             'stock'         => $product->stock,
             'image'         => $primaryImage,
@@ -419,9 +422,11 @@ class StorefrontController extends Controller
             'variants'       => $product->variants->map(fn($v) => [
                 'id'         => $v->id,
                 'name'       => $v->name,
-                'price'      => $v->price,
-                'sale_price' => $v->sale_price,
-                'stock'      => $v->stock,
+                'price'       => $v->price,
+                'sale_price'  => $v->sale_price,
+                'offer_price' => $v->offer_price,
+                'offer_type'  => $v->offer_type,
+                'stock'       => $v->stock,
                 'sku'        => $v->sku,
                 'attributes' => $v->attributes,
             ])->values(),

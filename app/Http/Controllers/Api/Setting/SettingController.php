@@ -91,6 +91,12 @@ class SettingController extends Controller
         return $this->success($data, 'Notification settings updated successfully');
     }
 
+    public function getStoreHours(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        return $this->success($this->settingService->getStoreHours($companyId), 'Store hours retrieved successfully');
+    }
+
     public function updateStoreHours(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');

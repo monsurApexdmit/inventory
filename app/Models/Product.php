@@ -23,6 +23,8 @@ class Product extends Model
         'description',
         'price',
         'sale_price',
+        'offer_price',
+        'offer_type',
         'cost_price',
         'profit_margin',
         'margin_type',
@@ -42,6 +44,7 @@ class Product extends Model
     protected $casts = [
         'price' => 'float',
         'sale_price' => 'float',
+        'offer_price' => 'float',
         'cost_price' => 'float',
         'profit_margin' => 'float',
         'stock' => 'integer',

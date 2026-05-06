@@ -265,6 +265,7 @@ Route::prefix('settings')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::patch('/business',            [SettingController::class, 'updateBusiness']);
     Route::patch('/regional',            [SettingController::class, 'updateRegional']);
     Route::patch('/notifications',       [SettingController::class, 'updateNotifications']);
+    Route::get('/store-hours',           [SettingController::class, 'getStoreHours']);
     Route::patch('/store-hours',         [SettingController::class, 'updateStoreHours']);
     Route::post('/change-password',      [SettingController::class, 'changePassword']);
     Route::post('/upload-logo',          [SettingController::class, 'uploadLogo']);

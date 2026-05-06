@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\SaasUser;
+use App\Models\Staff;
 use App\Services\Auth\JwtService;
 use Closure;
 use Illuminate\Http\Request;
@@ -48,12 +49,21 @@ class JwtAuthMiddleware
             ], 401);
         }
 
+        $userId    = $payload->get('sub');
+        $companyId = $payload->get('company_id');
+
+        // Legacy tokens have no company_id claim — resolve via staff table
+        if (!$companyId) {
+            $staff     = Staff::where('user_id', $userId)->first();
+            $companyId = $staff?->company_id;
+        }
+
         // Inject claims into the request for downstream use
-        $request->attributes->set('auth_user_id',    $payload->get('sub'));
-        $request->attributes->set('auth_company_id', $payload->get('company_id'));
+        $request->attributes->set('auth_user_id',    $userId);
+        $request->attributes->set('auth_company_id', $companyId);
         $request->attributes->set('auth_email',      $payload->get('email'));
         $request->attributes->set('auth_token',      $token);
-        $request->setUserResolver(static fn() => SaasUser::find($payload->get('sub')));
+        $request->setUserResolver(static fn() => SaasUser::find($userId));
 
         return $next($request);
     }

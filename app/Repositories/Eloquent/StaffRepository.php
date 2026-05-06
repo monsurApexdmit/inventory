@@ -27,6 +27,11 @@ class StaffRepository implements IStaffRepository
             ->first();
     }
 
+    public function findByUserId(int $userId): ?Staff
+    {
+        return Staff::where('user_id', $userId)->first();
+    }
+
     public function create(array $data): Staff
     {
         return $this->model->create($data);

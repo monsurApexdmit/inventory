@@ -40,6 +40,8 @@ class ProductDTO extends BaseDTO
         public readonly ?array $inventory = null,
         public readonly ?array $variants = null,
         public readonly ?array $images = null,
+        public readonly ?float $offerPrice = null,
+        public readonly ?string $offerType = null,
     ) {}
 
     public function toArray(): array
@@ -56,6 +58,8 @@ class ProductDTO extends BaseDTO
             'description'   => $this->description,
             'price'         => $this->price,
             'salePrice'     => $this->salePrice,
+            'offerPrice'    => $this->offerPrice,
+            'offerType'     => $this->offerType,
             'costPrice'     => $this->costPrice,
             'profitMargin'  => $this->profitMargin,
             'marginType'    => $this->marginType,

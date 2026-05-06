@@ -41,6 +41,10 @@ class ProductRepository implements IProductRepository
             $query->where('location_id', $filters['location_id']);
         }
 
+        if (isset($filters['vendor_id'])) {
+            $query->where('vendor_id', $filters['vendor_id']);
+        }
+
         $limit = $filters['limit'] ?? 15;
         return $query->paginate($limit);
     }

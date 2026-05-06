@@ -85,6 +85,8 @@ class ProductMapper extends BaseMapper
             inventory: !empty($inventory) ? $inventory : null,
             variants: $model->relationLoaded('variants') ? $this->formatVariants($model->variants) : null,
             images: $model->relationLoaded('images') ? $this->formatImages($model->images) : null,
+            offerPrice: $model->offer_price ? (float) $model->offer_price : null,
+            offerType: $model->offer_type,
         );
     }
 

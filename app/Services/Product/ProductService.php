@@ -383,6 +383,18 @@ class ProductService
             $dbData['sale_price'] = $data['sale_price'];
         }
 
+        if (array_key_exists('offerPrice', $data)) {
+            $dbData['offer_price'] = $data['offerPrice'] !== '' && $data['offerPrice'] !== null ? (float) $data['offerPrice'] : null;
+        } elseif (array_key_exists('offer_price', $data)) {
+            $dbData['offer_price'] = $data['offer_price'] !== '' && $data['offer_price'] !== null ? (float) $data['offer_price'] : null;
+        }
+
+        if (array_key_exists('offerType', $data)) {
+            $dbData['offer_type'] = $data['offerType'] ?: null;
+        } elseif (array_key_exists('offer_type', $data)) {
+            $dbData['offer_type'] = $data['offer_type'] ?: null;
+        }
+
         if (isset($data['costPrice'])) {
             $dbData['cost_price'] = $data['costPrice'];
         } elseif (isset($data['cost_price'])) {
@@ -494,6 +506,18 @@ class ProductService
             $dbData['sale_price'] = $data['salePrice'];
         } elseif (isset($data['sale_price'])) {
             $dbData['sale_price'] = $data['sale_price'];
+        }
+
+        if (array_key_exists('offerPrice', $data)) {
+            $dbData['offer_price'] = $data['offerPrice'] !== '' && $data['offerPrice'] !== null ? (float) $data['offerPrice'] : null;
+        } elseif (array_key_exists('offer_price', $data)) {
+            $dbData['offer_price'] = $data['offer_price'] !== '' && $data['offer_price'] !== null ? (float) $data['offer_price'] : null;
+        }
+
+        if (array_key_exists('offerType', $data)) {
+            $dbData['offer_type'] = $data['offerType'] ?: null;
+        } elseif (array_key_exists('offer_type', $data)) {
+            $dbData['offer_type'] = $data['offer_type'] ?: null;
         }
 
         // Accept both camelCase and snake_case for cost_price

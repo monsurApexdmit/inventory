@@ -39,6 +39,8 @@ class ProductVariantMapper extends BaseMapper
             price: (float) $model->price,
             salePrice: (float) $model->sale_price,
             costPrice: (float) $model->cost_price,
+            offerPrice: $model->offer_price ? (float) $model->offer_price : null,
+            offerType: $model->offer_type,
             stock: (int) $model->stock,
             sku: $model->sku,
             barcode: $model->barcode,
