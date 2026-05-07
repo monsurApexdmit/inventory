@@ -2,15 +2,31 @@
 
 use App\Models\Customer;
 use App\Models\SaasUser;
+use App\Models\Staff;
 use App\Models\SupportTicket;
+use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
+if (!function_exists('resolveUserCompanyId')) {
+    function resolveUserCompanyId(mixed $user): ?int
+    {
+        if ($user instanceof SaasUser) {
+            return (int) $user->company_id;
+        }
+        if ($user instanceof User) {
+            $staff = Staff::where('user_id', $user->id)->first();
+            return $staff ? (int) $staff->company_id : null;
+        }
+        return null;
+    }
+}
+
 Broadcast::channel('support.company.{companyId}', function (mixed $user, int $companyId): bool {
-    return $user instanceof SaasUser && (int) $user->company_id === $companyId;
+    return resolveUserCompanyId($user) === $companyId;
 });
 
 Broadcast::channel('notifications.company.{companyId}', function (mixed $user, int $companyId): bool {
-    return $user instanceof SaasUser && (int) $user->company_id === $companyId;
+    return resolveUserCompanyId($user) === $companyId;
 });
 
 Broadcast::channel('support.ticket.{ticketId}', function (mixed $user, int $ticketId): bool {
@@ -20,8 +36,9 @@ Broadcast::channel('support.ticket.{ticketId}', function (mixed $user, int $tick
         return false;
     }
 
-    if ($user instanceof SaasUser) {
-        return (int) $user->company_id === (int) $ticket->company_id;
+    $userCompanyId = resolveUserCompanyId($user);
+    if ($userCompanyId !== null) {
+        return $userCompanyId === (int) $ticket->company_id;
     }
 
     if ($user instanceof Customer) {

@@ -328,8 +328,13 @@ class SaasAuthService
     // Me
     // -------------------------------------------------------------------------
 
-    public function me(int $userId): array
+    public function me(int $userId, bool $isLegacy = false): array
     {
+        // Legacy staff tokens: JWT has no company_id claim
+        if ($isLegacy) {
+            return $this->meAsStaff($userId);
+        }
+
         $user = $this->saasUserRepository->findByIdWithCompany($userId);
 
         if (!$user) {
@@ -365,14 +370,104 @@ class SaasAuthService
 
         return [
             'user' => [
-                'id'         => $user->id,
-                'companyId'  => $user->company_id,
-                'email'      => $user->email,
-                'fullName'   => $user->full_name,
-                'role'       => $user->role,
-                'status'     => $user->status,
-                'joinedDate' => $user->joined_date?->toIso8601String(),
-                'lastLogin'  => $user->last_login?->toIso8601String(),
+                'id'          => $user->id,
+                'companyId'   => $user->company_id,
+                'email'       => $user->email,
+                'fullName'    => $user->full_name,
+                'role'        => $user->role,
+                'status'      => $user->status,
+                'joinedDate'  => $user->joined_date?->toIso8601String(),
+                'lastLogin'   => $user->last_login?->toIso8601String(),
+                'permissions' => null, // null = full access (owner/admin bypass)
+                'roleId'      => $user->role_id,
+            ],
+            'company' => [
+                'id'                  => $company->id,
+                'name'                => $company->name,
+                'status'              => $company->status,
+                'createdAt'           => $company->created_at->toIso8601String(),
+                'updatedAt'           => $company->updated_at->toIso8601String(),
+                'trialDaysRemaining'  => $trialDaysRemaining,
+                'subscriptionEndDate' => $subscription?->current_period_end?->toIso8601String() ?? $trialEnd->toIso8601String(),
+                'planId'              => $plan?->id,
+                'planName'            => $plan?->name,
+                'planFeatures'        => $planFeatures,
+                'maxUsers'            => $maxUsers,
+                'maxProducts'         => $maxProducts,
+                'maxBranches'         => $maxBranches,
+            ],
+        ];
+    }
+
+    private function meAsStaff(int $legacyUserId): array
+    {
+        $legacyUser = $this->userRepository->findById($legacyUserId);
+
+        if (!$legacyUser) {
+            throw new HttpException(404, 'User not found.');
+        }
+
+        $staff = $this->staffRepository->findByUserId($legacyUserId);
+
+        if (!$staff) {
+            throw new HttpException(404, 'Staff record not found.');
+        }
+
+        $company = $this->companyRepository->findById($staff->company_id);
+
+        if (!$company) {
+            throw new HttpException(404, 'Company not found.');
+        }
+
+        $subscription = $company->subscriptions()->latest()->first();
+        $plan = $subscription?->plan;
+
+        $trialEnd           = now()->addDays(10);
+        $trialDaysRemaining = max(0, (int) now()->diffInDays($trialEnd));
+
+        $planFeatures = [];
+        $maxUsers = 10;
+        $maxProducts = 1000;
+        $maxBranches = 1;
+
+        if ($plan) {
+            $features = $plan->features;
+            $planFeatures = is_string($features) ? (json_decode($features, true) ?? []) : ($features ?? []);
+            $maxUsers = (int) ($plan->max_users ?? 10);
+            $maxProducts = (int) ($plan->max_products ?? 1000);
+            $maxBranches = (int) ($plan->max_branches ?? 1);
+        }
+
+        // Build permission map from custom role_permissions table
+        $permissions = [];
+        if ($staff->staff_role_id) {
+            $rolePerms = \App\Models\RolePermission::with('permission')
+                ->where('role_id', $staff->staff_role_id)
+                ->get();
+
+            foreach ($rolePerms as $rp) {
+                if ($rp->permission) {
+                    $permissions[$rp->permission->name] = [
+                        'read'   => (bool) $rp->read,
+                        'write'  => (bool) $rp->write,
+                        'delete' => (bool) $rp->delete,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'user' => [
+                'id'          => $legacyUser->id,
+                'companyId'   => $staff->company_id,
+                'email'       => $legacyUser->email,
+                'fullName'    => $staff->name,
+                'role'        => $staff->role ?? 'staff',
+                'status'      => $staff->status ?? 'active',
+                'joinedDate'  => $staff->joining_date ?? null,
+                'lastLogin'   => null,
+                'permissions' => $permissions, // keyed by module name
+                'roleId'      => $staff->staff_role_id,
             ],
             'company' => [
                 'id'                  => $company->id,

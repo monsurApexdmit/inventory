@@ -22,7 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\ParseMultipartPutRequest::class,
         ]);
         $middleware->alias([
-            'customer.auth' => \App\Http\Middleware\CustomerAuthMiddleware::class,
+            'customer.auth'    => \App\Http\Middleware\CustomerAuthMiddleware::class,
+            'check_permission' => \App\Http\Middleware\CheckPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -23,6 +23,7 @@ class Staff extends Model
         'contact',
         'joining_date',
         'role',
+        'staff_role_id',
         'status',
         'published',
         'avatar',
@@ -49,6 +50,11 @@ class Staff extends Model
     public function uploadedBy(): BelongsTo
     {
         return $this->belongsTo(SaasUser::class, 'uploaded_by');
+    }
+
+    public function staffRole(): BelongsTo
+    {
+        return $this->belongsTo(StaffRole::class, 'staff_role_id');
     }
 
     public function salaryPayments(): HasMany

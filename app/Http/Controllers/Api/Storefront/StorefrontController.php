@@ -246,10 +246,11 @@ class StorefrontController extends Controller
             ->orderBy('id')
             ->get()
             ->map(fn($m) => [
-                'id'          => $m->id,
-                'name'        => $m->name,
-                'description' => $m->description,
-                'icon'        => $m->icon,
+                'id'           => $m->id,
+                'name'         => $m->name,
+                'description'  => $m->description,
+                'icon'         => $m->icon,
+                'gateway_type' => $m->gateway_type ?? 'cod',
             ]);
 
         return response()->json(['success' => true, 'data' => $methods]);

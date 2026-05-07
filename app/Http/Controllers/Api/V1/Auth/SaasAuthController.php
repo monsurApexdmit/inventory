@@ -112,8 +112,9 @@ class SaasAuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $userId = $request->attributes->get('auth_user_id');
-        $dto = $this->authService->me($userId);
+        $userId   = $request->attributes->get('auth_user_id');
+        $isLegacy = $request->attributes->get('auth_is_legacy', false);
+        $dto = $this->authService->me($userId, $isLegacy);
         $data = is_object($dto) && method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
 
         return $this->success($data, 'Current user fetched');

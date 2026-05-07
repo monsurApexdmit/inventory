@@ -45,6 +45,10 @@ class PermissionSeeder extends Seeder
         'International',
         'Notifications',
         'Support',
+        // Added in RBAC audit
+        'Product Reviews',
+        'Checkout',
+        'User Management',
     ];
 
     public function run(): void

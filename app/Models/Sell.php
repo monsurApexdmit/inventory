@@ -42,6 +42,7 @@ class Sell extends Model
         'status',
         'stock_deducted',
         'payment_status',
+        'payment_transaction_id',
         'fulfillment_status',
         'tracking_number',
         'carrier',

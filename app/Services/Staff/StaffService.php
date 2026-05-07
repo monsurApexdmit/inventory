@@ -60,18 +60,19 @@ class StaffService
 
             // Create Staff record
             $staff = $this->staffRepository->create([
-                'company_id' => $companyId,
-                'user_id' => $user->id,
-                'name' => $data['name'],
-                'email' => $data['email'],
-                'contact' => $data['contact'] ?? null,
-                'joining_date' => $data['joiningDate'] ?? null,
-                'role' => $data['role'] ?? null,
-                'status' => $data['status'] ?? 'Active',
-                'published' => $data['published'] ?? false,
-                'avatar' => $data['avatar'] ?? null,
-                'salary' => $data['salary'] ?? 0,
-                'bank_account' => $data['bankAccount'] ?? null,
+                'company_id'    => $companyId,
+                'user_id'       => $user->id,
+                'name'          => $data['name'],
+                'email'         => $data['email'],
+                'contact'       => $data['contact'] ?? null,
+                'joining_date'  => $data['joiningDate'] ?? null,
+                'role'          => $data['role'] ?? null,
+                'staff_role_id' => $data['staffRoleId'] ?? null,
+                'status'        => $data['status'] ?? 'Active',
+                'published'     => $data['published'] ?? false,
+                'avatar'        => $data['avatar'] ?? null,
+                'salary'        => $data['salary'] ?? 0,
+                'bank_account'  => $data['bankAccount'] ?? null,
                 'payment_method' => $data['paymentMethod'] ?? null,
             ]);
 
@@ -108,6 +109,24 @@ class StaffService
                 if ($staff->user_id) {
                     $this->userRepository->update($staff->user_id, $updateData);
                 }
+            }
+
+            // Remap camelCase keys for staff table
+            if (isset($data['staffRoleId'])) {
+                $data['staff_role_id'] = $data['staffRoleId'];
+                unset($data['staffRoleId']);
+            }
+            if (isset($data['joiningDate'])) {
+                $data['joining_date'] = $data['joiningDate'];
+                unset($data['joiningDate']);
+            }
+            if (isset($data['bankAccount'])) {
+                $data['bank_account'] = $data['bankAccount'];
+                unset($data['bankAccount']);
+            }
+            if (isset($data['paymentMethod'])) {
+                $data['payment_method'] = $data['paymentMethod'];
+                unset($data['paymentMethod']);
             }
 
             // Update Staff record

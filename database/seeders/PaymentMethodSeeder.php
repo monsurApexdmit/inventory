@@ -13,25 +13,28 @@ class PaymentMethodSeeder extends Seeder
 
         $methods = [
             [
-                'name'        => 'Cash on Delivery',
-                'description' => 'Pay when your order arrives at your doorstep',
-                'icon'        => 'banknote',
-                'is_active'   => true,
-                'sort_order'  => 1,
+                'name'         => 'Cash on Delivery',
+                'description'  => 'Pay when your order arrives at your doorstep',
+                'icon'         => 'banknote',
+                'gateway_type' => 'cod',
+                'is_active'    => true,
+                'sort_order'   => 1,
             ],
             [
-                'name'        => 'Bank Transfer',
-                'description' => 'Transfer directly to our bank account',
-                'icon'        => 'landmark',
-                'is_active'   => true,
-                'sort_order'  => 2,
+                'name'         => 'SSLCommerz',
+                'description'  => 'Pay with bKash, Nagad, Rocket, Cards or Net Banking',
+                'icon'         => 'credit-card',
+                'gateway_type' => 'sslcommerz',
+                'is_active'    => false,
+                'sort_order'   => 2,
             ],
             [
-                'name'        => 'Credit / Debit Card',
-                'description' => 'Pay securely with Visa, Mastercard or Amex',
-                'icon'        => 'credit-card',
-                'is_active'   => true,
-                'sort_order'  => 3,
+                'name'         => 'PortWallet',
+                'description'  => 'Pay with Cards or Mobile Banking via PortWallet',
+                'icon'         => 'wallet',
+                'gateway_type' => 'portwallet',
+                'is_active'    => false,
+                'sort_order'   => 3,
             ],
         ];
 

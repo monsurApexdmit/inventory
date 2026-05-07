@@ -10,7 +10,10 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Sell;
 use App\Models\VariantInventory;
+use App\Models\PaymentMethod;
 use App\Services\Coupon\CouponService;
+use App\Services\Gateway\SSLCommerzService;
+use App\Services\Gateway\PortWalletService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -239,6 +242,62 @@ class StorefrontOrderController extends Controller
             $customer->name,
             $total
         );
+
+        // Resolve gateway_type from PaymentMethod record
+        $paymentMethodRecord = PaymentMethod::where('company_id', $customer->company_id)
+            ->whereRaw('LOWER(name) = ?', [strtolower($request->payment_method)])
+            ->first();
+        $gatewayType = $paymentMethodRecord?->gateway_type ?? 'cod';
+
+        if (in_array($gatewayType, ['sslcommerz', 'portwallet'])) {
+            // Mark order as awaiting payment
+            $sell->update(['payment_status' => 'pending_payment']);
+
+            $appUrl      = rtrim(config('app.url'), '/');
+            $callbackBase = $appUrl . '/api/gateway';
+            $tranId      = 'INV-' . $sell->invoice_no;
+
+            $gatewayParams = [
+                'amount'           => $total,
+                'currency'         => 'BDT',
+                'tran_id'          => $tranId,
+                'product_name'     => 'Order ' . $sell->invoice_no,
+                'customer_name'    => $customer->name,
+                'customer_email'   => $customer->email,
+                'customer_phone'   => $request->shipping_address['phone'] ?? $customer->phone ?? '',
+                'shipping_address' => $request->shipping_address['address'] ?? '',
+                'shipping_city'    => $request->shipping_address['city'] ?? 'Dhaka',
+            ];
+
+            try {
+                if ($gatewayType === 'sslcommerz') {
+                    $gatewayParams['success_url'] = "{$callbackBase}/sslcommerz/success";
+                    $gatewayParams['fail_url']    = "{$callbackBase}/sslcommerz/fail";
+                    $gatewayParams['cancel_url']  = "{$callbackBase}/sslcommerz/cancel";
+                    $gatewayParams['ipn_url']     = "{$callbackBase}/sslcommerz/ipn";
+                    $service     = new SSLCommerzService($customer->company_id);
+                    $paymentUrl  = $service->initPayment($gatewayParams);
+                } else {
+                    $gatewayParams['success_url'] = "{$callbackBase}/portwallet/callback";
+                    $gatewayParams['fail_url']    = "{$callbackBase}/portwallet/callback";
+                    $gatewayParams['cancel_url']  = "{$callbackBase}/portwallet/callback";
+                    $gatewayParams['ipn_url']     = "{$callbackBase}/portwallet/callback";
+                    $service    = new PortWalletService($customer->company_id);
+                    $paymentUrl = $service->initPayment($gatewayParams);
+                }
+            } catch (\Throwable $e) {
+                // Delete order so user can retry — don't leave ghost pending_payment orders
+                $sell->items()->delete();
+                $sell->delete();
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+            }
+
+            return response()->json([
+                'success'     => true,
+                'data'        => $this->formatOrder($sell->load('items')),
+                'payment_url' => $paymentUrl,
+            ], 201);
+        }
 
         return response()->json([
             'success' => true,

@@ -15,6 +15,7 @@ class PaymentMethod extends Model
         'name',
         'description',
         'icon',
+        'gateway_type',
         'is_active',
         'sort_order',
     ];

@@ -30,11 +30,12 @@ class PaymentMethodController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
 
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
-            'description' => 'nullable|string|max:500',
-            'icon'        => 'nullable|string|max:50',
-            'is_active'   => 'boolean',
-            'sort_order'  => 'integer|min:0',
+            'name'         => 'required|string|max:255',
+            'description'  => 'nullable|string|max:500',
+            'icon'         => 'nullable|string|max:50',
+            'gateway_type' => 'nullable|string|in:cod,sslcommerz,portwallet',
+            'is_active'    => 'boolean',
+            'sort_order'   => 'integer|min:0',
         ]);
 
         $method = PaymentMethod::create(array_merge($data, ['company_id' => $companyId]));
@@ -49,11 +50,12 @@ class PaymentMethodController extends Controller
         $method = PaymentMethod::where('company_id', $companyId)->findOrFail($id);
 
         $data = $request->validate([
-            'name'        => 'sometimes|string|max:255',
-            'description' => 'nullable|string|max:500',
-            'icon'        => 'nullable|string|max:50',
-            'is_active'   => 'boolean',
-            'sort_order'  => 'integer|min:0',
+            'name'         => 'sometimes|string|max:255',
+            'description'  => 'nullable|string|max:500',
+            'icon'         => 'nullable|string|max:50',
+            'gateway_type' => 'nullable|string|in:cod,sslcommerz,portwallet',
+            'is_active'    => 'boolean',
+            'sort_order'   => 'integer|min:0',
         ]);
 
         $method->update($data);
@@ -84,12 +86,13 @@ class PaymentMethodController extends Controller
     private function format(PaymentMethod $m): array
     {
         return [
-            'id'          => $m->id,
-            'name'        => $m->name,
-            'description' => $m->description,
-            'icon'        => $m->icon,
-            'isActive'    => $m->is_active,
-            'sortOrder'   => $m->sort_order,
+            'id'           => $m->id,
+            'name'         => $m->name,
+            'description'  => $m->description,
+            'icon'         => $m->icon,
+            'gateway_type' => $m->gateway_type ?? 'cod',
+            'isActive'     => $m->is_active,
+            'sortOrder'    => $m->sort_order,
         ];
     }
 }
