@@ -75,6 +75,23 @@ class SellController extends Controller
         }
     }
 
+    public function weeklyOrders(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        if (!$companyId) {
+            return $this->error('Company ID not found in context', 401);
+        }
+
+        try {
+            $data = $this->sellService->getWeeklyOrders($companyId);
+            return $this->success($data, 'Weekly orders retrieved successfully');
+        } catch (\Exception $e) {
+            \Log::error('Weekly orders failed', ['message' => $e->getMessage()]);
+            return $this->error('Failed to retrieve weekly orders', 500);
+        }
+    }
+
     /**
      * GET /sells/:id
      * Get a single sell

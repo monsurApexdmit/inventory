@@ -11,9 +11,14 @@ use App\Models\ProductVariant;
 use App\Models\Sell;
 use App\Models\VariantInventory;
 use App\Models\PaymentMethod;
+use App\Models\Setting;
 use App\Services\Coupon\CouponService;
 use App\Services\Gateway\SSLCommerzService;
 use App\Services\Gateway\PortWalletService;
+use App\Services\Gateway\StripeService;
+use App\Services\Gateway\PayPalService;
+use App\Services\Gateway\BkashService;
+use App\Services\Gateway\NagadService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -249,13 +254,12 @@ class StorefrontOrderController extends Controller
             ->first();
         $gatewayType = $paymentMethodRecord?->gateway_type ?? 'cod';
 
-        if (in_array($gatewayType, ['sslcommerz', 'portwallet'])) {
-            // Mark order as awaiting payment
+        if (in_array($gatewayType, ['sslcommerz', 'portwallet', 'stripe', 'paypal', 'bkash', 'nagad'])) {
             $sell->update(['payment_status' => 'pending_payment']);
 
-            $appUrl      = rtrim(config('app.url'), '/');
+            $appUrl       = rtrim(config('app.url'), '/');
             $callbackBase = $appUrl . '/api/gateway';
-            $tranId      = 'INV-' . $sell->invoice_no;
+            $tranId       = 'INV-' . $sell->invoice_no;
 
             $gatewayParams = [
                 'amount'           => $total,
@@ -267,6 +271,7 @@ class StorefrontOrderController extends Controller
                 'customer_phone'   => $request->shipping_address['phone'] ?? $customer->phone ?? '',
                 'shipping_address' => $request->shipping_address['address'] ?? '',
                 'shipping_city'    => $request->shipping_address['city'] ?? 'Dhaka',
+                'brand_name'       => config('app.name', 'Shop'),
             ];
 
             try {
@@ -275,18 +280,43 @@ class StorefrontOrderController extends Controller
                     $gatewayParams['fail_url']    = "{$callbackBase}/sslcommerz/fail";
                     $gatewayParams['cancel_url']  = "{$callbackBase}/sslcommerz/cancel";
                     $gatewayParams['ipn_url']     = "{$callbackBase}/sslcommerz/ipn";
-                    $service     = new SSLCommerzService($customer->company_id);
-                    $paymentUrl  = $service->initPayment($gatewayParams);
-                } else {
+                    $service    = new SSLCommerzService($customer->company_id);
+                    $paymentUrl = $service->initPayment($gatewayParams);
+
+                } elseif ($gatewayType === 'portwallet') {
                     $gatewayParams['success_url'] = "{$callbackBase}/portwallet/callback";
                     $gatewayParams['fail_url']    = "{$callbackBase}/portwallet/callback";
                     $gatewayParams['cancel_url']  = "{$callbackBase}/portwallet/callback";
                     $gatewayParams['ipn_url']     = "{$callbackBase}/portwallet/callback";
                     $service    = new PortWalletService($customer->company_id);
                     $paymentUrl = $service->initPayment($gatewayParams);
+
+                } elseif ($gatewayType === 'stripe') {
+                    // Stripe uses USD by default; override currency for international shops
+                    $gatewayParams['currency']    = 'USD';
+                    $gatewayParams['success_url'] = "{$callbackBase}/stripe/success?tran_id={$tranId}";
+                    $gatewayParams['cancel_url']  = "{$callbackBase}/stripe/cancel?tran_id={$tranId}";
+                    $service    = new StripeService($customer->company_id);
+                    $paymentUrl = $service->initPayment($gatewayParams);
+
+                } elseif ($gatewayType === 'bkash') {
+                    $gatewayParams['callback_url'] = "{$callbackBase}/bkash/callback?tran_id={$tranId}";
+                    $service    = new BkashService($customer->company_id);
+                    $paymentUrl = $service->initPayment($gatewayParams);
+
+                } elseif ($gatewayType === 'nagad') {
+                    $gatewayParams['callback_url'] = "{$callbackBase}/nagad/callback";
+                    $service    = new NagadService($customer->company_id);
+                    $paymentUrl = $service->initPayment($gatewayParams);
+
+                } else { // paypal
+                    $gatewayParams['currency']    = 'USD';
+                    $gatewayParams['success_url'] = "{$callbackBase}/paypal/success?tran_id={$tranId}";
+                    $gatewayParams['cancel_url']  = "{$callbackBase}/paypal/cancel?tran_id={$tranId}";
+                    $service    = new PayPalService($customer->company_id);
+                    $paymentUrl = $service->initPayment($gatewayParams);
                 }
             } catch (\Throwable $e) {
-                // Delete order so user can retry — don't leave ghost pending_payment orders
                 $sell->items()->delete();
                 $sell->delete();
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
@@ -297,6 +327,90 @@ class StorefrontOrderController extends Controller
                 'data'        => $this->formatOrder($sell->load('items')),
                 'payment_url' => $paymentUrl,
             ], 201);
+        }
+
+        // COD shipping deposit — charge only shipping cost via gateway before delivery
+        if ($gatewayType === 'cod' && $shippingCost > 0) {
+            $setting     = Setting::where('company_id', $customer->company_id)->first();
+            $codDeposit  = $setting?->payment_settings['cod_shipping_deposit'] ?? [];
+            $depositEnabled  = (bool) ($codDeposit['enabled'] ?? false);
+            $depositGateway  = $codDeposit['gateway'] ?? 'sslcommerz'; // 'sslcommerz' | 'portwallet'
+            $depositAmount   = (float) ($codDeposit['custom_amount'] ?? 0) ?: $shippingCost;
+
+            // Guard: check that the selected deposit gateway has credentials before redirecting
+            $allPaymentSettings = $setting?->payment_settings ?? [];
+            $gatewayCredentials = $allPaymentSettings[$depositGateway] ?? [];
+            $hasCredentials = match($depositGateway) {
+                'sslcommerz' => !empty($gatewayCredentials['store_id']) && !empty($gatewayCredentials['store_passwd']),
+                'portwallet'  => !empty($gatewayCredentials['app_key']) && !empty($gatewayCredentials['app_secret']),
+                'bkash'       => !empty($gatewayCredentials['app_key']) && !empty($gatewayCredentials['app_secret'])
+                                 && !empty($gatewayCredentials['username']) && !empty($gatewayCredentials['password']),
+                'nagad'       => !empty($gatewayCredentials['merchant_id']) && !empty($gatewayCredentials['private_key']),
+                default       => false,
+            };
+
+            if ($depositEnabled && $hasCredentials) {
+                $sell->update([
+                    'payment_status'         => 'pending_payment',
+                    'shipping_deposit_amount' => $depositAmount,
+                ]);
+
+                $appUrl       = rtrim(config('app.url'), '/');
+                $callbackBase = $appUrl . '/api/gateway/cod-deposit';
+                $tranId       = 'INV-' . $sell->invoice_no;
+
+                $depositParams = [
+                    'amount'           => $depositAmount,
+                    'currency'         => 'BDT',
+                    'tran_id'          => $tranId,
+                    'product_name'     => 'Shipping Deposit – Order ' . $sell->invoice_no,
+                    'customer_name'    => $customer->name,
+                    'customer_email'   => $customer->email,
+                    'customer_phone'   => $request->shipping_address['phone'] ?? $customer->phone ?? '',
+                    'shipping_address' => $request->shipping_address['address'] ?? '',
+                    'shipping_city'    => $request->shipping_address['city'] ?? 'Dhaka',
+                    'brand_name'       => config('app.name', 'Shop'),
+                ];
+
+                try {
+                    if ($depositGateway === 'sslcommerz') {
+                        $depositParams['success_url'] = "{$callbackBase}/sslcommerz/success";
+                        $depositParams['fail_url']    = "{$callbackBase}/sslcommerz/fail";
+                        $depositParams['cancel_url']  = "{$callbackBase}/sslcommerz/cancel";
+                        $depositParams['ipn_url']     = "{$callbackBase}/sslcommerz/ipn";
+                        $service    = new SSLCommerzService($customer->company_id);
+                        $paymentUrl = $service->initPayment($depositParams);
+                    } elseif ($depositGateway === 'portwallet') {
+                        $depositParams['success_url'] = "{$callbackBase}/portwallet/callback";
+                        $depositParams['fail_url']    = "{$callbackBase}/portwallet/callback";
+                        $depositParams['cancel_url']  = "{$callbackBase}/portwallet/callback";
+                        $depositParams['ipn_url']     = "{$callbackBase}/portwallet/callback";
+                        $service    = new PortWalletService($customer->company_id);
+                        $paymentUrl = $service->initPayment($depositParams);
+                    } elseif ($depositGateway === 'bkash') {
+                        $tranId = 'INV-' . $sell->invoice_no;
+                        $depositParams['callback_url'] = "{$callbackBase}/bkash/callback?tran_id={$tranId}";
+                        $service    = new BkashService($customer->company_id);
+                        $paymentUrl = $service->initPayment($depositParams);
+                    } else { // nagad
+                        $depositParams['callback_url'] = "{$callbackBase}/nagad/callback";
+                        $service    = new NagadService($customer->company_id);
+                        $paymentUrl = $service->initPayment($depositParams);
+                    }
+                } catch (\Throwable $e) {
+                    $sell->items()->delete();
+                    $sell->delete();
+                    return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+                }
+
+                return response()->json([
+                    'success'      => true,
+                    'data'         => $this->formatOrder($sell->load('items')),
+                    'payment_url'  => $paymentUrl,
+                    'deposit_only' => true,
+                    'deposit_amount' => $depositAmount,
+                ], 201);
+            }
         }
 
         return response()->json([

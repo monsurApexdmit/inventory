@@ -155,6 +155,29 @@ class SellRepository implements ISellRepository
         ];
     }
 
+    public function getWeeklyOrders(int $companyId): array
+    {
+        $startOfWeek = \Carbon\Carbon::now()->startOfWeek(\Carbon\Carbon::MONDAY);
+        $endOfWeek   = \Carbon\Carbon::now()->endOfWeek(\Carbon\Carbon::SUNDAY);
+
+        $rows = DB::table('sells')
+            ->where('company_id', $companyId)
+            ->whereNull('deleted_at')
+            ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+            ->selectRaw('DAYOFWEEK(created_at) as dow, COUNT(*) as cnt')
+            ->groupBy('dow')
+            ->get()
+            ->keyBy('dow');
+
+        // DAYOFWEEK: 1=Sun,2=Mon,...,7=Sat — map to Mon-Sun order
+        $order = [2, 3, 4, 5, 6, 7, 1];
+        $result = [];
+        foreach ($order as $dow) {
+            $result[] = (int) ($rows[$dow]->cnt ?? 0);
+        }
+        return $result;
+    }
+
     /**
      * Check if invoice number exists for company
      */

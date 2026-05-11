@@ -36,6 +36,38 @@ class PaymentMethodSeeder extends Seeder
                 'is_active'    => false,
                 'sort_order'   => 3,
             ],
+            [
+                'name'         => 'Stripe',
+                'description'  => 'Pay securely with Credit or Debit Card via Stripe',
+                'icon'         => 'credit-card',
+                'gateway_type' => 'stripe',
+                'is_active'    => false,
+                'sort_order'   => 4,
+            ],
+            [
+                'name'         => 'PayPal',
+                'description'  => 'Pay with your PayPal account',
+                'icon'         => 'wallet',
+                'gateway_type' => 'paypal',
+                'is_active'    => false,
+                'sort_order'   => 5,
+            ],
+            [
+                'name'         => 'bKash',
+                'description'  => 'Pay directly with your bKash account',
+                'icon'         => 'smartphone',
+                'gateway_type' => 'bkash',
+                'is_active'    => false,
+                'sort_order'   => 6,
+            ],
+            [
+                'name'         => 'Nagad',
+                'description'  => 'Pay directly with your Nagad account',
+                'icon'         => 'smartphone',
+                'gateway_type' => 'nagad',
+                'is_active'    => false,
+                'sort_order'   => 7,
+            ],
         ];
 
         foreach ($methods as $method) {

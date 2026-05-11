@@ -41,6 +41,8 @@ interface ISellRepository
      */
     public function getStats(int $companyId): array;
 
+    public function getWeeklyOrders(int $companyId): array;
+
     /**
      * Check if invoice number exists for company
      */

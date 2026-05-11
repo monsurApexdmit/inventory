@@ -300,6 +300,11 @@ class SellService
         return $this->repository->getStats($companyId);
     }
 
+    public function getWeeklyOrders(int $companyId): array
+    {
+        return $this->repository->getWeeklyOrders($companyId);
+    }
+
     /**
      * Deduct stock for sell items
      */

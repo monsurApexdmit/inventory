@@ -43,6 +43,8 @@ class Sell extends Model
         'stock_deducted',
         'payment_status',
         'payment_transaction_id',
+        'shipping_deposit_amount',
+        'shipping_deposit_transaction_id',
         'fulfillment_status',
         'tracking_number',
         'carrier',

@@ -33,7 +33,7 @@ class PaymentMethodController extends Controller
             'name'         => 'required|string|max:255',
             'description'  => 'nullable|string|max:500',
             'icon'         => 'nullable|string|max:50',
-            'gateway_type' => 'nullable|string|in:cod,sslcommerz,portwallet',
+            'gateway_type' => 'nullable|string|in:cod,manual,sslcommerz,portwallet,stripe,paypal,bkash,nagad',
             'is_active'    => 'boolean',
             'sort_order'   => 'integer|min:0',
         ]);
@@ -53,7 +53,7 @@ class PaymentMethodController extends Controller
             'name'         => 'sometimes|string|max:255',
             'description'  => 'nullable|string|max:500',
             'icon'         => 'nullable|string|max:50',
-            'gateway_type' => 'nullable|string|in:cod,sslcommerz,portwallet',
+            'gateway_type' => 'nullable|string|in:cod,manual,sslcommerz,portwallet,stripe,paypal,bkash,nagad',
             'is_active'    => 'boolean',
             'sort_order'   => 'integer|min:0',
         ]);

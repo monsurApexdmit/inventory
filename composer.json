@@ -11,6 +11,8 @@
         "laravel/reverb": "^1.10",
         "laravel/tinker": "^2.10.1",
         "pusher/pusher-php-server": "^7.2",
+        "srmklive/paypal": "^3.1",
+        "stripe/stripe-php": "^20.1",
         "tymon/jwt-auth": "^2.1"
     },
     "require-dev": {

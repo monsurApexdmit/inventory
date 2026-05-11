@@ -108,11 +108,35 @@ Route::prefix('store')->group(function () {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Route::prefix('gateway')->group(function () {
+    // SSLCommerz
     Route::post('/sslcommerz/success',  [GatewayController::class, 'sslSuccess']);
     Route::post('/sslcommerz/fail',     [GatewayController::class, 'sslFail']);
     Route::post('/sslcommerz/cancel',   [GatewayController::class, 'sslCancel']);
     Route::post('/sslcommerz/ipn',      [GatewayController::class, 'sslIpn']);
+    // PortWallet
     Route::post('/portwallet/callback', [GatewayController::class, 'portwalletCallback']);
+    // Stripe — success/cancel are GET (browser redirect), webhook is POST
+    Route::get('/stripe/success',       [GatewayController::class, 'stripeSuccess']);
+    Route::get('/stripe/cancel',        [GatewayController::class, 'stripeCancel']);
+    Route::post('/stripe/webhook',      [GatewayController::class, 'stripeWebhook']);
+    // PayPal — success/cancel are GET (browser redirect)
+    Route::get('/paypal/success',       [GatewayController::class, 'paypalSuccess']);
+    Route::get('/paypal/cancel',        [GatewayController::class, 'paypalCancel']);
+    // bKash — callback is GET (bKash redirects browser back)
+    Route::get('/bkash/callback',       [GatewayController::class, 'bkashCallback']);
+    // Nagad — callback is GET
+    Route::get('/nagad/callback',       [GatewayController::class, 'nagadCallback']);
+
+    // COD Shipping Deposit callbacks (same gateways, different status outcome)
+    Route::prefix('cod-deposit')->group(function () {
+        Route::post('/sslcommerz/success',  [GatewayController::class, 'codDepositSslSuccess']);
+        Route::post('/sslcommerz/fail',     [GatewayController::class, 'codDepositSslFail']);
+        Route::post('/sslcommerz/cancel',   [GatewayController::class, 'codDepositSslCancel']);
+        Route::post('/sslcommerz/ipn',      [GatewayController::class, 'codDepositSslIpn']);
+        Route::post('/portwallet/callback', [GatewayController::class, 'codDepositPortwalletCallback']);
+        Route::get('/bkash/callback',       [GatewayController::class, 'codDepositBkashCallback']);
+        Route::get('/nagad/callback',       [GatewayController::class, 'codDepositNagadCallback']);
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -355,6 +379,7 @@ Route::prefix('sells')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::get('/',                    [SellController::class, 'index'])->middleware('check_permission:Orders.read');
     Route::post('/',                   [SellController::class, 'store'])->middleware('check_permission:Orders.write');
     Route::get('/stats',               [SellController::class, 'stats'])->middleware('check_permission:Orders.read');
+    Route::get('/weekly-orders',       [SellController::class, 'weeklyOrders'])->middleware('check_permission:Orders.read');
     Route::get('/invoice/{invoiceNo}', [SellController::class, 'getByInvoice'])->middleware('check_permission:Orders.read');
     Route::get('/{id}',                [SellController::class, 'show'])->middleware('check_permission:Orders.read');
     Route::put('/{id}',                [SellController::class, 'update'])->middleware('check_permission:Orders.write');

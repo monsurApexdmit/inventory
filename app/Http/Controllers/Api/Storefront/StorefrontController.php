@@ -240,17 +240,38 @@ class StorefrontController extends Controller
             return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
         }
 
+        $setting        = Setting::where('company_id', $companyId)->first();
+        $paymentSettings = $setting?->payment_settings ?? [];
+        $codDeposit      = $paymentSettings['cod_shipping_deposit'] ?? [];
+        $depositEnabled  = (bool) ($codDeposit['enabled'] ?? false);
+        $depositGateway  = $codDeposit['gateway'] ?? 'sslcommerz';
+        $depositAmount   = (float) ($codDeposit['custom_amount'] ?? 0);
+
+        // Check if deposit gateway actually has credentials
+        $gatewayCreds = $paymentSettings[$depositGateway] ?? [];
+        $depositHasCreds = match($depositGateway) {
+            'sslcommerz' => !empty($gatewayCreds['store_id']) && !empty($gatewayCreds['store_passwd']),
+            'portwallet'  => !empty($gatewayCreds['app_key']) && !empty($gatewayCreds['app_secret']),
+            'bkash'       => !empty($gatewayCreds['app_key']) && !empty($gatewayCreds['app_secret'])
+                             && !empty($gatewayCreds['username']) && !empty($gatewayCreds['password']),
+            'nagad'       => !empty($gatewayCreds['merchant_id']) && !empty($gatewayCreds['private_key']),
+            default       => false,
+        };
+        $depositActive = $depositEnabled && $depositHasCreds;
+
         $methods = PaymentMethod::where('company_id', $companyId)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
             ->map(fn($m) => [
-                'id'           => $m->id,
-                'name'         => $m->name,
-                'description'  => $m->description,
-                'icon'         => $m->icon,
-                'gateway_type' => $m->gateway_type ?? 'cod',
+                'id'                     => $m->id,
+                'name'                   => $m->name,
+                'description'            => $m->description,
+                'icon'                   => $m->icon,
+                'gateway_type'           => $m->gateway_type ?? 'cod',
+                'cod_deposit_required'   => ($m->gateway_type ?? 'cod') === 'cod' && $depositActive,
+                'cod_deposit_amount'     => ($m->gateway_type ?? 'cod') === 'cod' && $depositActive ? $depositAmount : null,
             ]);
 
         return response()->json(['success' => true, 'data' => $methods]);
