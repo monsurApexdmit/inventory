@@ -412,6 +412,7 @@ class StorefrontController extends Controller
                 'storeHours'    => $storeHours,
                 'logoUrl'       => $storeSettings?->logo_url ?? null,
                 'faviconUrl'    => $generalSettings['faviconUrl'] ?? $storeSettings?->logo_url ?? null,
+                'bannerUrl'     => $storeSettings?->banner_url ?? null,
             ],
         ]);
     }
