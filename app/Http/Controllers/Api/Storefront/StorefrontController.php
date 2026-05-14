@@ -413,6 +413,9 @@ class StorefrontController extends Controller
                 'logoUrl'       => $storeSettings?->logo_url ?? null,
                 'faviconUrl'    => $generalSettings['faviconUrl'] ?? $storeSettings?->logo_url ?? null,
                 'bannerUrl'     => $storeSettings?->banner_url ?? null,
+                'primaryColor'     => $generalSettings['primaryColor'] ?? null,
+                'accentColor'      => $generalSettings['accentColor'] ?? null,
+                'backgroundColor'  => $generalSettings['backgroundColor'] ?? null,
             ],
         ]);
     }
