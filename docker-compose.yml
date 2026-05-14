@@ -7,6 +7,7 @@ services:
     working_dir: /var/www
     volumes:
       - ./:/var/www
+      - ./php-upload.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     networks:
       - laravel
       - database_db_network
@@ -31,6 +32,7 @@ services:
       "
     volumes:
       - ./:/var/www
+      - ./php-upload.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     ports:
       - "8088:8080"
     networks:

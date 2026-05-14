@@ -135,7 +135,7 @@ class SettingController extends Controller
     public function uploadLogo(UploadImageRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $uploadedBy = (int) $request->attributes->get('auth_saas_user_id');
+        $uploadedBy = (int) $request->attributes->get('auth_user_id');
 
         // Validate file size (5MB max)
         if ($request->file('file')->getSize() > 5 * 1024 * 1024) {
@@ -154,7 +154,7 @@ class SettingController extends Controller
     public function uploadBanner(UploadImageRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $uploadedBy = (int) $request->attributes->get('auth_saas_user_id');
+        $uploadedBy = (int) $request->attributes->get('auth_user_id');
 
         // Validate file size (10MB max)
         if ($request->file('file')->getSize() > 10 * 1024 * 1024) {
