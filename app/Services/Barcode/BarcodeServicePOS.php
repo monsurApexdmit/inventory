@@ -80,11 +80,12 @@ class BarcodeServicePOS
      */
     public function generateBarcodeCode(string $type = 'PROD'): string
     {
+        $prefix = $type === 'VAR' ? 'V' : 'P';
         $maxAttempts = 10;
         $attempt = 0;
 
         while ($attempt < $maxAttempts) {
-            $code = strtoupper($type) . '-' . Str::random(8) . '-' . Str::random(4);
+            $code = $prefix . strtoupper(Str::random(8));
 
             if (!$this->barcodeExists($code)) {
                 return $code;

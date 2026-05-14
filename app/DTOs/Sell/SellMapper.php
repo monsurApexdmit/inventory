@@ -118,6 +118,9 @@ class SellMapper extends BaseMapper
             shipments: $shipments,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
+            shippingDepositAmount: $model->shipping_deposit_amount !== null ? (float) $model->shipping_deposit_amount : null,
+            shippingDepositTransactionId: $model->shipping_deposit_transaction_id,
+            paymentTransactionId: $model->payment_transaction_id,
         );
     }
 

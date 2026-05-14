@@ -49,6 +49,14 @@ class PermissionSeeder extends Seeder
         'Product Reviews',
         'Checkout',
         'User Management',
+        // Tailor Shop
+        'TailorShop',
+        'TailorOrders',
+        'TailorMeasurements',
+        'TailorFabric',
+        'TailorDorji',
+        'TailorPayments',
+        'TailorReports',
     ];
 
     public function run(): void

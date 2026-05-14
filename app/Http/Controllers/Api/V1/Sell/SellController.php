@@ -92,6 +92,23 @@ class SellController extends Controller
         }
     }
 
+    public function monthlyRevenue(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        if (!$companyId) {
+            return $this->error('Company ID not found in context', 401);
+        }
+
+        try {
+            $data = $this->sellService->getMonthlyRevenue($companyId);
+            return $this->success($data, 'Monthly revenue retrieved successfully');
+        } catch (\Exception $e) {
+            \Log::error('Monthly revenue failed', ['message' => $e->getMessage()]);
+            return $this->error('Failed to retrieve monthly revenue', 500);
+        }
+    }
+
     /**
      * GET /sells/:id
      * Get a single sell

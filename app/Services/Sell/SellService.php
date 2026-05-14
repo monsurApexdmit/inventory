@@ -305,6 +305,11 @@ class SellService
         return $this->repository->getWeeklyOrders($companyId);
     }
 
+    public function getMonthlyRevenue(int $companyId): array
+    {
+        return $this->repository->getMonthlyRevenue($companyId);
+    }
+
     /**
      * Deduct stock for sell items
      */

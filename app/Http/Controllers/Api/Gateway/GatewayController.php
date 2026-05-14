@@ -443,6 +443,77 @@ class GatewayController extends Controller
         }
     }
 
+    // GET /api/gateway/cod-deposit/stripe/success?session_id=xxx&tran_id=xxx
+    public function codDepositStripeSuccess(Request $request)
+    {
+        $sessionId = $request->input('session_id');
+        $order     = $this->findOrderByTranId($request->input('tran_id', ''));
+
+        if (!$order || !$sessionId) {
+            return redirect("{$this->frontendUrl}/order/result?status=fail&reason=order_not_found");
+        }
+
+        try {
+            $service = new StripeService($order->company_id);
+            $session = $service->getSession($sessionId);
+
+            if ($session->payment_status === 'paid') {
+                $order->update([
+                    'payment_status'                  => 'shipping_deposit_paid',
+                    'shipping_deposit_transaction_id' => $session->payment_intent,
+                ]);
+                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+            }
+        } catch (\Throwable $e) {}
+
+        $order->update(['payment_status' => 'failed']);
+        return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
+    }
+
+    // GET /api/gateway/cod-deposit/stripe/cancel?tran_id=xxx
+    public function codDepositStripeCancel(Request $request)
+    {
+        $order = $this->findOrderByTranId($request->input('tran_id', ''));
+        if ($order) $order->update(['payment_status' => 'cancelled']);
+        return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice=" . ($order?->invoice_no ?? ''));
+    }
+
+    // GET /api/gateway/cod-deposit/paypal/success?token=xxx&tran_id=xxx
+    public function codDepositPaypalSuccess(Request $request)
+    {
+        $orderId = $request->input('token');
+        $order   = $this->findOrderByTranId($request->input('tran_id', ''));
+
+        if (!$order || !$orderId) {
+            return redirect("{$this->frontendUrl}/order/result?status=fail&reason=order_not_found");
+        }
+
+        try {
+            $service  = new PayPalService($order->company_id);
+            $captured = $service->captureOrder($orderId);
+
+            if (($captured['status'] ?? '') === 'COMPLETED') {
+                $txnId = $captured['purchase_units'][0]['payments']['captures'][0]['id'] ?? $orderId;
+                $order->update([
+                    'payment_status'                  => 'shipping_deposit_paid',
+                    'shipping_deposit_transaction_id' => $txnId,
+                ]);
+                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+            }
+        } catch (\Throwable $e) {}
+
+        $order->update(['payment_status' => 'failed']);
+        return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
+    }
+
+    // GET /api/gateway/cod-deposit/paypal/cancel?tran_id=xxx
+    public function codDepositPaypalCancel(Request $request)
+    {
+        $order = $this->findOrderByTranId($request->input('tran_id', ''));
+        if ($order) $order->update(['payment_status' => 'cancelled']);
+        return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice=" . ($order?->invoice_no ?? ''));
+    }
+
     private function findOrderByTranId(string $tranId): ?Sell
     {
         $invoice = str_replace('INV-', '', $tranId);

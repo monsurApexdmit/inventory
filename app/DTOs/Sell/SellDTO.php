@@ -52,6 +52,9 @@ class SellDTO extends BaseDTO
         public ?array $shipments = null,
         public string $createdAt = '',
         public string $updatedAt = '',
+        public ?float $shippingDepositAmount = null,
+        public ?string $shippingDepositTransactionId = null,
+        public ?string $paymentTransactionId = null,
     ) {}
 
     public function toArray(): array
@@ -99,6 +102,9 @@ class SellDTO extends BaseDTO
             'shipments' => $this->shipments,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'shippingDepositAmount' => $this->shippingDepositAmount,
+            'shippingDepositTransactionId' => $this->shippingDepositTransactionId,
+            'paymentTransactionId' => $this->paymentTransactionId,
         ];
     }
 }

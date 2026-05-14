@@ -12,8 +12,8 @@ class NagadService
     private string $privateKey;  // PEM, no header/footer
     private string $publicKey;   // Nagad's public key for encrypting sensitive data
 
-    // Nagad's sandbox public key (from official docs)
-    private const SANDBOX_NAGAD_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAi9Xbxfyy7fYf4pBByL8L1nQQz6q13MXhAH0NNBLqgNjDRrTCHDEFxRFNqzJtUDVaVnVVSeFx1SaDAzEsHa1xYnGfpJwIXJRfNlxUirnHXKgCH1V3CpS7wPSrfSDhGDqlOGC0uG7PVQPd0y1WDpxRpD8C5pRCGv5tOuMnbcN72VmqvKxPVG3kWpLhMnKHrmiqiTxo+I4kXKiNDFh0x9q6Aw8NCVAaBMnX6OUq+Dkm8mCcQVwb6ybC71hV2Oq9Gb0c8Jz8tLnB5bRf6FLzmOHxFrKEKg2lM7mWjk5D7JcFpZ/7x3X9Jyqe9Q9bLyV3v3Z3NZ3jFcNFKnxFJJpQIDAQAB';
+    // Nagad's sandbox public key (from sandbox PG)
+    private const SANDBOX_NAGAD_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjBH1pFNSSRKPuMcNxmU5jZ1x8K9LPFM4XSu11m7uCfLUSE4SEjL30w3ockFvwAcuJffCUwtSpbjr34cSTD7EFG1Jqk9Gg0fQCKvPaU54jjMJoP2toR9fGmQV7y9fz31UVxSk97AqWZZLJBT2lmv76AgpVV0k0xtb/0VIv8pd/j6TIz9SFfsTQOugHkhyRzzhvZisiKzOAAWNX8RMpG+iqQi4p9W9VrmmiCfFDmLFnMrwhncnMsvlXB8QSJCq2irrx3HG0SJJCbS5+atz+E1iqO8QaPJ05snxv82Mf4NlZ4gZK0Pq/VvJ20lSkR+0nk+s/v3BgIyle78wjZP1vWLU4wIDAQAB';
 
     public function __construct(int $companyId)
     {

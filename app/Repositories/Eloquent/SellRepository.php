@@ -178,6 +178,26 @@ class SellRepository implements ISellRepository
         return $result;
     }
 
+    public function getMonthlyRevenue(int $companyId): array
+    {
+        $year = \Carbon\Carbon::now()->year;
+
+        $rows = DB::table('sells')
+            ->where('company_id', $companyId)
+            ->whereNull('deleted_at')
+            ->whereYear('created_at', $year)
+            ->selectRaw('MONTH(created_at) as month, SUM(amount) as revenue')
+            ->groupBy('month')
+            ->get()
+            ->keyBy('month');
+
+        $result = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $result[] = round((float) ($rows[$m]->revenue ?? 0), 2);
+        }
+        return $result;
+    }
+
     /**
      * Check if invoice number exists for company
      */

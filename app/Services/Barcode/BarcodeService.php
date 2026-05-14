@@ -31,8 +31,7 @@ class BarcodeService
     public function generateBarcodeNumber(): string
     {
         do {
-            // Generate barcode: PROD-8 random chars-4 random chars
-            $barcode = 'PROD-' . Str::random(8) . '-' . Str::random(4);
+            $barcode = 'P' . strtoupper(Str::random(8));
         } while ($this->barcodeExists($barcode));
 
         return $barcode;

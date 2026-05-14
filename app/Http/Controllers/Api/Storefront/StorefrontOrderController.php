@@ -334,7 +334,7 @@ class StorefrontOrderController extends Controller
             $setting     = Setting::where('company_id', $customer->company_id)->first();
             $codDeposit  = $setting?->payment_settings['cod_shipping_deposit'] ?? [];
             $depositEnabled  = (bool) ($codDeposit['enabled'] ?? false);
-            $depositGateway  = $codDeposit['gateway'] ?? 'sslcommerz'; // 'sslcommerz' | 'portwallet'
+            $depositGateway  = $codDeposit['gateway'] ?? 'sslcommerz';
             $depositAmount   = (float) ($codDeposit['custom_amount'] ?? 0) ?: $shippingCost;
 
             // Guard: check that the selected deposit gateway has credentials before redirecting
@@ -346,6 +346,8 @@ class StorefrontOrderController extends Controller
                 'bkash'       => !empty($gatewayCredentials['app_key']) && !empty($gatewayCredentials['app_secret'])
                                  && !empty($gatewayCredentials['username']) && !empty($gatewayCredentials['password']),
                 'nagad'       => !empty($gatewayCredentials['merchant_id']) && !empty($gatewayCredentials['private_key']),
+                'stripe'      => !empty($gatewayCredentials['secret_key']),
+                'paypal'      => !empty($gatewayCredentials['client_id']) && !empty($gatewayCredentials['client_secret']),
                 default       => false,
             };
 
@@ -392,9 +394,21 @@ class StorefrontOrderController extends Controller
                         $depositParams['callback_url'] = "{$callbackBase}/bkash/callback?tran_id={$tranId}";
                         $service    = new BkashService($customer->company_id);
                         $paymentUrl = $service->initPayment($depositParams);
-                    } else { // nagad
+                    } elseif ($depositGateway === 'nagad') {
                         $depositParams['callback_url'] = "{$callbackBase}/nagad/callback";
                         $service    = new NagadService($customer->company_id);
+                        $paymentUrl = $service->initPayment($depositParams);
+                    } elseif ($depositGateway === 'stripe') {
+                        $depositParams['currency']    = 'USD';
+                        $depositParams['success_url'] = "{$callbackBase}/stripe/success?tran_id={$tranId}";
+                        $depositParams['cancel_url']  = "{$callbackBase}/stripe/cancel?tran_id={$tranId}";
+                        $service    = new StripeService($customer->company_id);
+                        $paymentUrl = $service->initPayment($depositParams);
+                    } else { // paypal
+                        $depositParams['currency']    = 'USD';
+                        $depositParams['success_url'] = "{$callbackBase}/paypal/success?tran_id={$tranId}";
+                        $depositParams['cancel_url']  = "{$callbackBase}/paypal/cancel?tran_id={$tranId}";
+                        $service    = new PayPalService($customer->company_id);
                         $paymentUrl = $service->initPayment($depositParams);
                     }
                 } catch (\Throwable $e) {
@@ -444,6 +458,9 @@ class StorefrontOrderController extends Controller
                 'zip'      => $order->shipping_postal_code,
                 'country'  => $order->shipping_country,
             ],
+            'payment_transaction_id'          => $order->payment_transaction_id,
+            'shipping_deposit_amount'          => $order->shipping_deposit_amount !== null ? (float) $order->shipping_deposit_amount : null,
+            'shipping_deposit_transaction_id'  => $order->shipping_deposit_transaction_id,
             'items' => $order->items->map(fn($item) => [
                 'id'           => $item->id,
                 'product_id'   => $item->product_id,

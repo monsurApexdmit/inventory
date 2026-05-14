@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Auth\LegacyAuthController;
 use App\Http\Controllers\Api\V1\Auth\SaasAuthController;
 use App\Http\Controllers\Api\V1\Customer\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerReturn\CustomerReturnController;
+use App\Http\Controllers\Api\V1\CustomerReturn\StorefrontCustomerReturnController;
 use App\Http\Controllers\Api\V1\Product\ProductController;
 use App\Http\Controllers\Api\V1\Product\ProductReviewReplyController;
 use App\Http\Controllers\Api\V1\Shipping\ShippingAddressController;
@@ -40,6 +41,7 @@ use App\Http\Controllers\Api\Storefront\WishlistController;
 use App\Http\Controllers\Api\Storefront\WishlistAnalyticsController;
 use App\Http\Controllers\Api\V1\ContentPageController;
 use App\Http\Controllers\Api\Gateway\GatewayController;
+use App\Http\Controllers\Api\Tailor\TailorController;
 use App\Http\Middleware\JwtAuthMiddleware;
 use Illuminate\Support\Facades\Route;
 
@@ -62,6 +64,7 @@ Route::prefix('store')->group(function () {
     Route::get('/pages/{slug}',       [StorefrontController::class, 'page']);
     Route::get('/settings/company',   [StorefrontController::class, 'companySettings']);
     Route::get('/settings/homepage-hero', [StorefrontController::class, 'homepageHero']);
+    Route::get('/stats',              [StorefrontController::class, 'stats']);
 
     // Public order tracking (no auth)
     Route::get('/orders/track',        [StorefrontOrderController::class, 'trackOrder']);
@@ -100,6 +103,12 @@ Route::prefix('store')->group(function () {
         Route::post('/support/tickets',            [StorefrontSupportController::class, 'store']);
         Route::get('/support/tickets/{id}',        [StorefrontSupportController::class, 'show']);
         Route::post('/support/tickets/{id}/reply', [StorefrontSupportController::class, 'reply']);
+
+        // Customer returns (store-side)
+        Route::get('/returns',      [StorefrontCustomerReturnController::class, 'index']);
+        Route::post('/returns',     [StorefrontCustomerReturnController::class, 'store']);
+        Route::get('/returns/{id}', [StorefrontCustomerReturnController::class, 'show']);
+        Route::delete('/returns/{id}', [StorefrontCustomerReturnController::class, 'cancel']);
     });
 });
 
@@ -136,6 +145,10 @@ Route::prefix('gateway')->group(function () {
         Route::post('/portwallet/callback', [GatewayController::class, 'codDepositPortwalletCallback']);
         Route::get('/bkash/callback',       [GatewayController::class, 'codDepositBkashCallback']);
         Route::get('/nagad/callback',       [GatewayController::class, 'codDepositNagadCallback']);
+        Route::get('/stripe/success',       [GatewayController::class, 'codDepositStripeSuccess']);
+        Route::get('/stripe/cancel',        [GatewayController::class, 'codDepositStripeCancel']);
+        Route::get('/paypal/success',       [GatewayController::class, 'codDepositPaypalSuccess']);
+        Route::get('/paypal/cancel',        [GatewayController::class, 'codDepositPaypalCancel']);
     });
 });
 
@@ -380,6 +393,7 @@ Route::prefix('sells')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::post('/',                   [SellController::class, 'store'])->middleware('check_permission:Orders.write');
     Route::get('/stats',               [SellController::class, 'stats'])->middleware('check_permission:Orders.read');
     Route::get('/weekly-orders',       [SellController::class, 'weeklyOrders'])->middleware('check_permission:Orders.read');
+    Route::get('/monthly-revenue',     [SellController::class, 'monthlyRevenue'])->middleware('check_permission:Orders.read');
     Route::get('/invoice/{invoiceNo}', [SellController::class, 'getByInvoice'])->middleware('check_permission:Orders.read');
     Route::get('/{id}',                [SellController::class, 'show'])->middleware('check_permission:Orders.read');
     Route::put('/{id}',                [SellController::class, 'update'])->middleware('check_permission:Orders.write');
@@ -446,6 +460,9 @@ Route::prefix('shipments')->middleware(JwtAuthMiddleware::class)->group(function
 
 // Public tracking endpoint (no auth)
 Route::get('/track/{trackingNumber}', [OrderShipmentController::class, 'publicTracking']);
+
+// Public tailor order tracking (no auth)
+Route::get('/tailor/track/{token}', [\App\Http\Controllers\Api\Tailor\TailorController::class, 'publicTrack']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 8: Staff & Payroll
@@ -531,4 +548,62 @@ Route::prefix('support/tickets')->middleware(JwtAuthMiddleware::class)->group(fu
     Route::patch('/{id}/status',   [SupportTicketController::class, 'updateStatus'])->middleware('check_permission:Support.write');
     Route::patch('/{id}/priority', [SupportTicketController::class, 'updatePriority'])->middleware('check_permission:Support.write');
     Route::delete('/{id}',         [SupportTicketController::class, 'destroy'])->middleware('check_permission:Support.delete');
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tailor Shop Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('tailor')->middleware(JwtAuthMiddleware::class)->group(function () {
+    // Dashboard
+    Route::get('/dashboard',                    [TailorController::class, 'dashboard'])->middleware('check_permission:TailorShop.read');
+
+    // Fabrics
+    Route::get('/fabrics',                      [TailorController::class, 'fabricIndex'])->middleware('check_permission:TailorFabric.read');
+    Route::post('/fabrics',                     [TailorController::class, 'fabricStore'])->middleware('check_permission:TailorFabric.write');
+    Route::put('/fabrics/{id}',                 [TailorController::class, 'fabricUpdate'])->middleware('check_permission:TailorFabric.write');
+    Route::delete('/fabrics/{id}',              [TailorController::class, 'fabricDestroy'])->middleware('check_permission:TailorFabric.delete');
+
+    // Customers
+    Route::get('/customers',                    [TailorController::class, 'customerIndex'])->middleware('check_permission:TailorOrders.read,TailorMeasurements.read');
+    Route::get('/customers/search',             [TailorController::class, 'customerFindByPhone'])->middleware('check_permission:TailorOrders.read,TailorMeasurements.read');
+    Route::post('/customers',                   [TailorController::class, 'customerStore'])->middleware('check_permission:TailorOrders.write');
+    Route::get('/customers/{id}',               [TailorController::class, 'customerShow'])->middleware('check_permission:TailorOrders.read,TailorMeasurements.read');
+    Route::put('/customers/{id}',               [TailorController::class, 'customerUpdate'])->middleware('check_permission:TailorOrders.write');
+    Route::delete('/customers/{id}',            [TailorController::class, 'customerDelete'])->middleware('check_permission:TailorOrders.write');
+    Route::get('/customers/{id}/orders',        [TailorController::class, 'customerOrders'])->middleware('check_permission:TailorOrders.read');
+
+    // Measurements
+    Route::get('/measurements',                  [TailorController::class, 'measurementIndex'])->middleware('check_permission:TailorMeasurements.read');
+    Route::get('/measurements/customer/{customerId}', [TailorController::class, 'measurementByCustomer'])->middleware('check_permission:TailorMeasurements.read');
+    Route::post('/measurements',                [TailorController::class, 'measurementStore'])->middleware('check_permission:TailorMeasurements.write');
+    Route::put('/measurements/{id}',            [TailorController::class, 'measurementUpdate'])->middleware('check_permission:TailorMeasurements.write');
+
+    // Dorjis
+    Route::get('/dorjis',                       [TailorController::class, 'dorjiIndex'])->middleware('check_permission:TailorDorji.read');
+    Route::post('/dorjis',                      [TailorController::class, 'dorjiStore'])->middleware('check_permission:TailorDorji.write');
+    Route::put('/dorjis/{id}',                  [TailorController::class, 'dorjiUpdate'])->middleware('check_permission:TailorDorji.write');
+    Route::delete('/dorjis/{id}',               [TailorController::class, 'dorjiDestroy'])->middleware('check_permission:TailorDorji.delete');
+
+    // Orders
+    Route::get('/orders',                       [TailorController::class, 'orderIndex'])->middleware('check_permission:TailorOrders.read');
+    Route::post('/orders',                      [TailorController::class, 'orderStore'])->middleware('check_permission:TailorOrders.write');
+    Route::get('/orders/{id}',                  [TailorController::class, 'orderShow'])->middleware('check_permission:TailorOrders.read');
+    Route::put('/orders/{id}',                  [TailorController::class, 'orderUpdate'])->middleware('check_permission:TailorOrders.write');
+    Route::patch('/orders/{id}/status',         [TailorController::class, 'orderUpdateStatus'])->middleware('check_permission:TailorOrders.write');
+
+    // Assignments
+    Route::get('/assignments',                  [TailorController::class, 'assignmentIndex'])->middleware('check_permission:TailorOrders.read');
+    Route::post('/assignments',                 [TailorController::class, 'assignmentStore'])->middleware('check_permission:TailorOrders.write');
+    Route::put('/assignments/{id}',             [TailorController::class, 'assignmentUpdate'])->middleware('check_permission:TailorOrders.write');
+
+    // Payments
+    Route::get('/payments',                     [TailorController::class, 'paymentIndex'])->middleware('check_permission:TailorPayments.read');
+    Route::post('/payments',                    [TailorController::class, 'paymentStore'])->middleware('check_permission:TailorPayments.write');
+
+    // Reports
+    Route::get('/reports/orders',               [TailorController::class, 'reportOrders'])->middleware('check_permission:TailorReports.read');
+    Route::get('/reports/fabrics',              [TailorController::class, 'reportFabrics'])->middleware('check_permission:TailorReports.read');
+    Route::get('/reports/dorjis',               [TailorController::class, 'reportDorjis'])->middleware('check_permission:TailorReports.read');
 });

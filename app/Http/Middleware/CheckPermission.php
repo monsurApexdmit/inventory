@@ -22,6 +22,10 @@ class CheckPermission
      *  - manager / staff (SaasUser with role) → check via staff_role_id → role_permissions
      *  - legacy staff (User model) → check via Staff record → staff_role_id → role_permissions
      */
+    /**
+     * Supports OR permissions via comma separation: "TailorOrders.read,TailorMeasurements.read"
+     * Access granted if ANY of the listed permissions passes.
+     */
     public function handle(Request $request, Closure $next, string $permissionDotAction): Response
     {
         $userId    = $request->attributes->get('auth_user_id');
@@ -32,10 +36,9 @@ class CheckPermission
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
         }
 
-        [$module, $action] = array_pad(explode('.', $permissionDotAction, 2), 2, 'read');
+        $permissions = array_map('trim', explode(',', $permissionDotAction));
 
         if (!$isLegacy) {
-            // SaaS user — owner/admin bypass all permission checks
             $saasUser = SaasUser::find($userId);
             if (!$saasUser || (int) $saasUser->company_id !== $companyId) {
                 return response()->json(['success' => false, 'message' => 'Access denied.'], 403);
@@ -45,13 +48,16 @@ class CheckPermission
                 return $next($request);
             }
 
-            // SaaS user with custom role — check via role_id on saas_users
-            return $this->checkRolePermission($saasUser->role_id, $module, $action)
-                ? $next($request)
-                : response()->json(['success' => false, 'message' => 'Access denied.'], 403);
+            foreach ($permissions as $perm) {
+                [$module, $action] = array_pad(explode('.', $perm, 2), 2, 'read');
+                if ($this->checkRolePermission($saasUser->role_id, $module, $action)) {
+                    return $next($request);
+                }
+            }
+
+            return response()->json(['success' => false, 'message' => 'Access denied.'], 403);
         }
 
-        // Legacy staff — resolve via Staff record → staff_role_id
         $staff = Staff::where('user_id', $userId)
             ->where('company_id', $companyId)
             ->first();
@@ -64,9 +70,14 @@ class CheckPermission
             return response()->json(['success' => false, 'message' => 'Access denied. No role assigned.'], 403);
         }
 
-        return $this->checkRolePermission($staff->staff_role_id, $module, $action)
-            ? $next($request)
-            : response()->json(['success' => false, 'message' => 'Access denied.'], 403);
+        foreach ($permissions as $perm) {
+            [$module, $action] = array_pad(explode('.', $perm, 2), 2, 'read');
+            if ($this->checkRolePermission($staff->staff_role_id, $module, $action)) {
+                return $next($request);
+            }
+        }
+
+        return response()->json(['success' => false, 'message' => 'Access denied.'], 403);
     }
 
     private function checkRolePermission(int|null $roleId, string $module, string $action): bool

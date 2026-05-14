@@ -7,10 +7,13 @@ use App\Models\Category;
 use App\Models\CompanySettings;
 use App\Models\ContentPage;
 use App\Models\Coupon;
+use App\Models\Customer;
 use App\Models\Product;
 use App\Models\PaymentMethod;
+use App\Models\Sell;
 use App\Models\Setting;
 use App\Models\ShippingMethod;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,6 +31,7 @@ class StorefrontController extends Controller
         $query = Product::with(['category', 'images', 'variants'])
             ->withCount('reviews')
             ->withAvg('reviews', 'rating')
+            ->withSum('orderItems', 'quantity')
             ->where('company_id', $companyId)
             ->where('published', true);
 
@@ -74,6 +78,7 @@ class StorefrontController extends Controller
         $query = Product::with(['category', 'images', 'variants'])
             ->withCount('reviews')
             ->withAvg('reviews', 'rating')
+            ->withSum('orderItems', 'quantity')
             ->where('company_id', $companyId)
             ->where('published', true);
 
@@ -121,6 +126,7 @@ class StorefrontController extends Controller
         $query = Product::with(['category', 'images', 'variants', 'attributes'])
             ->withCount('reviews')
             ->withAvg('reviews', 'rating')
+            ->withSum('orderItems', 'quantity')
             ->where('company_id', $companyId)
             ->where('published', true);
 
@@ -363,10 +369,34 @@ class StorefrontController extends Controller
             ]);
         }
 
+        $storeSettings   = Setting::where('company_id', $companyId)->first();
+        $generalSettings = $storeSettings?->general_settings ?? [];
+        $paymentSettings = $storeSettings?->payment_settings ?? [];
+        $storeHours      = $storeSettings?->store_hours ?? [];
+
+        $gatewayLabels = [
+            'sslcommerz' => 'SSLCommerz',
+            'bkash'      => 'bKash',
+            'nagad'      => 'Nagad',
+            'portwallet'  => 'PortWallet',
+            'stripe'     => 'Stripe',
+            'paypal'     => 'PayPal',
+            'cod'        => 'Cash on Delivery',
+        ];
+
+        $enabledPaymentMethods = [];
+        foreach ($gatewayLabels as $key => $label) {
+            $cfg = $paymentSettings[$key] ?? [];
+            if (!empty($cfg['enabled'])) {
+                $enabledPaymentMethods[] = $label;
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
                 'companyId' => $settings->company_id,
+                'storeName' => $generalSettings['storeName'] ?? 'StoreFront',
                 'taxRate' => (float) ($settings->tax_rate ?? 0),
                 'currency' => $settings->currency ?? 'USD',
                 'timezone' => $settings->timezone ?? 'UTC',
@@ -375,6 +405,11 @@ class StorefrontController extends Controller
                 'currencyDecimalSeparator' => $settings->getAttribute('currency_decimal_separator') ?? '.',
                 'currencyThousandsSeparator' => $settings->getAttribute('currency_thousands_separator') ?? ',',
                 'currencyDecimalPlaces' => (int) ($settings->getAttribute('currency_decimal_places') ?? 2),
+                'paymentMethods' => $enabledPaymentMethods,
+                'storePhone'    => $generalSettings['storePhone'] ?? null,
+                'storeEmail'    => $generalSettings['storeEmail'] ?? null,
+                'storeAddress'  => $generalSettings['storeAddress'] ?? null,
+                'storeHours'    => $storeHours,
             ],
         ]);
     }
@@ -414,6 +449,26 @@ class StorefrontController extends Controller
         ]);
     }
 
+    // GET /api/store/stats?company_id=11
+    public function stats(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $totalProducts  = Product::where('company_id', $companyId)->whereNull('deleted_at')->where('published', true)->count();
+        $totalOrders    = Sell::where('company_id', $companyId)->whereNull('deleted_at')->count();
+        $totalCustomers = Customer::where('company_id', $companyId)->count();
+        $todayOrders    = Sell::where('company_id', $companyId)->whereNull('deleted_at')->whereDate('created_at', now()->toDateString())->count();
+
+        return response()->json([
+            'success' => true,
+            'data'    => compact('totalProducts', 'totalOrders', 'totalCustomers', 'todayOrders'),
+        ]);
+    }
+
     private function formatProduct(Product $product): array
     {
         $primaryImage = $product->images->firstWhere('is_primary', true)?->path
@@ -431,6 +486,7 @@ class StorefrontController extends Controller
             'offer_type'    => $product->offer_type,
             'sku'           => $product->sku,
             'stock'         => $product->stock,
+            'total_sold'    => (int) ($product->order_items_sum_quantity ?? 0),
             'image'         => $primaryImage,
             'images'        => $product->images->sortBy('position')->pluck('path')->values(),
             'category_id'   => $product->category_id,
