@@ -410,6 +410,8 @@ class StorefrontController extends Controller
                 'storeEmail'    => $generalSettings['storeEmail'] ?? null,
                 'storeAddress'  => $generalSettings['storeAddress'] ?? null,
                 'storeHours'    => $storeHours,
+                'logoUrl'       => $storeSettings?->logo_url ?? null,
+                'faviconUrl'    => $generalSettings['faviconUrl'] ?? $storeSettings?->logo_url ?? null,
             ],
         ]);
     }
