@@ -64,6 +64,7 @@ Route::prefix('store')->group(function () {
     Route::get('/pages/{slug}',       [StorefrontController::class, 'page']);
     Route::get('/settings/company',   [StorefrontController::class, 'companySettings']);
     Route::get('/settings/homepage-hero', [StorefrontController::class, 'homepageHero']);
+    Route::get('/settings/promo-banner',  [StorefrontController::class, 'promoBanner']);
     Route::get('/stats',              [StorefrontController::class, 'stats']);
 
     // Public order tracking (no auth)

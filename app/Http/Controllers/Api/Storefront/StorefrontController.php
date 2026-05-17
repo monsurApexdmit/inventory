@@ -455,6 +455,30 @@ class StorefrontController extends Controller
         ]);
     }
 
+    // GET /api/store/settings/promo-banner?company_id=11
+    public function promoBanner(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $setting = Setting::where('company_id', $companyId)->first();
+        $promo = data_get($setting?->business_settings, 'promoBanner', []);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'enabled'  => (bool) ($promo['enabled'] ?? false),
+                'title'    => $promo['title']    ?? 'Flash Sale — Up to 60% Off Everything',
+                'subtitle' => $promo['subtitle'] ?? 'Limited time offer on thousands of products. Don\'t miss out!',
+                'cta'      => $promo['cta']      ?? 'Shop the Sale',
+                'link'     => $promo['link']     ?? '/shop',
+            ],
+        ]);
+    }
+
     // GET /api/store/stats?company_id=11
     public function stats(Request $request): JsonResponse
     {
