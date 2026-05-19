@@ -23,6 +23,8 @@ class ProductRepository implements IProductRepository
                     $q->with('inventory');
                 },
                 'images',
+                'bundleItems.product',
+                'bundleItems.variant',
             ]);
 
         if (isset($filters['search'])) {

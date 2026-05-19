@@ -6,6 +6,7 @@ use App\DTOs\CustomerReturn\CustomerReturnDTO;
 use App\DTOs\CustomerReturn\CustomerReturnMapper;
 use App\Models\Location;
 use App\Models\Product;
+use App\Models\ProductBundleItem;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
 use App\Models\CustomerReturn;
@@ -181,7 +182,11 @@ class CustomerReturnService
                 } elseif ($item->product_id) {
                     $product = Product::find($item->product_id);
                     if ($product) {
-                        $product->increment('stock', $item->quantity);
+                        if ($product->is_bundle) {
+                            $this->restoreBundleStock($product, (int) $item->quantity);
+                        } else {
+                            $product->increment('stock', $item->quantity);
+                        }
                     }
                 }
             }
@@ -236,6 +241,44 @@ class CustomerReturnService
     public function getStats(int $companyId): array
     {
         return $this->repository->getStats($companyId);
+    }
+
+    private function restoreBundleStock(Product $bundle, int $returnQty): void
+    {
+        $bundleItems = ProductBundleItem::where('bundle_product_id', $bundle->id)
+            ->with(['product', 'variant'])
+            ->get();
+
+        foreach ($bundleItems as $bi) {
+            $restoreQty = $bi->quantity * $returnQty;
+
+            if ($bi->variant_id && $bi->variant) {
+                $bi->variant->increment('stock', $restoreQty);
+                $childProduct = $bi->variant->product;
+                if ($childProduct) {
+                    $childProduct->stock = \App\Models\ProductVariant::where('product_id', $childProduct->id)->sum('stock');
+                    $childProduct->save();
+                }
+            } elseif ($bi->product) {
+                $bi->product->increment('stock', $restoreQty);
+            }
+        }
+
+        // Re-sync bundle stock = MIN(floor(childStock / childQty))
+        $bundle->refresh();
+        $items = ProductBundleItem::where('bundle_product_id', $bundle->id)
+            ->with(['product', 'variant'])
+            ->get();
+
+        $available = null;
+        foreach ($items as $item) {
+            $childStock = $item->variant_id && $item->variant
+                ? (int) $item->variant->stock
+                : (int) ($item->product->stock ?? 0);
+            $slots = (int) floor($childStock / max(1, $item->quantity));
+            $available = $available === null ? $slots : min($available, $slots);
+        }
+        $bundle->update(['stock' => max(0, $available ?? 0)]);
     }
 
     private function mapInputToDb(array $data): array

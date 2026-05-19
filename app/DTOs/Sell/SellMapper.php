@@ -3,6 +3,7 @@
 namespace App\DTOs\Sell;
 
 use App\DTOs\BaseMapper;
+use App\Models\ProductBundleItem;
 use App\Models\Sell;
 
 class SellMapper extends BaseMapper
@@ -151,7 +152,30 @@ class SellMapper extends BaseMapper
                 'totalPrice' => $item->total_price,
                 'unitCost' => $item->unit_cost,
                 'totalCost' => $item->total_cost,
+                'bundleItems' => $this->getBundleChildren($item->product_id, $item->quantity),
             ];
         }, $itemsArray);
+    }
+
+    private function getBundleChildren(?int $productId, int $saleQty): ?array
+    {
+        if (!$productId) return null;
+
+        $items = ProductBundleItem::where('bundle_product_id', $productId)
+            ->with(['product', 'variant'])
+            ->get();
+
+        if ($items->isEmpty()) return null;
+
+        return $items->map(function ($bi) use ($saleQty) {
+            $name = $bi->product?->name ?? 'Unknown';
+            if ($bi->variant) $name .= ' — ' . $bi->variant->name;
+            return [
+                'productId'   => $bi->product_id,
+                'productName' => $name,
+                'qtyPerBundle' => $bi->quantity,
+                'totalQty'    => $bi->quantity * $saleQty,
+            ];
+        })->values()->all();
     }
 }

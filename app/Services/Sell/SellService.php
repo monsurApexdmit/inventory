@@ -323,15 +323,14 @@ class SellService
                 continue;
             }
 
-            if ($item['variantId'] ?? null) {
+            $product = Product::find($item['productId']);
+
+            if ($product && $product->is_bundle) {
+                $this->deductBundleStock($sell->company_id, $product, (int) $item['quantity']);
+            } elseif ($item['variantId'] ?? null) {
                 $this->deductVariantStock($sell->company_id, $item);
             } else {
-                $product = Product::find($item['productId']);
-                if ($product && $product->is_bundle) {
-                    $this->deductBundleStock($sell->company_id, $product, (int) $item['quantity']);
-                } else {
-                    $this->deductSimpleProductStock($sell->company_id, $item);
-                }
+                $this->deductSimpleProductStock($sell->company_id, $item);
             }
         }
     }
@@ -551,12 +550,54 @@ class SellService
     private function restoreStock(Sell $sell): void
     {
         foreach ($sell->items as $item) {
-            if ($item->variant_id) {
+            $product = Product::find($item->product_id);
+
+            if ($product && $product->is_bundle) {
+                $this->restoreBundleStock($product, (int) $item->quantity);
+            } elseif ($item->variant_id) {
                 $this->restoreVariantStock($item);
             } else {
                 $this->restoreSimpleProductStock($item);
             }
         }
+    }
+
+    private function restoreBundleStock(Product $bundle, int $saleQty): void
+    {
+        $bundleItems = ProductBundleItem::where('bundle_product_id', $bundle->id)
+            ->with(['product', 'variant'])
+            ->get();
+
+        foreach ($bundleItems as $bi) {
+            $restoreQty = $bi->quantity * $saleQty;
+
+            if ($bi->variant_id && $bi->variant) {
+                $bi->variant->increment('stock', $restoreQty);
+                $childProduct = $bi->variant->product;
+                if ($childProduct) {
+                    $childProduct->stock = ProductVariant::where('product_id', $childProduct->id)->sum('stock');
+                    $childProduct->save();
+                }
+            } elseif ($bi->product) {
+                $bi->product->increment('stock', $restoreQty);
+            }
+        }
+
+        // Re-sync bundle stock after restoring children
+        $bundle->refresh();
+        $items = ProductBundleItem::where('bundle_product_id', $bundle->id)
+            ->with(['product', 'variant'])
+            ->get();
+
+        $available = null;
+        foreach ($items as $item) {
+            $childStock = $item->variant_id && $item->variant
+                ? (int) $item->variant->stock
+                : (int) ($item->product->stock ?? 0);
+            $slots = (int) floor($childStock / max(1, $item->quantity));
+            $available = $available === null ? $slots : min($available, $slots);
+        }
+        $bundle->update(['stock' => max(0, $available ?? 0)]);
     }
 
     /**

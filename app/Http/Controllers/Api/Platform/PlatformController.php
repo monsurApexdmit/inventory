@@ -116,6 +116,20 @@ class PlatformController extends Controller
         return $this->success(['id' => $company->id, 'status' => $company->status], 'Company status updated.');
     }
 
+    public function updateCompany(Request $request, int $id): JsonResponse
+    {
+        $company = Company::findOrFail($id);
+
+        $data = $request->validate([
+            'subdomain' => 'nullable|string|max:63|alpha_dash|unique:companies,subdomain,' . $id,
+        ]);
+
+        $company->update(['subdomain' => $data['subdomain'] ?? null]);
+        $company->refresh();
+
+        return $this->success($this->formatCompany($company), 'Company updated.');
+    }
+
     public function listCompanyUsers(int $id): JsonResponse
     {
         Company::findOrFail($id);
@@ -301,6 +315,7 @@ class PlatformController extends Controller
             'phone'        => $c->phone,
             'country'      => $c->country,
             'status'       => $c->status,
+            'subdomain'    => $c->subdomain,
             'usersCount'   => $c->saas_users_count ?? 0,
             'createdAt'    => $c->created_at->toIso8601String(),
             'subscription' => $subscription ? $this->formatSubscription($subscription) : null,

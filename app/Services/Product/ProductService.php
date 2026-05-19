@@ -12,6 +12,7 @@ use App\Models\ProductBundleItem;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\User;
+use App\Models\Vendor;
 use App\Models\VariantInventory;
 use App\Repositories\Contracts\IProductRepository;
 use App\Services\Barcode\BarcodeService;
@@ -355,7 +356,7 @@ class ProductService
 
         $vendorId = $data['vendor_id'] ?? $data['vendorId'] ?? null;
         if ($vendorId) {
-            $vendor = User::where('id', $vendorId)->exists();
+            $vendor = Vendor::where('id', $vendorId)->exists();
 
             if (!$vendor) {
                 throw new HttpException(400, 'Vendor not found');
@@ -630,21 +631,31 @@ class ProductService
         }
 
         $available = null;
+        $totalCost  = 0;
+
         foreach ($items as $item) {
+            $qty = max(1, (int) $item->quantity);
+
             if ($item->variant_id && $item->variant) {
                 $childStock = (int) $item->variant->stock;
+                $childCost  = (float) ($item->variant->cost_price ?? $item->product->cost_price ?? 0);
             } elseif ($item->product) {
                 $childStock = (int) $item->product->stock;
+                $childCost  = (float) ($item->product->cost_price ?? 0);
             } else {
                 $childStock = 0;
+                $childCost  = 0;
             }
 
-            $qty = max(1, (int) $item->quantity);
-            $slots = (int) floor($childStock / $qty);
-            $available = $available === null ? $slots : min($available, $slots);
+            $slots      = (int) floor($childStock / $qty);
+            $available  = $available === null ? $slots : min($available, $slots);
+            $totalCost += $childCost * $qty;
         }
 
-        $bundle->update(['stock' => max(0, $available ?? 0)]);
+        $bundle->update([
+            'stock'      => max(0, $available ?? 0),
+            'cost_price' => $totalCost > 0 ? $totalCost : $bundle->cost_price,
+        ]);
     }
 
     private function syncImages(Product $product, array $imageFiles): void

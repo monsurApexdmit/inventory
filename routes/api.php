@@ -59,6 +59,7 @@ Route::prefix('platform')->middleware([JwtAuthMiddleware::class, 'super_admin'])
     Route::get('/companies',                                  [PlatformController::class, 'listCompanies']);
     Route::get('/companies/{id}',                             [PlatformController::class, 'getCompany']);
     Route::patch('/companies/{id}/status',                    [PlatformController::class, 'updateCompanyStatus']);
+    Route::patch('/companies/{id}',                           [PlatformController::class, 'updateCompany']);
     Route::get('/companies/{id}/users',                       [PlatformController::class, 'listCompanyUsers']);
     Route::post('/companies/{id}/subscription',               [PlatformController::class, 'assignSubscription']);
     Route::delete('/companies/{id}/subscription',             [PlatformController::class, 'cancelSubscription']);
@@ -77,7 +78,7 @@ Route::prefix('platform')->middleware([JwtAuthMiddleware::class, 'super_admin'])
 // Public Storefront API — scoped by company_id query param
 // ─────────────────────────────────────────────────────────────────────────────
 
-Route::prefix('store')->group(function () {
+Route::prefix('store')->middleware('resolve_company')->group(function () {
 
     // Catalog (no auth)
     Route::get('/products',           [StorefrontController::class, 'products']);

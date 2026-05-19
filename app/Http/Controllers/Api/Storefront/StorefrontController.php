@@ -123,7 +123,7 @@ class StorefrontController extends Controller
             return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
         }
 
-        $query = Product::with(['category', 'images', 'variants', 'attributes'])
+        $query = Product::with(['category', 'images', 'variants', 'attributes', 'bundleItems.product', 'bundleItems.variant'])
             ->withCount('reviews')
             ->withAvg('reviews', 'rating')
             ->withSum('orderItems', 'quantity')
@@ -538,6 +538,22 @@ class StorefrontController extends Controller
                 'sku'        => $v->sku,
                 'attributes' => $v->attributes,
             ])->values(),
+            'is_bundle'      => (bool) $product->is_bundle,
+            'bundle_price_override' => $product->bundle_price_override,
+            'bundle_items'   => $product->relationLoaded('bundleItems')
+                ? $product->bundleItems->map(function ($bi) {
+                    $name = $bi->product?->name ?? 'Unknown';
+                    if ($bi->variant) $name .= ' — ' . $bi->variant->name;
+                    return [
+                        'product_id'   => $bi->product_id,
+                        'product_name' => $name,
+                        'variant_id'   => $bi->variant_id,
+                        'quantity'     => $bi->quantity,
+                        'sku'          => $bi->product?->sku,
+                        'image'        => $bi->product?->image,
+                    ];
+                })->values()
+                : [],
         ];
     }
 }
