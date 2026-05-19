@@ -52,7 +52,8 @@ class CategoryRepository implements ICategoryRepository
         return $this->model
             ->where('company_id', $companyId)
             ->where('status', true)
-            ->get();
+            ->get()
+            ->all();
     }
 
     public function getStatsByCompany(int $companyId): array

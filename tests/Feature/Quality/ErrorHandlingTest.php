@@ -20,7 +20,7 @@ class ErrorHandlingTest extends TestCase
     {
         parent::setUp();
         $this->company = Company::factory()->create();
-        $this->owner = SaasUser::factory()->create(['company_id' => $this->company->id]);
+        $this->owner = SaasUser::factory()->owner()->create(['company_id' => $this->company->id]);
         $this->token = JWTAuth::fromUser($this->owner);
     }
 
@@ -53,7 +53,7 @@ class ErrorHandlingTest extends TestCase
     public function test_different_company_data_isolated(): void
     {
         $otherCompany = Company::factory()->create();
-        $otherOwner = SaasUser::factory()->create(['company_id' => $otherCompany->id]);
+        $otherOwner = SaasUser::factory()->owner()->create(['company_id' => $otherCompany->id]);
         $otherToken = JWTAuth::fromUser($otherOwner);
 
         // Try to access resource from different company

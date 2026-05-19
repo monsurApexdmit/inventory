@@ -31,6 +31,8 @@ class CouponTest extends TestCase
             'full_name' => 'Test Owner',
             'password' => bcrypt('password'),
             'company_id' => $this->company->id,
+            'role' => 'owner',
+            'status' => 'active',
         ]);
 
         $this->token = JWTAuth::fromUser($this->owner);

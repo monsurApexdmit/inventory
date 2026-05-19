@@ -42,6 +42,8 @@ class SellTest extends TestCase
             'full_name' => 'Test Owner',
             'password' => bcrypt('password'),
             'company_id' => $this->company->id,
+            'role' => 'owner',
+            'status' => 'active',
         ]);
 
         $this->token = JWTAuth::fromUser($this->owner);
@@ -152,7 +154,8 @@ class SellTest extends TestCase
 
         // Verify variant inventory was deducted
         $variant->refresh();
-        $this->assertEquals(47, VariantInventory::find(1)->quantity);
+        $inventory = VariantInventory::where('variant_id', $variant->id)->first();
+        $this->assertEquals(47, $inventory->quantity);
     }
 
     public function test_create_sell_insufficient_stock(): void
@@ -458,6 +461,8 @@ class SellTest extends TestCase
             'full_name' => 'Other Owner',
             'password' => bcrypt('password'),
             'company_id' => $otherCompany->id,
+            'role' => 'owner',
+            'status' => 'active',
         ]);
 
         $sell = Sell::create([

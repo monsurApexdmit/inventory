@@ -26,6 +26,7 @@ class NotificationService
     public const TYPE_SUPPORT_TICKET       = 'support_ticket';
     public const TYPE_SUPPORT_MESSAGE      = 'support_message';
     public const TYPE_PRODUCT_REVIEW       = 'product_review';
+    public const TYPE_BATCH_EXPIRY         = 'batch_expiry';
 
     private readonly NotificationMapper $mapper;
 
@@ -328,5 +329,18 @@ class NotificationService
         } catch (\Throwable $e) {
             Log::warning('Notification broadcast failed: '.$e->getMessage());
         }
+    }
+
+    public function notifyExpiringBatch(int $companyId, string $batchNumber, string $productName, string $expiryDate, int $qty): void
+    {
+        $notification = $this->repository->create(
+            $companyId,
+            self::TYPE_BATCH_EXPIRY,
+            'Batch Expiring Soon',
+            "Batch {$batchNumber} ({$productName}) expires on {$expiryDate} — {$qty} units remaining",
+            ['batchNumber' => $batchNumber, 'productName' => $productName, 'expiryDate' => $expiryDate, 'quantity' => $qty]
+        );
+
+        $this->broadcastCreatedNotification($notification);
     }
 }

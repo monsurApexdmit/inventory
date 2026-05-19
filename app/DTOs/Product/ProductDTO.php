@@ -31,6 +31,7 @@ class ProductDTO extends BaseDTO
         public readonly ?string $image,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly int $reorderPoint = 0,
         public readonly ?string $locationName = null,
         public readonly bool $isHotDeal = false,
         public readonly bool $isBestSeller = false,
@@ -43,6 +44,11 @@ class ProductDTO extends BaseDTO
         public readonly ?array $images = null,
         public readonly ?float $offerPrice = null,
         public readonly ?string $offerType = null,
+        public readonly ?array $attributes = null,
+        public readonly bool $isBundle = false,
+        public readonly ?float $bundlePriceOverride = null,
+        public readonly ?array $bundleItems = null,
+        public readonly string $trackingType = 'none',
     ) {}
 
     public function toArray(): array
@@ -66,6 +72,7 @@ class ProductDTO extends BaseDTO
             'profitMargin'  => $this->profitMargin,
             'marginType'    => $this->marginType,
             'stock'         => $this->stock,
+            'reorderPoint'  => $this->reorderPoint,
             'sku'           => $this->sku,
             'barcode'       => $this->barcode,
             'published'     => $this->published,
@@ -77,10 +84,16 @@ class ProductDTO extends BaseDTO
             'image'         => $this->image,
             'createdAt'     => $this->createdAt,
             'updatedAt'     => $this->updatedAt,
+            'category'      => $this->categoryId !== null ? ['id' => $this->categoryId, 'name' => $this->categoryName] : null,
             'location'      => $this->location,
             'inventory'     => $this->inventory,
-            'variants'      => $this->variants,
-            'images'        => $this->images,
+            'variants'      => $this->variants ?? [],
+            'images'        => $this->images ?? [],
+            'attributes'          => $this->attributes ?? [],
+            'isBundle'            => $this->isBundle,
+            'bundlePriceOverride' => $this->bundlePriceOverride,
+            'bundleItems'         => $this->bundleItems ?? [],
+            'trackingType'        => $this->trackingType,
         ];
     }
 }

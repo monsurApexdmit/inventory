@@ -5,6 +5,9 @@ namespace App\Services\Sell;
 use App\DTOs\Sell\SellDTO;
 use App\DTOs\Sell\SellMapper;
 use App\Models\Coupon;
+use App\Models\ProductBatch;
+use App\Models\ProductBundleItem;
+use App\Models\ProductSerial;
 use App\Models\CouponUsage;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -323,7 +326,12 @@ class SellService
             if ($item['variantId'] ?? null) {
                 $this->deductVariantStock($sell->company_id, $item);
             } else {
-                $this->deductSimpleProductStock($sell->company_id, $item);
+                $product = Product::find($item['productId']);
+                if ($product && $product->is_bundle) {
+                    $this->deductBundleStock($sell->company_id, $product, (int) $item['quantity']);
+                } else {
+                    $this->deductSimpleProductStock($sell->company_id, $item);
+                }
             }
         }
     }
@@ -371,14 +379,58 @@ class SellService
             }
         }
 
-        // Sync variant stock
-        $variant->stock = VariantInventory::where('variant_id', $variant->id)->sum('quantity');
-        $variant->save();
+        // Serial tracking for variant
+        if ($variant->tracking_type === 'serial') {
+            $serials = ProductSerial::where('variant_id', $variant->id)
+                ->where('status', 'available')
+                ->orderBy('received_date')->orderBy('id')
+                ->limit($item['quantity'])->get();
+
+            if ($serials->count() < $item['quantity']) {
+                throw new HttpException(400, "Insufficient available serial numbers for variant '{$variant->name}'");
+            }
+            foreach ($serials as $serial) {
+                $serial->update(['status' => 'sold', 'sold_date' => now()->toDateString()]);
+            }
+            $variant->stock = ProductSerial::where('variant_id', $variant->id)->where('status', 'available')->count();
+            $variant->save();
+
+        // Batch tracking for variant
+        } elseif ($variant->tracking_type === 'batch') {
+            $remaining = $item['quantity'];
+            $batches = ProductBatch::where('variant_id', $variant->id)
+                ->where('quantity_remaining', '>', 0)
+                ->orderByRaw('expiry_date IS NULL, expiry_date ASC')->orderBy('id')->get();
+
+            foreach ($batches as $batch) {
+                if ($remaining <= 0) break;
+                $deduct = min($batch->quantity_remaining, $remaining);
+                $batch->decrement('quantity_remaining', $deduct);
+                $remaining -= $deduct;
+            }
+            if ($remaining > 0) {
+                throw new HttpException(400, "Insufficient batch stock for variant '{$variant->name}'");
+            }
+            $variant->stock = ProductBatch::where('variant_id', $variant->id)->sum('quantity_remaining');
+            $variant->save();
+        }
+
+        // Sync variant stock (non-tracked path uses VariantInventory)
+        if ($variant->tracking_type === 'none') {
+            $variant->stock = VariantInventory::where('variant_id', $variant->id)->sum('quantity');
+            $variant->save();
+        }
 
         // Sync product stock
         $product = $variant->product;
         $product->stock = ProductVariant::where('product_id', $product->id)->sum('stock');
         $product->save();
+
+        // Low stock alert for variant
+        if ($variant->reorder_point > 0 && $variant->stock <= $variant->reorder_point) {
+            $label = $product->name . ' (' . $variant->name . ')';
+            $this->notificationService->notifyLowStock($companyId, $label, $variant->stock, $variant->reorder_point);
+        }
     }
 
     /**
@@ -395,7 +447,102 @@ class SellService
             throw new HttpException(400, "Insufficient stock for product '{$product->name}' (available: {$product->stock}, requested: {$item['quantity']})");
         }
 
-        $product->decrement('stock', $item['quantity']);
+        // Serial tracking: mark serials as sold (FIFO by received_date)
+        if ($product->tracking_type === 'serial') {
+            $serials = ProductSerial::where('product_id', $product->id)
+                ->where('status', 'available')
+                ->whereNull('variant_id')
+                ->orderBy('received_date')
+                ->orderBy('id')
+                ->limit($item['quantity'])
+                ->get();
+
+            if ($serials->count() < $item['quantity']) {
+                throw new HttpException(400, "Insufficient available serial numbers for '{$product->name}'");
+            }
+
+            foreach ($serials as $serial) {
+                $serial->update(['status' => 'sold', 'sold_date' => now()->toDateString()]);
+            }
+
+            $available = ProductSerial::where('product_id', $product->id)
+                ->whereNull('variant_id')->where('status', 'available')->count();
+            $product->update(['stock' => $available]);
+
+        // Batch tracking: deduct from oldest expiry (FEFO)
+        } elseif ($product->tracking_type === 'batch') {
+            $remaining = $item['quantity'];
+            $batches = ProductBatch::where('product_id', $product->id)
+                ->whereNull('variant_id')
+                ->where('quantity_remaining', '>', 0)
+                ->orderByRaw('expiry_date IS NULL, expiry_date ASC')
+                ->orderBy('id')
+                ->get();
+
+            foreach ($batches as $batch) {
+                if ($remaining <= 0) break;
+                $deduct = min($batch->quantity_remaining, $remaining);
+                $batch->decrement('quantity_remaining', $deduct);
+                $remaining -= $deduct;
+            }
+
+            if ($remaining > 0) {
+                throw new HttpException(400, "Insufficient batch stock for '{$product->name}'");
+            }
+
+            $totalRemaining = ProductBatch::where('product_id', $product->id)
+                ->whereNull('variant_id')->sum('quantity_remaining');
+            $product->update(['stock' => $totalRemaining]);
+
+        } else {
+            $product->decrement('stock', $item['quantity']);
+        }
+
+        // Low stock alert
+        $product->refresh();
+        if ($product->reorder_point > 0 && $product->stock <= $product->reorder_point) {
+            $this->notificationService->notifyLowStock($companyId, $product->name, $product->stock, $product->reorder_point);
+        }
+    }
+
+    private function deductBundleStock(int $companyId, Product $bundle, int $saleQty): void
+    {
+        $bundleItems = ProductBundleItem::where('bundle_product_id', $bundle->id)
+            ->with(['product', 'variant'])
+            ->get();
+
+        foreach ($bundleItems as $bi) {
+            $totalQty = $bi->quantity * $saleQty;
+
+            if ($bi->variant_id && $bi->variant) {
+                $this->deductVariantStock($companyId, [
+                    'productId' => $bi->product_id,
+                    'variantId' => $bi->variant_id,
+                    'quantity'  => $totalQty,
+                ]);
+            } elseif ($bi->product) {
+                $this->deductSimpleProductStock($companyId, [
+                    'productId' => $bi->product_id,
+                    'quantity'  => $totalQty,
+                ]);
+            }
+        }
+
+        // Re-sync bundle stock after child deductions
+        $bundle->refresh();
+        $items = ProductBundleItem::where('bundle_product_id', $bundle->id)
+            ->with(['product', 'variant'])
+            ->get();
+
+        $available = null;
+        foreach ($items as $item) {
+            $childStock = $item->variant_id && $item->variant
+                ? (int) $item->variant->stock
+                : (int) ($item->product->stock ?? 0);
+            $slots = (int) floor($childStock / max(1, $item->quantity));
+            $available = $available === null ? $slots : min($available, $slots);
+        }
+        $bundle->update(['stock' => max(0, $available ?? 0)]);
     }
 
     /**

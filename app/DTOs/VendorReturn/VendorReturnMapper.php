@@ -36,6 +36,11 @@ class VendorReturnMapper extends BaseMapper
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
             items: $model->relationLoaded('items') ? $this->formatItems($model->items) : null,
+            vendor: $model->relationLoaded('vendor') && $model->vendor ? [
+                'id' => $model->vendor->id,
+                'name' => $model->vendor->name,
+                'email' => $model->vendor->email,
+            ] : null,
         );
     }
 

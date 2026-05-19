@@ -4,6 +4,7 @@ namespace App\Services\CustomerReturn;
 
 use App\DTOs\CustomerReturn\CustomerReturnDTO;
 use App\DTOs\CustomerReturn\CustomerReturnMapper;
+use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
@@ -167,9 +168,12 @@ class CustomerReturnService
                 if ($item->variant_id) {
                     $variant = ProductVariant::find($item->variant_id);
                     if ($variant) {
-                        // Create or update variant inventory at location_id=1
+                        $existingInventory = VariantInventory::where('variant_id', $item->variant_id)->first();
+                        $locationId = $existingInventory?->location_id
+                            ?? Location::first()?->id
+                            ?? Location::create(['name' => 'Default', 'company_id' => $return->company_id])->id;
                         $inventory = VariantInventory::firstOrCreate(
-                            ['variant_id' => $item->variant_id, 'location_id' => 1],
+                            ['variant_id' => $item->variant_id, 'location_id' => $locationId],
                             ['quantity' => 0]
                         );
                         $inventory->increment('quantity', $item->quantity);

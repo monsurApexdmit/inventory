@@ -42,6 +42,7 @@ class ProductVariantMapper extends BaseMapper
             offerPrice: $model->offer_price ? (float) $model->offer_price : null,
             offerType: $model->offer_type,
             stock: (int) $model->stock,
+            reorderPoint: (int) ($model->reorder_point ?? 0),
             sku: $model->sku,
             barcode: $model->barcode,
             createdAt: $this->formatTimestamp($model->created_at),

@@ -4,6 +4,7 @@ namespace App\Services\Staff;
 
 use App\DTOs\Staff\StaffDTO;
 use App\DTOs\Staff\StaffMapper;
+use App\Models\Role;
 use App\Repositories\Contracts\IStaffRepository;
 use App\Repositories\Contracts\IUserRepository;
 use App\Services\Notification\NotificationService;
@@ -50,12 +51,12 @@ class StaffService
     public function create(int $companyId, array $data): StaffDTO
     {
         $staff = DB::transaction(function () use ($companyId, $data) {
-            // Create User with role_id = 2 (User role, since 1 is Admin)
+            $staffRole = Role::firstOrCreate(['title' => 'Staff'], ['status' => true]);
             $user = $this->userRepository->create([
                 'username' => $data['email'],
                 'email' => $data['email'],
                 'password' => $data['password'] ?? 'ChangeMe123',
-                'role_id' => 2,
+                'role_id' => $staffRole->id,
             ]);
 
             // Create Staff record

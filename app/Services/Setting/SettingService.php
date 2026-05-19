@@ -127,7 +127,7 @@ class SettingService
             'business' => $setting->business_settings ?? [],
             'regional' => $setting->regional_settings ?? [],
             'notifications' => $setting->notification_settings ?? [],
-            'storeHours' => $setting->store_hours ?? [],
+            'store-hours' => $setting->store_hours ?? [],
             'logoUrl' => $setting->logo_url,
             'bannerUrl' => $setting->banner_url,
             'uploadedBy' => $setting->uploaded_by,

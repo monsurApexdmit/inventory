@@ -8,6 +8,7 @@ use App\Models\Attribute;
 use App\Models\Category;
 use App\Models\Location;
 use App\Models\Product;
+use App\Models\ProductBundleItem;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\User;
@@ -86,6 +87,7 @@ class ProductService
 
         $variants = $data['variants'] ?? [];
         $attributeIds = $data['attributes'] ?? [];
+        $bundleItems = $data['bundleItems'] ?? [];
         $imageFiles = $data['image'] ?? [];
         if (!is_array($imageFiles)) {
             $imageFiles = [];
@@ -93,7 +95,7 @@ class ProductService
 
         $productId = 0;
 
-        DB::transaction(function () use (&$dbData, $variants, $attributeIds, $companyId, &$productId, $imageFiles) {
+        DB::transaction(function () use (&$dbData, $variants, $attributeIds, $bundleItems, $companyId, &$productId, $imageFiles) {
             $product = Product::create($dbData);
             $productId = $product->id;
 
@@ -148,6 +150,19 @@ class ProductService
                 $product->attributes()->sync($attributeIds);
             }
 
+            // Bundle items
+            if (!empty($bundleItems)) {
+                $product->bundleItems()->delete();
+                foreach ($bundleItems as $bi) {
+                    ProductBundleItem::create([
+                        'bundle_product_id' => $product->id,
+                        'product_id'        => $bi['productId'],
+                        'variant_id'        => $bi['variantId'] ?? null,
+                        'quantity'          => $bi['quantity'] ?? 1,
+                    ]);
+                }
+            }
+
             // Sync product images
             if (!empty($imageFiles)) {
                 $this->syncImages($product, $imageFiles);
@@ -156,6 +171,9 @@ class ProductService
 
         $product = $this->repository->findByIdAndCompany($productId, $companyId);
         $this->syncProductStock($product);
+        if ($product->is_bundle) {
+            $this->syncBundleStock($product);
+        }
 
         return $this->mapper->toDTO($product);
     }
@@ -182,6 +200,7 @@ class ProductService
 
         $variants = $data['variants'] ?? [];
         $attributeIds = $data['attributes'] ?? [];
+        $bundleItems = $data['bundleItems'] ?? null;
 
         $dbData = $this->mapInputToDb(array_merge($data, [
             'company_id' => $companyId,
@@ -190,7 +209,7 @@ class ProductService
         // Don't pass image array to fill()
         unset($dbData['image']);
 
-        DB::transaction(function () use ($product, $dbData, $data, $imageFiles, $variants, $attributeIds, $companyId) {
+        DB::transaction(function () use ($product, $dbData, $data, $imageFiles, $variants, $attributeIds, $bundleItems, $companyId) {
             $product->fill($dbData)->save();
 
             // Handle attributes sync if provided
@@ -240,6 +259,19 @@ class ProductService
                 }
             }
 
+            // Handle bundle items
+            if ($bundleItems !== null) {
+                $product->bundleItems()->delete();
+                foreach ($bundleItems as $bi) {
+                    ProductBundleItem::create([
+                        'bundle_product_id' => $product->id,
+                        'product_id'        => $bi['productId'],
+                        'variant_id'        => $bi['variantId'] ?? null,
+                        'quantity'          => $bi['quantity'] ?? 1,
+                    ]);
+                }
+            }
+
             // Handle images with keep_images support
             $keepPaths = $data['keep_images'] ?? null;
             if ($keepPaths !== null) {
@@ -263,7 +295,11 @@ class ProductService
             }
         });
 
-        $this->syncProductStock($product->refresh());
+        $refreshed = $product->refresh();
+        $this->syncProductStock($refreshed);
+        if ($refreshed->is_bundle) {
+            $this->syncBundleStock($refreshed);
+        }
 
         return $this->get($id, $companyId);
     }
@@ -418,6 +454,24 @@ class ProductService
         if (isset($data['stock'])) {
             $dbData['stock'] = $data['stock'];
         }
+        if (isset($data['reorderPoint'])) {
+            $dbData['reorder_point'] = (int) $data['reorderPoint'];
+        } elseif (isset($data['reorder_point'])) {
+            $dbData['reorder_point'] = (int) $data['reorder_point'];
+        }
+        if (isset($data['trackingType'])) {
+            $dbData['tracking_type'] = $data['trackingType'];
+        } elseif (isset($data['tracking_type'])) {
+            $dbData['tracking_type'] = $data['tracking_type'];
+        }
+        if (isset($data['isBundle'])) {
+            $dbData['is_bundle'] = (bool) $data['isBundle'];
+        } elseif (isset($data['is_bundle'])) {
+            $dbData['is_bundle'] = (bool) $data['is_bundle'];
+        }
+        if (array_key_exists('bundlePriceOverride', $data)) {
+            $dbData['bundle_price_override'] = $data['bundlePriceOverride'] !== null && $data['bundlePriceOverride'] !== '' ? (float) $data['bundlePriceOverride'] : null;
+        }
         if (isset($data['sku'])) {
             $dbData['sku'] = $data['sku'];
         }
@@ -544,6 +598,11 @@ class ProductService
         if (isset($data['stock'])) {
             $dbData['stock'] = $data['stock'];
         }
+        if (isset($data['reorderPoint'])) {
+            $dbData['reorder_point'] = (int) $data['reorderPoint'];
+        } elseif (isset($data['reorder_point'])) {
+            $dbData['reorder_point'] = (int) $data['reorder_point'];
+        }
         if (isset($data['sku'])) {
             $dbData['sku'] = $data['sku'];
         }
@@ -560,6 +619,32 @@ class ProductService
             $totalStock = $product->variants()->sum('stock');
             $product->update(['stock' => $totalStock]);
         }
+    }
+
+    private function syncBundleStock(Product $bundle): void
+    {
+        $items = $bundle->bundleItems()->with('product', 'variant')->get();
+
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $available = null;
+        foreach ($items as $item) {
+            if ($item->variant_id && $item->variant) {
+                $childStock = (int) $item->variant->stock;
+            } elseif ($item->product) {
+                $childStock = (int) $item->product->stock;
+            } else {
+                $childStock = 0;
+            }
+
+            $qty = max(1, (int) $item->quantity);
+            $slots = (int) floor($childStock / $qty);
+            $available = $available === null ? $slots : min($available, $slots);
+        }
+
+        $bundle->update(['stock' => max(0, $available ?? 0)]);
     }
 
     private function syncImages(Product $product, array $imageFiles): void

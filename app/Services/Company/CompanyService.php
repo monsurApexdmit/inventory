@@ -78,6 +78,7 @@ class CompanyService
             // Return zero-value DTO if no record
             return [
                 'companyId' => $companyId,
+                'companyName' => '',
                 'taxId' => '',
                 'taxIdType' => '',
                 'taxRate' => 0.0,
@@ -97,6 +98,7 @@ class CompanyService
 
         $result = [
             'companyId' => $settings->company_id,
+            'companyName' => $settings->company_name ?? '',
             'taxId' => $settings->tax_id ?? '',
             'taxIdType' => $settings->tax_id_type ?? '',
             'taxRate' => (float) ($settings->tax_rate ?? 0),

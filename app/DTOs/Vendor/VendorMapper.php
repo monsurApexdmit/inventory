@@ -36,6 +36,11 @@ class VendorMapper extends BaseMapper
             amountPayable: (float) $model->amount_payable,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
+            user: $model->relationLoaded('user') && $model->user ? [
+                'id' => $model->user->id,
+                'name' => $model->user->name ?? $model->user->username ?? null,
+                'email' => $model->user->email,
+            ] : null,
         );
     }
 }

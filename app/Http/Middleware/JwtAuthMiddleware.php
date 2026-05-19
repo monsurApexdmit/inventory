@@ -54,6 +54,19 @@ class JwtAuthMiddleware
         $companyId = $payload->get('company_id');
         $isLegacy  = $companyId === null;
 
+        // Super admin has no company_id — resolve role before staff lookup
+        $saasUser = SaasUser::find($userId);
+        if ($saasUser && $saasUser->role === 'super_admin') {
+            $request->attributes->set('auth_user_id',       $userId);
+            $request->attributes->set('auth_company_id',    null);
+            $request->attributes->set('auth_is_legacy',     false);
+            $request->attributes->set('auth_is_super_admin',true);
+            $request->attributes->set('auth_email',         $payload->get('email'));
+            $request->attributes->set('auth_token',         $token);
+            $request->setUserResolver(static fn() => $saasUser);
+            return $next($request);
+        }
+
         // Legacy tokens have no company_id claim — resolve via staff table
         if ($isLegacy) {
             $staff     = Staff::where('user_id', $userId)->first();

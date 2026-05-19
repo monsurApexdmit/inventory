@@ -15,4 +15,6 @@ interface ILocationRepository
     public function update(int $id, array $data): Location;
 
     public function delete(int $id): bool;
+
+    public function countByCompany(int $companyId): int;
 }

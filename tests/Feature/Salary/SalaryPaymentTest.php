@@ -23,7 +23,7 @@ class SalaryPaymentTest extends TestCase
     {
         parent::setUp();
         $this->company = Company::factory()->create();
-        $this->owner = SaasUser::factory()->create(['company_id' => $this->company->id]);
+        $this->owner = SaasUser::factory()->owner()->create(['company_id' => $this->company->id]);
         $this->staff = Staff::factory()->create(['company_id' => $this->company->id]);
         $this->token = JWTAuth::fromUser($this->owner);
     }

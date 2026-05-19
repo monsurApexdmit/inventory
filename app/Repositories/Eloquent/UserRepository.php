@@ -9,6 +9,16 @@ class UserRepository implements IUserRepository
 {
     public function __construct(private readonly User $model) {}
 
+    public function findAll(): array
+    {
+        return $this->model->with('role')->get()->all();
+    }
+
+    public function delete(int $id): void
+    {
+        $this->model->findOrFail($id)->forceDelete();
+    }
+
     public function findById(int $id): ?User
     {
         return $this->model->with('role')->find($id);

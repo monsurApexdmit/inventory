@@ -4,6 +4,7 @@ namespace App\Services\Team;
 
 use App\Repositories\Contracts\IInvitationRepository;
 use App\Repositories\Contracts\ISubscriptionRepository;
+use App\Services\Company\PlanLimitService;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -12,6 +13,7 @@ class TeamService
     public function __construct(
         private readonly IInvitationRepository $invitationRepository,
         private readonly ISubscriptionRepository $subscriptionRepository,
+        private readonly PlanLimitService $planLimitService,
     ) {
     }
 
@@ -43,6 +45,7 @@ class TeamService
             'users' => $users,
             'companyId' => $companyId,
             'maxUsers' => $maxUsers,
+            'activeUsers' => count($users),
             'totalUsers' => count($users),
             'canAddMore' => count($users) < $maxUsers,
         ];
@@ -50,6 +53,8 @@ class TeamService
 
     public function invite(int $companyId, int $inviterId, array $data): array
     {
+        $this->planLimitService->enforceUserLimit($companyId);
+
         $token = Str::random(64);
         $expiresAt = now()->addDays(7);
 

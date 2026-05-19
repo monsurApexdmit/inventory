@@ -25,6 +25,7 @@ class VendorReturnDTO extends BaseDTO
         public readonly string $createdAt,
         public readonly string $updatedAt,
         public readonly ?array $items = null,
+        public readonly ?array $vendor = null,
     ) {}
 
     public function toArray(): array
@@ -45,6 +46,7 @@ class VendorReturnDTO extends BaseDTO
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
             'items' => $this->items,
+            'vendor' => $this->vendor,
         ];
     }
 }

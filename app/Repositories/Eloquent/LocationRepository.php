@@ -44,4 +44,9 @@ class LocationRepository implements ILocationRepository
     {
         return $this->model->destroy($id) > 0;
     }
+
+    public function countByCompany(int $companyId): int
+    {
+        return $this->model->where('company_id', $companyId)->count();
+    }
 }

@@ -16,6 +16,7 @@ class InventoryItemDTO extends BaseDTO
         public readonly ?string $barcode,
         public readonly int $stock,
         public readonly array $inventory,
+        public readonly int $reorderPoint = 0,
     ) {}
 
     public function toArray(): array
@@ -29,6 +30,7 @@ class InventoryItemDTO extends BaseDTO
             'sku' => $this->sku,
             'barcode' => $this->barcode,
             'stock' => $this->stock,
+            'reorderPoint' => $this->reorderPoint,
             'inventory' => array_map(
                 fn($item) => $item instanceof LocationInventoryDTO ? $item->toArray() : $item,
                 $this->inventory

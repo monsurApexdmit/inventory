@@ -9,7 +9,7 @@ class AuraShopCategorySeeder extends Seeder
 {
     public function run(): void
     {
-        $companyId = 11;
+        $companyId = 458;
 
         $categories = [
             'Electronics' => [
@@ -135,6 +135,6 @@ class AuraShopCategorySeeder extends Seeder
             }
         }
 
-        $this->command->info('AuraShop categories seeded for company_id=11 ✓');
+        $this->command->info('AuraShop categories seeded for company_id=458 ✓');
     }
 }

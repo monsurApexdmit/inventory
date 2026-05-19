@@ -14,24 +14,24 @@ class CreateSalaryPaymentRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'staff_id' => $this->staffId,
-            'paid_amount' => $this->paidAmount,
-            'payment_date' => $this->paymentDate,
-            'payment_method' => $this->paymentMethod,
+            'paidAmount' => $this->paidAmount ?? $this->paid_amount,
+            'paymentDate' => $this->paymentDate ?? $this->payment_date,
+            'paymentMethod' => $this->paymentMethod ?? $this->payment_method,
         ]);
     }
 
     public function rules(): array
     {
         return [
-            'staff_id' => 'required|integer|min:1',
-            'month' => 'required|string',
+            'staffId' => 'required|integer|min:1',
+            'month' => ['required', 'string', 'regex:/^\d{4}-\d{2}$/'],
             'amount' => 'required|numeric|min:0',
-            'paid_amount' => 'nullable|numeric|min:0',
-            'status' => 'nullable|string|in:Paid,Pending,Partial',
-            'payment_date' => 'nullable|date',
-            'payment_method' => 'nullable|string',
+            'paidAmount' => 'nullable|numeric|min:0',
+            'status' => 'nullable|string|in:paid,partial,Paid,Pending,Partial',
+            'paymentDate' => 'nullable|date',
+            'paymentMethod' => 'nullable|string',
             'notes' => 'nullable|string',
+            'remarks' => 'nullable|string',
         ];
     }
 }

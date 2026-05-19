@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'customer.auth'    => \App\Http\Middleware\CustomerAuthMiddleware::class,
             'check_permission' => \App\Http\Middleware\CheckPermission::class,
+            'super_admin'      => \App\Http\Middleware\SuperAdminMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

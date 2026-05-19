@@ -28,7 +28,7 @@ class CustomerReturnTest extends TestCase
         parent::setUp();
 
         $this->company = Company::factory()->create();
-        $this->owner = SaasUser::factory()->create(['company_id' => $this->company->id]);
+        $this->owner = SaasUser::factory()->owner()->create(['company_id' => $this->company->id]);
         $this->customer = Customer::factory()->create(['company_id' => $this->company->id]);
         $this->product = Product::factory()->create(['company_id' => $this->company->id, 'stock' => 100]);
         $this->variant = ProductVariant::factory()->create(['product_id' => $this->product->id, 'stock' => 50]);

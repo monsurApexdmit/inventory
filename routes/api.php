@@ -24,6 +24,8 @@ use App\Http\Controllers\Api\V1\Shipping\OrderShipmentController;
 use App\Http\Controllers\Api\V1\StockTransfer\StockTransferController;
 use App\Http\Controllers\Api\V1\Vendor\VendorController;
 use App\Http\Controllers\Api\V1\VendorReturn\VendorReturnController;
+use App\Http\Controllers\Api\V1\PurchaseOrder\PurchaseOrderController;
+use App\Http\Controllers\Api\V1\SerialBatch\SerialBatchController;
 use App\Http\Controllers\Api\V1\Salary\SalaryPaymentController;
 use App\Http\Controllers\Api\V1\Coupon\CouponController;
 use App\Http\Controllers\Api\V1\Inventory\InventoryController;
@@ -37,6 +39,7 @@ use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
 use App\Http\Controllers\Api\Storefront\StorefrontProductReviewController;
 use App\Http\Controllers\Api\Storefront\StorefrontSupportController;
+use App\Http\Controllers\Api\Platform\PlatformController;
 use App\Http\Controllers\Api\Storefront\WishlistController;
 use App\Http\Controllers\Api\Storefront\WishlistAnalyticsController;
 use App\Http\Controllers\Api\V1\ContentPageController;
@@ -44,6 +47,31 @@ use App\Http\Controllers\Api\Gateway\GatewayController;
 use App\Http\Controllers\Api\Tailor\TailorController;
 use App\Http\Middleware\JwtAuthMiddleware;
 use Illuminate\Support\Facades\Route;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Platform Admin API — super_admin only
+// ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('platform')->middleware([JwtAuthMiddleware::class, 'super_admin'])->group(function () {
+    Route::get('/stats',                                      [PlatformController::class, 'stats']);
+
+    // Companies
+    Route::get('/companies',                                  [PlatformController::class, 'listCompanies']);
+    Route::get('/companies/{id}',                             [PlatformController::class, 'getCompany']);
+    Route::patch('/companies/{id}/status',                    [PlatformController::class, 'updateCompanyStatus']);
+    Route::get('/companies/{id}/users',                       [PlatformController::class, 'listCompanyUsers']);
+    Route::post('/companies/{id}/subscription',               [PlatformController::class, 'assignSubscription']);
+    Route::delete('/companies/{id}/subscription',             [PlatformController::class, 'cancelSubscription']);
+
+    // Plans
+    Route::get('/plans',                                      [PlatformController::class, 'listPlans']);
+    Route::post('/plans',                                     [PlatformController::class, 'createPlan']);
+    Route::put('/plans/{id}',                                 [PlatformController::class, 'updatePlan']);
+    Route::patch('/plans/{id}/toggle',                        [PlatformController::class, 'togglePlanStatus']);
+
+    // Super admin management
+    Route::post('/admins',                                    [PlatformController::class, 'createSuperAdmin']);
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public Storefront API — scoped by company_id query param
@@ -214,6 +242,7 @@ Route::prefix('auth/company')->middleware(JwtAuthMiddleware::class)->group(funct
     Route::get('/status',        [CompanyController::class, 'status']);
     Route::get('/settings',      [CompanyController::class, 'settings'])->middleware('check_permission:Company Settings.read');
     Route::put('/settings',      [CompanyController::class, 'upsertSettings'])->middleware('check_permission:Company Settings.write');
+    Route::get('/plan-limits',   [CompanyController::class, 'planLimits']);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -363,6 +392,17 @@ Route::prefix('vendors')->middleware(JwtAuthMiddleware::class)->group(function (
     Route::get('/{id}',    [VendorController::class, 'show'])->middleware('check_permission:Vendors.read');
     Route::put('/{id}',    [VendorController::class, 'update'])->middleware('check_permission:Vendors.write');
     Route::delete('/{id}', [VendorController::class, 'destroy'])->middleware('check_permission:Vendors.delete');
+});
+
+Route::prefix('purchase-orders')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',           [PurchaseOrderController::class, 'index'])->middleware('check_permission:Vendors.read');
+    Route::post('/',          [PurchaseOrderController::class, 'store'])->middleware('check_permission:Vendors.write');
+    Route::get('/stats',      [PurchaseOrderController::class, 'stats'])->middleware('check_permission:Vendors.read');
+    Route::get('/{id}',       [PurchaseOrderController::class, 'show'])->middleware('check_permission:Vendors.read');
+    Route::put('/{id}',       [PurchaseOrderController::class, 'update'])->middleware('check_permission:Vendors.write');
+    Route::patch('/{id}/status',  [PurchaseOrderController::class, 'updateStatus'])->middleware('check_permission:Vendors.write');
+    Route::post('/{id}/receive',  [PurchaseOrderController::class, 'receive'])->middleware('check_permission:Vendors.write');
+    Route::delete('/{id}',    [PurchaseOrderController::class, 'destroy'])->middleware('check_permission:Vendors.delete');
 });
 
 Route::prefix('vendor-returns')->middleware(JwtAuthMiddleware::class)->group(function () {
@@ -608,3 +648,26 @@ Route::prefix('tailor')->middleware(JwtAuthMiddleware::class)->group(function ()
     Route::get('/reports/fabrics',              [TailorController::class, 'reportFabrics'])->middleware('check_permission:TailorReports.read');
     Route::get('/reports/dorjis',               [TailorController::class, 'reportDorjis'])->middleware('check_permission:TailorReports.read');
 });
+
+// Serial tracking
+Route::prefix('serials')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [SerialBatchController::class, 'indexSerials'])->middleware('check_permission:Inventory.read');
+    Route::post('/',       [SerialBatchController::class, 'storeSerials'])->middleware('check_permission:Inventory.write');
+    Route::get('/stats',   [SerialBatchController::class, 'stats'])->middleware('check_permission:Inventory.read');
+    Route::get('/{id}',    [SerialBatchController::class, 'showSerial'])->middleware('check_permission:Inventory.read');
+    Route::put('/{id}',    [SerialBatchController::class, 'updateSerial'])->middleware('check_permission:Inventory.write');
+    Route::delete('/{id}', [SerialBatchController::class, 'destroySerial'])->middleware('check_permission:Inventory.delete');
+});
+
+// Batch tracking
+Route::prefix('batches')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [SerialBatchController::class, 'indexBatches'])->middleware('check_permission:Inventory.read');
+    Route::post('/',       [SerialBatchController::class, 'storeBatch'])->middleware('check_permission:Inventory.write');
+    Route::get('/{id}',    [SerialBatchController::class, 'showBatch'])->middleware('check_permission:Inventory.read');
+    Route::put('/{id}',    [SerialBatchController::class, 'updateBatch'])->middleware('check_permission:Inventory.write');
+    Route::delete('/{id}', [SerialBatchController::class, 'destroyBatch'])->middleware('check_permission:Inventory.delete');
+});
+
+// Inventory movements
+Route::get('/inventory-movements', [SerialBatchController::class, 'indexMovements'])
+    ->middleware([JwtAuthMiddleware::class, 'check_permission:Inventory.read']);

@@ -24,6 +24,8 @@ class ProductVariant extends Model
         'profit_margin',
         'margin_type',
         'stock',
+        'reorder_point',
+        'tracking_type',
         'sku',
         'barcode',
     ];
@@ -35,6 +37,7 @@ class ProductVariant extends Model
         'cost_price' => 'float',
         'profit_margin' => 'float',
         'stock' => 'integer',
+        'reorder_point' => 'integer',
     ];
 
     public function product(): BelongsTo
@@ -45,5 +48,15 @@ class ProductVariant extends Model
     public function inventory(): HasMany
     {
         return $this->hasMany(VariantInventory::class, 'variant_id');
+    }
+
+    public function serials(): HasMany
+    {
+        return $this->hasMany(ProductSerial::class, 'variant_id');
+    }
+
+    public function batches(): HasMany
+    {
+        return $this->hasMany(ProductBatch::class, 'variant_id');
     }
 }

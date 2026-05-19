@@ -22,7 +22,7 @@ class BillingController extends Controller
 
     public function plans(): JsonResponse
     {
-        return $this->success(['plans' => $this->billingService->getPlans()]);
+        return $this->success($this->billingService->getPlans());
     }
 
     public function updatePlan(Request $request, int $id): JsonResponse
@@ -37,7 +37,7 @@ class BillingController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
         $subscription = $this->billingService->getSubscription($companyId);
 
-        return $this->success($subscription ? $subscription->toArray() : null);
+        return $this->success($subscription ? $subscription->toArray() : ['status' => 'none']);
     }
 
     public function payments(Request $request): JsonResponse

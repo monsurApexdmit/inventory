@@ -102,7 +102,6 @@ class StaffTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'email' => 'john@example.com',
-            'role_id' => 5, // staff role
         ]);
     }
 

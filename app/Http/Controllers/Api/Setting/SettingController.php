@@ -38,57 +38,50 @@ class SettingController extends Controller
     public function updateGeneral(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
-        $this->settingService->updateSection($companyId, 'general', $data);
-        return $this->success($data, 'General settings updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'general', $request->all());
+        return $this->success($result, 'General settings updated successfully');
     }
 
     public function updateTax(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
-        $this->settingService->updateSection($companyId, 'tax', $data);
-        return $this->success($data, 'Tax settings updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'tax', $request->all());
+        return $this->success($result, 'Tax settings updated successfully');
     }
 
     public function updateShipping(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
-        $this->settingService->updateSection($companyId, 'shipping', $data);
-        return $this->success($data, 'Shipping settings updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'shipping', $request->all());
+        return $this->success($result, 'Shipping settings updated successfully');
     }
 
     public function updatePayment(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
-        $this->settingService->updateSection($companyId, 'payment', $data);
-        return $this->success($data, 'Payment settings updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'payment', $request->all());
+        return $this->success($result, 'Payment settings updated successfully');
     }
 
     public function updateBusiness(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
-        $this->settingService->updateSection($companyId, 'business', $data);
-        return $this->success($data, 'Business settings updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'business', $request->all());
+        return $this->success($result, 'Business settings updated successfully');
     }
 
     public function updateRegional(UpdateRegionalSettingRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->validated();
-        $this->settingService->updateSection($companyId, 'regional', $data);
-        return $this->success($data, 'Regional settings updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'regional', $request->validated());
+        return $this->success($result, 'Regional settings updated successfully');
     }
 
     public function updateNotifications(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
-        $this->settingService->updateSection($companyId, 'notifications', $data);
-        return $this->success($data, 'Notification settings updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'notifications', $request->all());
+        return $this->success($result, 'Notification settings updated successfully');
     }
 
     public function getStoreHours(Request $request): JsonResponse
@@ -100,9 +93,8 @@ class SettingController extends Controller
     public function updateStoreHours(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $data = $request->all();
-        $this->settingService->updateSection($companyId, 'store-hours', $data);
-        return $this->success($data, 'Store hours updated successfully');
+        $result = $this->settingService->updateSection($companyId, 'store-hours', $request->all());
+        return $this->success($result, 'Store hours updated successfully');
     }
 
     public function changePassword(Request $request): JsonResponse

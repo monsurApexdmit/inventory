@@ -13,22 +13,33 @@ class UpdateSalaryPaymentRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'paid_amount' => $this->paidAmount,
-            'payment_date' => $this->paymentDate,
-            'payment_method' => $this->paymentMethod,
-        ]);
+        $merged = [];
+
+        if ($this->has('paid_amount') && !$this->has('paidAmount')) {
+            $merged['paidAmount'] = $this->paid_amount;
+        }
+        if ($this->has('payment_date') && !$this->has('paymentDate')) {
+            $merged['paymentDate'] = $this->payment_date;
+        }
+        if ($this->has('payment_method') && !$this->has('paymentMethod')) {
+            $merged['paymentMethod'] = $this->payment_method;
+        }
+
+        if (!empty($merged)) {
+            $this->merge($merged);
+        }
     }
 
     public function rules(): array
     {
         return [
             'amount' => 'sometimes|numeric|min:0',
-            'paid_amount' => 'sometimes|numeric|min:0',
-            'status' => 'sometimes|string|in:Paid,Pending,Partial',
-            'payment_date' => 'sometimes|nullable|date',
-            'payment_method' => 'sometimes|nullable|string',
+            'paidAmount' => 'sometimes|numeric|min:0',
+            'status' => 'sometimes|string|in:paid,partial,Paid,Pending,Partial',
+            'paymentDate' => 'sometimes|nullable|date',
+            'paymentMethod' => 'sometimes|nullable|string',
             'notes' => 'sometimes|nullable|string',
+            'remarks' => 'sometimes|nullable|string',
         ];
     }
 }

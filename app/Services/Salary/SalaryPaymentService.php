@@ -54,12 +54,8 @@ class SalaryPaymentService
         $dbData['status'] = $this->calculateStatus($dbData['amount'], $dbData['paid_amount'] ?? 0);
 
         $existing = $this->repository->findByStaffAndMonth($dbData['staff_id'], $dbData['month']);
-        if ($existing) {
-            if ($existing->trashed()) {
-                $existing->restore();
-            }
-            $updated = $this->repository->update($existing->id, $dbData);
-            return $this->mapper->toDTO($updated->load('staff'));
+        if ($existing && !$existing->trashed()) {
+            throw new HttpException(409, 'Salary payment for this staff and month already exists');
         }
 
         $payment = $this->repository->create($dbData);
@@ -103,11 +99,11 @@ class SalaryPaymentService
     private function calculateStatus(float $amount, float $paidAmount): string
     {
         if ($paidAmount >= $amount) {
-            return 'Paid';
+            return 'paid';
         } elseif ($paidAmount > 0) {
-            return 'Partial';
+            return 'partial';
         }
-        return 'Pending';
+        return 'pending';
     }
 
     private function mapInputToDb(array $data): array
@@ -120,6 +116,7 @@ class SalaryPaymentService
             'payment_date' => $data['paymentDate'] ?? ($data['payment_date'] ?? null),
             'payment_method' => $data['paymentMethod'] ?? ($data['payment_method'] ?? null),
             'notes' => $data['notes'] ?? null,
+            'remarks' => $data['remarks'] ?? null,
         ];
 
         return array_filter($mapped, fn($v) => $v !== null);

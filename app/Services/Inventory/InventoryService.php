@@ -112,6 +112,7 @@ class InventoryService
                 'p.sku',
                 'p.barcode',
                 DB::raw('p.stock as stock'),
+                'p.reorder_point',
                 'p.location_id',
                 'l.name as locationName',
                 'p.stock as quantity'
@@ -152,6 +153,7 @@ class InventoryService
                 'pv.name as variantName',
                 'pv.sku',
                 'pv.barcode',
+                'pv.reorder_point',
                 'vi.location_id',
                 'l.name as locationName',
                 'vi.quantity'
@@ -215,7 +217,7 @@ class InventoryService
         }
 
         $variants = $query
-            ->select('pv.id', 'pv.product_id as productId', 'p.name as productName', 'pv.name as variantName', 'pv.sku', 'pv.barcode', 'pv.stock')
+            ->select('pv.id', 'pv.product_id as productId', 'p.name as productName', 'pv.name as variantName', 'pv.sku', 'pv.barcode', 'pv.stock', 'pv.reorder_point')
             ->get();
 
         if ($variants->isEmpty()) {
@@ -237,9 +239,10 @@ class InventoryService
                     'variantName' => $variant->variantName,
                     'sku' => $variant->sku,
                     'barcode' => $variant->barcode,
+                    'reorder_point' => (int) ($variant->reorder_point ?? 0),
                     'location_id' => $location->id,
                     'locationName' => $location->name,
-                    'quantity' => (int) $variant->stock, // Use variant.stock as fallback
+                    'quantity' => (int) $variant->stock,
                 ];
             }
         }
@@ -313,7 +316,8 @@ class InventoryService
                 sku: (string) $firstRow->sku,
                 barcode: isset($firstRow->barcode) ? (string) $firstRow->barcode : null,
                 stock: $totalStock,
-                inventory: $inventoryDtos
+                inventory: $inventoryDtos,
+                reorderPoint: (int) ($firstRow->reorder_point ?? 0),
             );
         }
 

@@ -61,6 +61,17 @@ class CreateProductRequest extends FormRequest
             $merged['attributes'] = json_decode($this->input('attributes'), true) ?? [];
         }
 
+        if ($this->has('bundleItems') && is_string($this->input('bundleItems'))) {
+            $merged['bundleItems'] = json_decode($this->input('bundleItems'), true) ?? [];
+        }
+
+        // Pass through bundle fields
+        foreach (['isBundle', 'bundlePriceOverride', 'reorderPoint', 'trackingType'] as $field) {
+            if ($this->has($field) && !isset($merged[$field])) {
+                $merged[$field] = $this->input($field);
+            }
+        }
+
         if (!empty($merged)) {
             $this->merge($merged);
         }
@@ -105,6 +116,14 @@ class CreateProductRequest extends FormRequest
             'variants.*.attributes' => 'nullable',
             'attributes' => 'nullable|array',
             'attributes.*' => 'integer|min:1',
+            'reorderPoint' => 'nullable|integer|min:0',
+            'trackingType' => 'nullable|in:none,serial,batch',
+            'isBundle' => 'nullable',
+            'bundlePriceOverride' => 'nullable|numeric|min:0',
+            'bundleItems' => 'nullable|array',
+            'bundleItems.*.productId' => 'required_with:bundleItems|integer|min:1',
+            'bundleItems.*.variantId' => 'nullable|integer|min:1',
+            'bundleItems.*.quantity' => 'nullable|integer|min:1',
         ];
     }
 }

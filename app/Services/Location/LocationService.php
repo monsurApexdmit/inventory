@@ -5,6 +5,7 @@ namespace App\Services\Location;
 use App\DTOs\Location\LocationDTO;
 use App\DTOs\Location\LocationMapper;
 use App\Repositories\Contracts\ILocationRepository;
+use App\Services\Company\PlanLimitService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class LocationService
@@ -13,6 +14,7 @@ class LocationService
 
     public function __construct(
         private readonly ILocationRepository $locationRepository,
+        private readonly PlanLimitService    $planLimitService,
     ) {
         $this->mapper = new LocationMapper();
     }
@@ -36,6 +38,8 @@ class LocationService
 
     public function create(int $companyId, array $data): LocationDTO
     {
+        $this->planLimitService->enforceBranchLimit($companyId);
+
         // Convert camelCase to snake_case
         $dbData = [
             'company_id' => $companyId,

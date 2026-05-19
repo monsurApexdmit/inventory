@@ -20,7 +20,7 @@ class SecurityTest extends TestCase
     {
         parent::setUp();
         $this->company = Company::factory()->create();
-        $this->owner = SaasUser::factory()->create(['company_id' => $this->company->id]);
+        $this->owner = SaasUser::factory()->owner()->create(['company_id' => $this->company->id]);
         $this->token = JWTAuth::fromUser($this->owner);
     }
 
@@ -119,7 +119,7 @@ class SecurityTest extends TestCase
     public function test_cannot_access_other_company_data(): void
     {
         $otherCompany = Company::factory()->create();
-        $otherOwner = SaasUser::factory()->create(['company_id' => $otherCompany->id]);
+        $otherOwner = SaasUser::factory()->owner()->create(['company_id' => $otherCompany->id]);
         $otherToken = JWTAuth::fromUser($otherOwner);
 
         $staff = \App\Models\Staff::factory()->create(['company_id' => $this->company->id]);

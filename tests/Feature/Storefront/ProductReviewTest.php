@@ -43,7 +43,7 @@ class ProductReviewTest extends TestCase
         $sig = hash_hmac('sha256', $payload, config('app.key'));
         $this->customerToken = "{$payload}.{$sig}";
 
-        $admin = SaasUser::factory()->forCompany($this->company)->create();
+        $admin = SaasUser::factory()->owner()->forCompany($this->company)->create();
         $this->adminToken = JWTAuth::fromUser($admin);
     }
 

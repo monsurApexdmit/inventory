@@ -32,6 +32,11 @@ class CheckPermission
         $companyId = (int) $request->attributes->get('auth_company_id');
         $isLegacy  = (bool) $request->attributes->get('auth_is_legacy', false);
 
+        // Super admins bypass all permission checks
+        if ($request->attributes->get('auth_is_super_admin')) {
+            return $next($request);
+        }
+
         if (!$userId || !$companyId) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
         }
@@ -60,10 +65,17 @@ class CheckPermission
 
         $staff = Staff::where('user_id', $userId)
             ->where('company_id', $companyId)
+            ->with('user.role')
             ->first();
 
         if (!$staff) {
             return response()->json(['success' => false, 'message' => 'Access denied.'], 403);
+        }
+
+        // Legacy admin/owner roles bypass permission checks
+        $legacyRoleTitle = $staff->user?->role?->title ?? '';
+        if (in_array(strtolower($legacyRoleTitle), ['admin', 'owner'], true)) {
+            return $next($request);
         }
 
         if (!$staff->staff_role_id) {

@@ -32,6 +32,7 @@ class ProductFactory extends Factory
             'stock' => $this->faker->numberBetween(0, 1000),
             'sku' => 'SKU-' . self::$counter,
             'barcode' => 'BARCODE-' . self::$counter,
+            'slug' => 'product-' . self::$counter . '-' . uniqid(),
             'published' => $this->faker->boolean(),
             'receipt_number' => null,
             'image' => null,

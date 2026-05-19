@@ -21,6 +21,7 @@ class SubscriptionPlan extends Model
         'max_products',
         'max_branches',
         'features',
+        'modules',
         'is_active',
         'is_featured',
     ];

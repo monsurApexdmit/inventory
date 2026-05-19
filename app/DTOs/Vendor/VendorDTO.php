@@ -25,6 +25,7 @@ class VendorDTO extends BaseDTO
         public readonly float $amountPayable,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly ?array $user = null,
     ) {}
 
     public function toArray(): array
@@ -45,6 +46,7 @@ class VendorDTO extends BaseDTO
             'amountPayable' => $this->amountPayable,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'user' => $this->user,
         ];
     }
 }

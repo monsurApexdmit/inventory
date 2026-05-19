@@ -70,6 +70,7 @@ class SaasUser extends Model implements JWTSubject, Authenticatable
         return [
             'company_id' => $this->company_id,
             'email'      => $this->email,
+            'role'       => $this->role,
         ];
     }
 

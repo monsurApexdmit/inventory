@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\User;
 
+use App\Models\Company;
 use App\Models\Role;
+use App\Models\Staff;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -17,9 +19,17 @@ class LegacyUserTest extends TestCase
     {
         parent::setUp();
 
-        $role = Role::factory()->create();
-
+        $company = Company::factory()->create();
+        $role = Role::factory()->create(['title' => 'Admin', 'status' => true]);
         $user = User::factory()->create(['role_id' => $role->id]);
+
+        Staff::create([
+            'company_id' => $company->id,
+            'user_id'    => $user->id,
+            'name'       => 'Test Admin',
+            'email'      => $user->email,
+        ]);
+
         $this->token = \Tymon\JWTAuth\Facades\JWTAuth::fromUser($user);
     }
 

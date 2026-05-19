@@ -11,6 +11,8 @@ use App\Repositories\Contracts\IPasswordResetRepository;
 use App\Repositories\Contracts\ISaasUserRepository;
 use App\Repositories\Contracts\IStaffRepository;
 use App\Repositories\Contracts\IUserRepository;
+use App\Models\Location;
+use App\Models\Setting;
 use App\Models\Staff;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -100,9 +102,18 @@ class SaasAuthService
             // For now: update company status to trial-active
             $this->companyRepository->update($user->company_id, ['status' => 'trial']);
 
-            $issued = $this->jwtService->issueSaasToken($user);
-
             $company = $this->companyRepository->findById($user->company_id);
+
+            Location::firstOrCreate(
+                ['company_id' => $user->company_id, 'is_default' => true],
+                ['name' => $company->name . ' - Main Store']
+            );
+
+            Setting::firstOrCreate(
+                ['company_id' => $user->company_id]
+            );
+
+            $issued = $this->jwtService->issueSaasToken($user);
 
             $trialEnd  = now()->addDays(10);
             $trialDays = (int) now()->diffInDays($trialEnd);
@@ -176,7 +187,20 @@ class SaasAuthService
 
             $this->saasUserRepository->updateLastLogin($saasUser->id);
 
-            $issued  = $this->jwtService->issueSaasToken($saasUser);
+            $issued = $this->jwtService->issueSaasToken($saasUser);
+
+            // Super admin: no company
+            if ($saasUser->role === 'super_admin') {
+                return [
+                    'userId'    => $saasUser->id,
+                    'userEmail' => $saasUser->email,
+                    'email'     => $saasUser->email,
+                    'userRole'  => 'super_admin',
+                    'companyId' => null,
+                    'token'     => $issued['token'],
+                ];
+            }
+
             $company = $this->companyRepository->findById($saasUser->company_id);
 
             return [
@@ -354,18 +378,21 @@ class SaasAuthService
         $trialEnd           = now()->addDays(10);
         $trialDaysRemaining = max(0, (int) now()->diffInDays($trialEnd));
 
-        // Get plan features and limits
+        // Get plan features, modules and limits
         $planFeatures = [];
-        $maxUsers = 10;
-        $maxProducts = 1000;
-        $maxBranches = 1;
+        $planModules  = [];
+        $maxUsers     = 10;
+        $maxProducts  = 1000;
+        $maxBranches  = 1;
 
         if ($plan) {
-            $features = $plan->features;
+            $features     = $plan->features;
+            $modules      = $plan->modules;
             $planFeatures = is_string($features) ? (json_decode($features, true) ?? []) : ($features ?? []);
-            $maxUsers = (int) ($plan->max_users ?? 10);
-            $maxProducts = (int) ($plan->max_products ?? 1000);
-            $maxBranches = (int) ($plan->max_branches ?? 1);
+            $planModules  = is_string($modules)  ? (json_decode($modules,  true) ?? []) : ($modules  ?? []);
+            $maxUsers     = (int) ($plan->max_users    ?? 10);
+            $maxProducts  = (int) ($plan->max_products ?? 1000);
+            $maxBranches  = (int) ($plan->max_branches ?? 1);
         }
 
         return [
@@ -392,6 +419,7 @@ class SaasAuthService
                 'planId'              => $plan?->id,
                 'planName'            => $plan?->name,
                 'planFeatures'        => $planFeatures,
+                'planModules'         => $planModules,
                 'maxUsers'            => $maxUsers,
                 'maxProducts'         => $maxProducts,
                 'maxBranches'         => $maxBranches,
@@ -426,16 +454,19 @@ class SaasAuthService
         $trialDaysRemaining = max(0, (int) now()->diffInDays($trialEnd));
 
         $planFeatures = [];
-        $maxUsers = 10;
-        $maxProducts = 1000;
-        $maxBranches = 1;
+        $planModules  = [];
+        $maxUsers     = 10;
+        $maxProducts  = 1000;
+        $maxBranches  = 1;
 
         if ($plan) {
-            $features = $plan->features;
+            $features     = $plan->features;
+            $modules      = $plan->modules;
             $planFeatures = is_string($features) ? (json_decode($features, true) ?? []) : ($features ?? []);
-            $maxUsers = (int) ($plan->max_users ?? 10);
-            $maxProducts = (int) ($plan->max_products ?? 1000);
-            $maxBranches = (int) ($plan->max_branches ?? 1);
+            $planModules  = is_string($modules)  ? (json_decode($modules,  true) ?? []) : ($modules  ?? []);
+            $maxUsers     = (int) ($plan->max_users    ?? 10);
+            $maxProducts  = (int) ($plan->max_products ?? 1000);
+            $maxBranches  = (int) ($plan->max_branches ?? 1);
         }
 
         // Build permission map from custom role_permissions table
@@ -480,6 +511,7 @@ class SaasAuthService
                 'planId'              => $plan?->id,
                 'planName'            => $plan?->name,
                 'planFeatures'        => $planFeatures,
+                'planModules'         => $planModules,
                 'maxUsers'            => $maxUsers,
                 'maxProducts'         => $maxProducts,
                 'maxBranches'         => $maxBranches,

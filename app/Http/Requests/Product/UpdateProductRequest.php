@@ -61,6 +61,16 @@ class UpdateProductRequest extends FormRequest
             $merged['attributes'] = json_decode($this->input('attributes'), true) ?? [];
         }
 
+        if ($this->has('bundleItems') && is_string($this->input('bundleItems'))) {
+            $merged['bundleItems'] = json_decode($this->input('bundleItems'), true) ?? [];
+        }
+
+        foreach (['isBundle', 'bundlePriceOverride', 'reorderPoint', 'trackingType'] as $field) {
+            if ($this->has($field) && !isset($merged[$field])) {
+                $merged[$field] = $this->input($field);
+            }
+        }
+
         if (!empty($merged)) {
             $this->merge($merged);
         }
@@ -105,6 +115,14 @@ class UpdateProductRequest extends FormRequest
             'variants.*.attributes' => 'nullable',
             'attributes' => 'sometimes|nullable|array',
             'attributes.*' => 'integer|min:1',
+            'reorderPoint' => 'sometimes|nullable|integer|min:0',
+            'trackingType' => 'sometimes|nullable|in:none,serial,batch',
+            'isBundle' => 'sometimes|nullable',
+            'bundlePriceOverride' => 'sometimes|nullable|numeric|min:0',
+            'bundleItems' => 'sometimes|nullable|array',
+            'bundleItems.*.productId' => 'required_with:bundleItems|integer|min:1',
+            'bundleItems.*.variantId' => 'nullable|integer|min:1',
+            'bundleItems.*.quantity' => 'nullable|integer|min:1',
             'keep_images' => 'sometimes|nullable|array',
             'keep_images.*' => 'string',
             'delete_images' => 'sometimes|nullable|boolean',

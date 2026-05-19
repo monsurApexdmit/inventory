@@ -87,7 +87,7 @@ class SalaryPaymentRepository implements ISalaryPaymentRepository
             'month' => $payment->month,
             'amount' => (float) $payment->amount,
             'paidAmount' => (float) $payment->paid_amount,
-            'status' => ucfirst(strtolower($payment->status)),
+            'status' => strtolower($payment->status),
             'paymentDate' => $payment->payment_date?->toIso8601String(),
             'paymentMethod' => $payment->payment_method,
             'notes' => $payment->notes,

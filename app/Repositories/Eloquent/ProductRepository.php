@@ -53,7 +53,7 @@ class ProductRepository implements IProductRepository
     {
         return $this->model
             ->where('company_id', $companyId)
-            ->with(['category', 'vendor', 'location', 'variants.inventory', 'images'])
+            ->with(['category', 'vendor', 'location', 'variants.inventory', 'images', 'attributes', 'bundleItems.product', 'bundleItems.variant'])
             ->find($id);
     }
 

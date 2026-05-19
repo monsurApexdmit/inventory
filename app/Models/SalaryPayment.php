@@ -22,6 +22,7 @@ class SalaryPayment extends Model
         'payment_date',
         'payment_method',
         'notes',
+        'remarks',
     ];
 
     protected $casts = [

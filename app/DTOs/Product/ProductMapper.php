@@ -70,6 +70,7 @@ class ProductMapper extends BaseMapper
             profitMargin: $model->profit_margin ? (float) $model->profit_margin : null,
             marginType: $model->margin_type,
             stock: (int) $model->stock,
+            reorderPoint: (int) ($model->reorder_point ?? 0),
             sku: $model->sku,
             barcode: $model->barcode,
             published: (bool) $model->published,
@@ -88,7 +89,31 @@ class ProductMapper extends BaseMapper
             images: $model->relationLoaded('images') ? $this->formatImages($model->images) : null,
             offerPrice: $model->offer_price ? (float) $model->offer_price : null,
             offerType: $model->offer_type,
+            attributes: $model->relationLoaded('attributes') ? $model->attributes->map(fn($a) => ['id' => $a->id, 'name' => $a->name])->values()->all() : null,
+            isBundle: (bool) ($model->is_bundle ?? false),
+            bundlePriceOverride: $model->bundle_price_override ? (float) $model->bundle_price_override : null,
+            bundleItems: $model->relationLoaded('bundleItems') ? $this->formatBundleItems($model->bundleItems) : null,
+            trackingType: $model->tracking_type ?? 'none',
         );
+    }
+
+    private function formatBundleItems($items): ?array
+    {
+        if ($items === null || $items->isEmpty()) {
+            return null;
+        }
+
+        return $items->map(function ($item) {
+            return [
+                'id'          => $item->id,
+                'productId'   => $item->product_id,
+                'productName' => $item->relationLoaded('product') ? $item->product->name : null,
+                'productSku'  => $item->relationLoaded('product') ? $item->product->sku : null,
+                'variantId'   => $item->variant_id,
+                'variantName' => $item->relationLoaded('variant') && $item->variant ? $item->variant->name : null,
+                'quantity'    => $item->quantity,
+            ];
+        })->values()->all();
     }
 
     /**
