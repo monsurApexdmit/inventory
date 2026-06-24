@@ -34,6 +34,26 @@ class PlanSeeder extends Seeder
         'Support',
     ];
 
+    // Trial — Growth-tier modules MINUS premium/conversion-gated ones
+    // (no POS, no Support) and no Salary/Tailor. 10-day taste of the product.
+    private const TRIAL_MODULES = [
+        'Dashboard',
+        'Products', 'Categories', 'Attributes', 'Coupons', 'Print Barcode',
+        'Orders', 'Shipments', 'Customers',
+        'Inventory', 'Transfers',
+        'Customer Returns', 'Vendor Returns',
+        'Vendors',
+        'Staff', 'Role & Permission',
+        'Settings', 'Company Settings', 'Billing Contact',
+        'Store', 'Store Locations', 'Shipping Addresses',
+        'Payment Methods', 'Shipping Methods',
+        'Team Members',
+        'Subscriptions', 'Billing Plans',
+        'Notifications',
+        'Pages',
+        'Aura Shop',
+    ];
+
     private const GROWTH_MODULES = [
         // Everything in Starter
         'Dashboard',
@@ -219,7 +239,7 @@ class PlanSeeder extends Seeder
             ]
         );
 
-        // ── Trial — free, same modules as Growth for 10 days ─────────────────
+        // ── Trial — free, restricted module set (no POS/Support) for 10 days ──
         SubscriptionPlan::updateOrCreate(
             ['name' => 'Trial'],
             [
@@ -236,7 +256,7 @@ class PlanSeeder extends Seeder
                     'Single Location',
                     '10-Day Trial',
                 ]),
-                'modules'        => json_encode(self::GROWTH_MODULES),
+                'modules'        => json_encode(self::TRIAL_MODULES),
                 'is_active'      => true,
                 'is_featured'    => false,
             ]
