@@ -41,7 +41,27 @@ class SaasAuthService
         $existingUser = $this->saasUserRepository->findByEmail($data['email']);
 
         if ($existingUser) {
-            throw new HttpException(409, 'Email already registered.');
+            // Already verified → genuine duplicate, send them to login.
+            if ($existingUser->status !== 'unverified') {
+                throw new HttpException(409, 'Email already registered.');
+            }
+
+            // Registered but never verified → resend the verification email
+            // instead of erroring, so the user can complete signup.
+            $this->emailVerificationRepository->invalidatePendingForUser($existingUser->id);
+
+            $token = $this->generateVerificationToken($existingUser->id, $existingUser->email);
+
+            Mail::to($existingUser->email)->send(new VerificationMail($existingUser->full_name, $token));
+
+            return [
+                'userId'      => $existingUser->id,
+                'companyId'   => $existingUser->company_id,
+                'email'       => $existingUser->email,
+                'companyName' => $existingUser->company->name ?? '',
+                'status'      => $existingUser->status,
+                'resent'      => true,
+            ];
         }
 
         return DB::transaction(function () use ($data) {
@@ -98,11 +118,30 @@ class SaasAuthService
                 'status' => 'active',
             ]);
 
-            // Activate trial subscription and company settings (via separate services in Phase 2)
-            // For now: update company status to trial-active
+            // Update company status to trial-active
             $this->companyRepository->update($user->company_id, ['status' => 'trial']);
 
             $company = $this->companyRepository->findById($user->company_id);
+
+            // Activate the 10-day trial subscription so the billing pages have
+            // real plan + period data (otherwise the UI shows NaN / Invalid Date).
+            $trialStart = now();
+            $trialEnd   = now()->addDays(10);
+            $trialPlan  = \DB::table('subscription_plans')->where('name', 'Trial')->first();
+
+            \DB::table('subscriptions')->updateOrInsert(
+                ['company_id' => $user->company_id],
+                [
+                    'plan_id'              => $trialPlan->id ?? null,
+                    'status'               => 'trialing',
+                    'current_period_start' => $trialStart,
+                    'current_period_end'   => $trialEnd,
+                    'next_billing_date'    => $trialEnd,
+                    'auto_renew'           => false,
+                    'updated_at'           => $trialStart,
+                    'created_at'           => $trialStart,
+                ]
+            );
 
             Location::firstOrCreate(
                 ['company_id' => $user->company_id, 'is_default' => true],
