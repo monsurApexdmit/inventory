@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker ps:*)",
+      "Bash(docker inspect:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker restart:*)",
+      "Read(//home/monsur/Documents/Go/**)",
+      "Bash(sudo chown:*)",
+      "Read(//home/monsur/Documents/business_context/guide_line/**)",
+      "Read(//home/monsur/Documents/business_context/inventory_management/backend/**)",
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//home/monsur/Documents/Go/inventory-laravel/**)",
+      "Bash(done)",
+      "Bash(for f:*)",
+      "Read(//home/monsur/Documents/business_context/inventory_management/backend/$f/**)",
+      "Bash(chmod 666 /home/monsur/Documents/Go/inventory-laravel/storage/logs/laravel.log)",
+      "Bash(chmod 775 /home/monsur/Documents/Go/inventory-laravel/storage/logs/)",
+      "Bash(docker-compose ps:*)",
+      "Bash(chmod 666 /home/monsur/Documents/Go/inventory-laravel/inventory_laravel)",
+      "Bash(chmod 777 /home/monsur/Documents/Go/inventory-laravel/database/)",
+      "Bash(chmod 666 /home/monsur/Documents/Go/inventory-laravel/database/database.sqlite)",
+      "Bash(composer require:*)",
+      "Bash(php /usr/local/bin/composer require firebase/php-jwt)",
+      "Read(//usr/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Read(//usr/**)",
+      "Read(//snap/**)",
+      "Read(//home/**)",
+      "Read(//etc/php/**)",
+      "Bash(ls /usr/bin/php*)",
+      "Bash(dpkg -l)",
+      "Bash(php artisan:*)",
+      "Bash(/tmp/test_endpoints.sh)",
+      "Bash(curl -s -X POST \"http://localhost:8005/api/auth/signup\" -H \"Content-Type: application/json\" -d '{:*)",
+      "Bash(curl -s -X POST http://localhost:8005/api/auth/signup -H 'Content-Type: application/json' -d '{:*)",
+      "Bash(/tmp/comprehensive_test.sh:*)",
+      "Bash(__NEW_LINE_4c7a9bbc9a7c3019__ chmod:*)",
+      "Bash(/tmp/comprehensive_test.sh)",
+      "Bash(/tmp/test_summary.md:*)",
+      "Bash(__NEW_LINE_77b05fa2255f445e__ cat:*)",
+      "Bash(/tmp/test_results.txt:*)",
+      "Bash(__NEW_LINE_2aff12c73acf323d__ cat:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(curl -X POST http://localhost:8005/api/products -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjgyLCJjb21wYW55X2lkIjoxMiwiZW1haWwiOiJzdGV2ZTNAZXhhbXBsZS5jb20iLCJpYXQiOjE3NDM2NzIxODB9.yCfbBl8ue2-DEPjQC5gq5JAZw3H0V2rMi6SPQeKKtTU' -F 'name=Test Product' -F 'description=Test Description' -F categoryId=2 -F price=100 -F published=true)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

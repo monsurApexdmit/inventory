@@ -1,4 +1,4 @@
-FROM php:8.2-fpm
+FROM php:8.3-fpm
 
 WORKDIR /var/www
 
@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install PHP extensions
 RUN docker-php-ext-install \
+    pcntl \
     pdo \
     pdo_mysql \
     zip \

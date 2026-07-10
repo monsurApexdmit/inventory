@@ -7,6 +7,7 @@ services:
     working_dir: /var/www
     volumes:
       - ./:/var/www
+      - ./php-upload.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     networks:
       - laravel
       - database_db_network
@@ -18,6 +19,36 @@ services:
       - DB_PASSWORD=admin123
       - REDIS_HOST=central_redis
       - REDIS_PORT=6379
+    restart: unless-stopped
+
+  reverb:
+    image: inventory-laravel-app
+    container_name: laravel-reverb
+    working_dir: /var/www
+    command: >
+      sh -lc "
+      php -m | grep -q '^pcntl$' || docker-php-ext-install pcntl >/tmp/reverb-pcntl.log 2>&1;
+      php artisan reverb:start --host=0.0.0.0 --port=8080
+      "
+    volumes:
+      - ./:/var/www
+      - ./php-upload.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+    ports:
+      - "8088:8080"
+    networks:
+      - laravel
+      - database_db_network
+    environment:
+      - DB_HOST=central_mysql
+      - DB_PORT=3306
+      - DB_DATABASE=inventory_laravel
+      - DB_USERNAME=admin
+      - DB_PASSWORD=admin123
+      - REDIS_HOST=central_redis
+      - REDIS_PORT=6379
+    depends_on:
+      - app
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -32,6 +63,7 @@ services:
       - app
     networks:
       - laravel
+    restart: unless-stopped
 
 networks:
   laravel:

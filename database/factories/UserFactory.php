@@ -25,21 +25,41 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
+            'username' => fake()->unique()->userName(),
+            'email'    => fake()->unique()->safeEmail(),
+            'password' => static::$password ??= Hash::make('password123'),
+            'role_id'  => null,
+            'address'  => fake()->address(),
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Define a legacy admin user.
      */
-    public function unverified(): static
+    public function admin(): static
     {
         return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
+            'role_id' => 1,
+        ]);
+    }
+
+    /**
+     * Define a user with custom email.
+     */
+    public function withEmail(string $email): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'email' => $email,
+        ]);
+    }
+
+    /**
+     * Define a user with custom password.
+     */
+    public function withPassword(string $password): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'password' => Hash::make($password),
         ]);
     }
 }
