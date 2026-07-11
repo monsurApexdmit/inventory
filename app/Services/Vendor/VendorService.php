@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Models\Vendor;
 use App\Repositories\Contracts\IVendorRepository;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class VendorService
@@ -46,26 +48,34 @@ class VendorService
     public function create(int $companyId, array $data): VendorDTO
     {
         // Check for email uniqueness per company
-        $existing = $this->repository->findByEmailAndCompany($data['email'], $companyId);
-        if ($existing) {
-            throw new HttpException(409, 'Email already registered for this company');
+        if (!empty($data['email'])) {
+            $existing = $this->repository->findByEmailAndCompany($data['email'], $companyId);
+            if ($existing) {
+                throw new HttpException(409, 'Email already registered for this company');
+            }
         }
 
-        // Create linked user with default password
-        $user = User::create([
-            'username' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make('changeme'),
-        ]);
+        return DB::transaction(function () use ($companyId, $data): VendorDTO {
+            $dbData = $this->mapInputToDb($data);
+            $dbData['company_id'] = $companyId;
 
-        // Prepare vendor data
-        $dbData = $this->mapInputToDb($data);
-        $dbData['company_id'] = $companyId;
-        $dbData['user_id'] = $user->id;
+            // Only vendors with an email receive a linked login identity.
+            if (!empty($data['email'])) {
+                $userData = [
+                    'username' => $data['name'],
+                    'email' => $data['email'],
+                    'password' => Hash::make('changeme'),
+                ];
+                if (Schema::hasColumn('users', 'name')) {
+                    $userData['name'] = $data['name'];
+                }
+                $dbData['user_id'] = User::create($userData)->id;
+            }
 
-        $vendor = $this->repository->create($dbData);
+            $vendor = $this->repository->create($dbData);
 
-        return $this->mapper->toDTO($vendor->fresh('user', 'user.role'));
+            return $this->mapper->toDTO($vendor->fresh('user', 'user.role'));
+        });
     }
 
     public function update(int $id, int $companyId, array $data): VendorDTO

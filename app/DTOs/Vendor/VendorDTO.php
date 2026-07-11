@@ -14,7 +14,7 @@ class VendorDTO extends BaseDTO
         public readonly int $companyId,
         public readonly ?int $userId,
         public readonly string $name,
-        public readonly string $email,
+        public readonly ?string $email,
         public readonly ?string $phone,
         public readonly ?string $address,
         public readonly ?string $logo,

@@ -35,6 +35,13 @@ class BillingService
     {
         $plans = $this->planRepository->findAllActive();
 
+        // Trial is assigned automatically during signup; it is not a
+        // purchasable plan and should not appear beside the paid tiers.
+        $plans = array_values(array_filter(
+            $plans,
+            fn (array $plan) => strcasecmp($plan['name'], 'Trial') !== 0
+        ));
+
         return array_map(fn ($plan) => $this->formatPlan($plan), $plans);
     }
 
