@@ -406,6 +406,9 @@ class StorefrontController extends Controller
                 'currencyThousandsSeparator' => $settings->getAttribute('currency_thousands_separator') ?? ',',
                 'currencyDecimalPlaces' => (int) ($settings->getAttribute('currency_decimal_places') ?? 2),
                 'paymentMethods' => $enabledPaymentMethods,
+                'freeShippingThreshold' => isset($generalSettings['freeShippingThreshold']) && $generalSettings['freeShippingThreshold'] !== ''
+                    ? (float) $generalSettings['freeShippingThreshold']
+                    : null,
                 'storePhone'    => $generalSettings['storePhone'] ?? null,
                 'storeEmail'    => $generalSettings['storeEmail'] ?? null,
                 'storeAddress'  => $generalSettings['storeAddress'] ?? null,
