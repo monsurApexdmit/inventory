@@ -99,6 +99,11 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     // Public order tracking (no auth)
     Route::get('/orders/track',        [StorefrontOrderController::class, 'trackOrder']);
 
+    // Place order — public so guests can check out (COD etc). The controller
+    // resolves the logged-in customer from the token when one is present,
+    // otherwise creates a guest order using the `guest` payload block.
+    Route::post('/orders',             [StorefrontOrderController::class, 'store']);
+
     // Customer auth (no auth)
     Route::post('/customer/register', [CustomerAuthController::class, 'register']);
     Route::post('/customer/login',    [CustomerAuthController::class, 'login']);
@@ -110,7 +115,6 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     // Customer protected routes
     Route::middleware('customer.auth')->group(function () {
         Route::get('/orders',          [StorefrontOrderController::class, 'index']);
-        Route::post('/orders',         [StorefrontOrderController::class, 'store']);
         Route::get('/orders/{id}',     [StorefrontOrderController::class, 'show']);
         Route::get('/profile',         [StorefrontCustomerController::class, 'show']);
         Route::put('/profile',         [StorefrontCustomerController::class, 'update']);
