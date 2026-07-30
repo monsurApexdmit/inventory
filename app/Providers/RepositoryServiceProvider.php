@@ -17,6 +17,9 @@ use App\Repositories\Contracts\IProductRepository;
 use App\Repositories\Contracts\IRolePermissionRepository;
 use App\Repositories\Contracts\ISaasUserRepository;
 use App\Repositories\Contracts\ISettingRepository;
+use App\Repositories\Contracts\IContentPageRepository;
+use App\Repositories\Contracts\IPaymentMethodRepository;
+use App\Repositories\Contracts\IShippingMethodRepository;
 use App\Repositories\Contracts\IStaffRepository;
 use App\Repositories\Contracts\IStaffRoleRepository;
 use App\Repositories\Contracts\ISubscriptionPlanRepository;
@@ -50,6 +53,9 @@ use App\Repositories\Eloquent\ProductRepository;
 use App\Repositories\Eloquent\RolePermissionRepository;
 use App\Repositories\Eloquent\SaasUserRepository;
 use App\Repositories\Eloquent\SettingRepository;
+use App\Repositories\Eloquent\ContentPageRepository;
+use App\Repositories\Eloquent\PaymentMethodRepository;
+use App\Repositories\Eloquent\ShippingMethodRepository;
 use App\Repositories\Eloquent\StaffRepository;
 use App\Repositories\Eloquent\StaffRoleRepository;
 use App\Repositories\Eloquent\SubscriptionPlanRepository;
@@ -132,5 +138,10 @@ class RepositoryServiceProvider extends ServiceProvider
 
         // Phase 13 bindings (Support Tickets)
         $this->app->bind(ISupportTicketRepository::class, SupportTicketRepository::class);
+
+        // Storefront config
+        $this->app->bind(IShippingMethodRepository::class, ShippingMethodRepository::class);
+        $this->app->bind(IPaymentMethodRepository::class, PaymentMethodRepository::class);
+        $this->app->bind(IContentPageRepository::class, ContentPageRepository::class);
     }
 }

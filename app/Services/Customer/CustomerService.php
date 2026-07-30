@@ -45,23 +45,28 @@ class CustomerService
 
     public function create(int $companyId, array $data): CustomerDTO
     {
-        // Check for email uniqueness per company
-        $existing = $this->repository->findByEmailAndCompany($data['email'], $companyId);
-        if ($existing) {
-            throw new HttpException(409, 'Email already registered for this company');
-        }
+        $hasEmail = !empty($data['email']);
 
-        // Create linked user with default password
-        $user = User::create([
-            'username' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make('changeme'),
-        ]);
+        // Email is optional. When provided, enforce per-company uniqueness and
+        // create a linked login user; phone-only customers get no linked user.
+        $user = null;
+        if ($hasEmail) {
+            $existing = $this->repository->findByEmailAndCompany($data['email'], $companyId);
+            if ($existing) {
+                throw new HttpException(409, 'Email already registered for this company');
+            }
+
+            $user = User::create([
+                'username' => $data['name'],
+                'email' => $data['email'],
+                'password' => Hash::make('changeme'),
+            ]);
+        }
 
         // Prepare customer data
         $dbData = $this->mapInputToDb($data);
         $dbData['company_id'] = $companyId;
-        $dbData['user_id'] = $user->id;
+        $dbData['user_id'] = $user?->id;
 
         $customer = $this->repository->create($dbData);
 

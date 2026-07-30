@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
-use App\Models\ContentPage;
+use App\Services\Setting\ContentPageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -13,16 +13,15 @@ class ContentPageController extends Controller
 {
     use ApiResponse;
 
+    public function __construct(private readonly ContentPageService $service)
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
 
-        $pages = ContentPage::where('company_id', $companyId)
-            ->orderByDesc('updated_at')
-            ->get()
-            ->map(fn(ContentPage $page) => $this->format($page));
-
-        return $this->success($pages);
+        return $this->success($this->service->list($companyId));
     }
 
     public function store(Request $request): JsonResponse
@@ -30,43 +29,21 @@ class ContentPageController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
         $data = $this->validatePayload($request, $companyId);
 
-        $page = ContentPage::create(array_merge($data, [
-            'company_id' => $companyId,
-            'published_at' => ($data['is_published'] ?? false) ? now() : null,
-        ]));
-
-        return $this->success($this->format($page), 'Content page created', 201);
+        return $this->success($this->service->create($companyId, $data), 'Content page created', 201);
     }
 
     public function update(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $page = ContentPage::where('company_id', $companyId)->findOrFail($id);
-        $data = $this->validatePayload($request, $companyId, $page->id, true);
+        $data = $this->validatePayload($request, $companyId, $id, true);
 
-        $nextPublished = array_key_exists('is_published', $data) ? (bool) $data['is_published'] : $page->is_published;
-        $publishedAt = $page->published_at;
-
-        if ($nextPublished && !$page->is_published) {
-            $publishedAt = now();
-        }
-
-        if (!$nextPublished) {
-            $publishedAt = null;
-        }
-
-        $page->update(array_merge($data, [
-            'published_at' => $publishedAt,
-        ]));
-
-        return $this->success($this->format($page->fresh()), 'Content page updated');
+        return $this->success($this->service->update($id, $companyId, $data), 'Content page updated');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $page = ContentPage::where('company_id', $companyId)->findOrFail($id);
-        $page->delete();
+        $this->service->delete($id, $companyId);
 
         return $this->success(null, 'Content page deleted');
     }
@@ -105,20 +82,5 @@ class ContentPageController extends Controller
             'content.seo.description' => ['nullable', 'string'],
             'is_published' => ['sometimes', 'boolean'],
         ]);
-    }
-
-    private function format(ContentPage $page): array
-    {
-        return [
-            'id' => $page->id,
-            'title' => $page->title,
-            'slug' => $page->slug,
-            'summary' => $page->summary,
-            'content' => $page->content,
-            'isPublished' => (bool) $page->is_published,
-            'publishedAt' => optional($page->published_at)?->toIso8601String(),
-            'createdAt' => optional($page->created_at)?->toIso8601String(),
-            'updatedAt' => optional($page->updated_at)?->toIso8601String(),
-        ];
     }
 }

@@ -96,7 +96,15 @@ class StorefrontOrderController extends Controller
     // POST /api/store/orders
     public function store(Request $request): JsonResponse
     {
+        // Logged-in customer (from customer.auth token) if present; null for guests.
         $customer = $request->attributes->get('storefront_customer');
+
+        // Company always comes from the resolve_company middleware (subdomain),
+        // so guest orders can still be scoped to the right tenant.
+        $companyId = $customer->company_id ?? (int) $request->input('company_id');
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'Store could not be resolved'], 400);
+        }
 
         $request->validate([
             'items'                    => 'required|array|min:1',
@@ -106,14 +114,20 @@ class StorefrontOrderController extends Controller
             'shipping_address'         => 'required|array',
             'shipping_address.name'    => 'required|string',
             'shipping_address.address' => 'required|string',
+            'shipping_address.phone'   => $customer ? 'nullable|string' : 'required|string',
             'payment_method'           => 'required|string',
         ]);
+
+        // Buyer identity: real customer when logged in, else the guest details.
+        $customerId    = $customer->id ?? null;
+        $customerName  = $customer->name ?? ($request->input('shipping_address.name') ?: 'Guest Customer');
+        $customerEmail = $customer->email ?? $request->input('shipping_address.email');
 
         $orderItems = [];
         $subtotal   = 0;
 
         foreach ($request->items as $item) {
-            $product = Product::where('company_id', $customer->company_id)
+            $product = Product::where('company_id', $companyId)
                 ->where('published', true)
                 ->find($item['product_id']);
 
@@ -147,15 +161,15 @@ class StorefrontOrderController extends Controller
 
         if ($request->filled('coupon_code')) {
             try {
-                $couponData    = $this->couponService->validate($customer->company_id, [
+                $couponData    = $this->couponService->validate($companyId, [
                     'code'        => $request->coupon_code,
                     'orderAmount' => $subtotal,
-                    'customerId'  => $customer->id,
+                    'customerId'  => $customerId,
                 ]);
                 $discount      = $couponData['discountAmount'] ?? 0;
                 $couponCode    = $request->coupon_code;
                 // Fetch the Coupon model for usage recording and free_shipping check
-                $appliedCoupon = Coupon::where('company_id', $customer->company_id)
+                $appliedCoupon = Coupon::where('company_id', $companyId)
                     ->where('code', $request->coupon_code)
                     ->first();
             } catch (HttpException $e) {
@@ -174,9 +188,9 @@ class StorefrontOrderController extends Controller
         $addr = $request->shipping_address;
 
         $sell = Sell::create([
-            'company_id'             => $customer->company_id,
-            'customer_id'            => $customer->id,
-            'customer_name'          => $customer->name,
+            'company_id'             => $companyId,
+            'customer_id'            => $customerId,
+            'customer_name'          => $customerName,
             'invoice_no'             => 'ORD-' . strtoupper(uniqid()),
             'order_time'             => now(),
             'amount'                 => $total,
@@ -186,7 +200,7 @@ class StorefrontOrderController extends Controller
             'fulfillment_status'     => 'unfulfilled',
             'shipping_full_name'     => $addr['name'],
             'shipping_phone'         => $addr['phone'] ?? null,
-            'shipping_email'         => $addr['email'] ?? $customer->email,
+            'shipping_email'         => $addr['email'] ?? $customerEmail,
             'shipping_address_line1' => $addr['address'],
             'shipping_city'          => $addr['city'] ?? null,
             'shipping_state'         => $addr['state'] ?? null,
@@ -221,7 +235,7 @@ class StorefrontOrderController extends Controller
             } else {
                 // Simple product — decrement product stock
                 Product::where('id', $item['product_id'])
-                    ->where('company_id', $customer->company_id)
+                    ->where('company_id', $companyId)
                     ->decrement('stock', $qty);
             }
         }
@@ -230,7 +244,7 @@ class StorefrontOrderController extends Controller
         if ($appliedCoupon) {
             CouponUsage::create([
                 'coupon_id'        => $appliedCoupon->id,
-                'customer_id'      => $customer->id,
+                'customer_id'      => $customerId,
                 'sell_id'          => $sell->id,
                 'coupon_code'      => $appliedCoupon->code,
                 'discount_applied' => $discount,
@@ -242,14 +256,14 @@ class StorefrontOrderController extends Controller
         }
 
         $this->notificationService->notifyOrderPlaced(
-            $customer->company_id,
+            $companyId,
             $sell->invoice_no,
-            $customer->name,
+            $customerName,
             $total
         );
 
         // Resolve gateway_type from PaymentMethod record
-        $paymentMethodRecord = PaymentMethod::where('company_id', $customer->company_id)
+        $paymentMethodRecord = PaymentMethod::where('company_id', $companyId)
             ->whereRaw('LOWER(name) = ?', [strtolower($request->payment_method)])
             ->first();
         $gatewayType = $paymentMethodRecord?->gateway_type ?? 'cod';
@@ -266,9 +280,9 @@ class StorefrontOrderController extends Controller
                 'currency'         => 'BDT',
                 'tran_id'          => $tranId,
                 'product_name'     => 'Order ' . $sell->invoice_no,
-                'customer_name'    => $customer->name,
-                'customer_email'   => $customer->email,
-                'customer_phone'   => $request->shipping_address['phone'] ?? $customer->phone ?? '',
+                'customer_name'    => $customerName,
+                'customer_email'   => $customerEmail,
+                'customer_phone'   => $request->shipping_address['phone'] ?? ($request->input("shipping_address.phone")) ?? '',
                 'shipping_address' => $request->shipping_address['address'] ?? '',
                 'shipping_city'    => $request->shipping_address['city'] ?? 'Dhaka',
                 'brand_name'       => config('app.name', 'Shop'),
@@ -280,7 +294,7 @@ class StorefrontOrderController extends Controller
                     $gatewayParams['fail_url']    = "{$callbackBase}/sslcommerz/fail";
                     $gatewayParams['cancel_url']  = "{$callbackBase}/sslcommerz/cancel";
                     $gatewayParams['ipn_url']     = "{$callbackBase}/sslcommerz/ipn";
-                    $service    = new SSLCommerzService($customer->company_id);
+                    $service    = new SSLCommerzService($companyId);
                     $paymentUrl = $service->initPayment($gatewayParams);
 
                 } elseif ($gatewayType === 'portwallet') {
@@ -288,7 +302,7 @@ class StorefrontOrderController extends Controller
                     $gatewayParams['fail_url']    = "{$callbackBase}/portwallet/callback";
                     $gatewayParams['cancel_url']  = "{$callbackBase}/portwallet/callback";
                     $gatewayParams['ipn_url']     = "{$callbackBase}/portwallet/callback";
-                    $service    = new PortWalletService($customer->company_id);
+                    $service    = new PortWalletService($companyId);
                     $paymentUrl = $service->initPayment($gatewayParams);
 
                 } elseif ($gatewayType === 'stripe') {
@@ -296,24 +310,24 @@ class StorefrontOrderController extends Controller
                     $gatewayParams['currency']    = 'USD';
                     $gatewayParams['success_url'] = "{$callbackBase}/stripe/success?tran_id={$tranId}";
                     $gatewayParams['cancel_url']  = "{$callbackBase}/stripe/cancel?tran_id={$tranId}";
-                    $service    = new StripeService($customer->company_id);
+                    $service    = new StripeService($companyId);
                     $paymentUrl = $service->initPayment($gatewayParams);
 
                 } elseif ($gatewayType === 'bkash') {
                     $gatewayParams['callback_url'] = "{$callbackBase}/bkash/callback?tran_id={$tranId}";
-                    $service    = new BkashService($customer->company_id);
+                    $service    = new BkashService($companyId);
                     $paymentUrl = $service->initPayment($gatewayParams);
 
                 } elseif ($gatewayType === 'nagad') {
                     $gatewayParams['callback_url'] = "{$callbackBase}/nagad/callback";
-                    $service    = new NagadService($customer->company_id);
+                    $service    = new NagadService($companyId);
                     $paymentUrl = $service->initPayment($gatewayParams);
 
                 } else { // paypal
                     $gatewayParams['currency']    = 'USD';
                     $gatewayParams['success_url'] = "{$callbackBase}/paypal/success?tran_id={$tranId}";
                     $gatewayParams['cancel_url']  = "{$callbackBase}/paypal/cancel?tran_id={$tranId}";
-                    $service    = new PayPalService($customer->company_id);
+                    $service    = new PayPalService($companyId);
                     $paymentUrl = $service->initPayment($gatewayParams);
                 }
             } catch (\Throwable $e) {
@@ -331,7 +345,7 @@ class StorefrontOrderController extends Controller
 
         // COD shipping deposit — charge only shipping cost via gateway before delivery
         if ($gatewayType === 'cod' && $shippingCost > 0) {
-            $setting     = Setting::where('company_id', $customer->company_id)->first();
+            $setting     = Setting::where('company_id', $companyId)->first();
             $codDeposit  = $setting?->payment_settings['cod_shipping_deposit'] ?? [];
             $depositEnabled  = (bool) ($codDeposit['enabled'] ?? false);
             $depositGateway  = $codDeposit['gateway'] ?? 'sslcommerz';
@@ -366,9 +380,9 @@ class StorefrontOrderController extends Controller
                     'currency'         => 'BDT',
                     'tran_id'          => $tranId,
                     'product_name'     => 'Shipping Deposit – Order ' . $sell->invoice_no,
-                    'customer_name'    => $customer->name,
-                    'customer_email'   => $customer->email,
-                    'customer_phone'   => $request->shipping_address['phone'] ?? $customer->phone ?? '',
+                    'customer_name'    => $customerName,
+                    'customer_email'   => $customerEmail,
+                    'customer_phone'   => $request->shipping_address['phone'] ?? ($request->input("shipping_address.phone")) ?? '',
                     'shipping_address' => $request->shipping_address['address'] ?? '',
                     'shipping_city'    => $request->shipping_address['city'] ?? 'Dhaka',
                     'brand_name'       => config('app.name', 'Shop'),
@@ -380,35 +394,35 @@ class StorefrontOrderController extends Controller
                         $depositParams['fail_url']    = "{$callbackBase}/sslcommerz/fail";
                         $depositParams['cancel_url']  = "{$callbackBase}/sslcommerz/cancel";
                         $depositParams['ipn_url']     = "{$callbackBase}/sslcommerz/ipn";
-                        $service    = new SSLCommerzService($customer->company_id);
+                        $service    = new SSLCommerzService($companyId);
                         $paymentUrl = $service->initPayment($depositParams);
                     } elseif ($depositGateway === 'portwallet') {
                         $depositParams['success_url'] = "{$callbackBase}/portwallet/callback";
                         $depositParams['fail_url']    = "{$callbackBase}/portwallet/callback";
                         $depositParams['cancel_url']  = "{$callbackBase}/portwallet/callback";
                         $depositParams['ipn_url']     = "{$callbackBase}/portwallet/callback";
-                        $service    = new PortWalletService($customer->company_id);
+                        $service    = new PortWalletService($companyId);
                         $paymentUrl = $service->initPayment($depositParams);
                     } elseif ($depositGateway === 'bkash') {
                         $tranId = 'INV-' . $sell->invoice_no;
                         $depositParams['callback_url'] = "{$callbackBase}/bkash/callback?tran_id={$tranId}";
-                        $service    = new BkashService($customer->company_id);
+                        $service    = new BkashService($companyId);
                         $paymentUrl = $service->initPayment($depositParams);
                     } elseif ($depositGateway === 'nagad') {
                         $depositParams['callback_url'] = "{$callbackBase}/nagad/callback";
-                        $service    = new NagadService($customer->company_id);
+                        $service    = new NagadService($companyId);
                         $paymentUrl = $service->initPayment($depositParams);
                     } elseif ($depositGateway === 'stripe') {
                         $depositParams['currency']    = 'USD';
                         $depositParams['success_url'] = "{$callbackBase}/stripe/success?tran_id={$tranId}";
                         $depositParams['cancel_url']  = "{$callbackBase}/stripe/cancel?tran_id={$tranId}";
-                        $service    = new StripeService($customer->company_id);
+                        $service    = new StripeService($companyId);
                         $paymentUrl = $service->initPayment($depositParams);
                     } else { // paypal
                         $depositParams['currency']    = 'USD';
                         $depositParams['success_url'] = "{$callbackBase}/paypal/success?tran_id={$tranId}";
                         $depositParams['cancel_url']  = "{$callbackBase}/paypal/cancel?tran_id={$tranId}";
-                        $service    = new PayPalService($customer->company_id);
+                        $service    = new PayPalService($companyId);
                         $paymentUrl = $service->initPayment($depositParams);
                     }
                 } catch (\Throwable $e) {

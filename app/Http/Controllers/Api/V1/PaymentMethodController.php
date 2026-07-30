@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
-use App\Models\PaymentMethod;
+use App\Services\Setting\PaymentMethodService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,17 +12,15 @@ class PaymentMethodController extends Controller
 {
     use ApiResponse;
 
+    public function __construct(private readonly PaymentMethodService $service)
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
 
-        $methods = PaymentMethod::where('company_id', $companyId)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->map(fn($m) => $this->format($m));
-
-        return $this->success($methods);
+        return $this->success($this->service->list($companyId));
     }
 
     public function store(Request $request): JsonResponse
@@ -38,16 +36,12 @@ class PaymentMethodController extends Controller
             'sort_order'   => 'integer|min:0',
         ]);
 
-        $method = PaymentMethod::create(array_merge($data, ['company_id' => $companyId]));
-
-        return $this->success($this->format($method), 'Payment method created', 201);
+        return $this->success($this->service->create($companyId, $data), 'Payment method created', 201);
     }
 
     public function update(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-
-        $method = PaymentMethod::where('company_id', $companyId)->findOrFail($id);
 
         $data = $request->validate([
             'name'         => 'sometimes|string|max:255',
@@ -58,17 +52,14 @@ class PaymentMethodController extends Controller
             'sort_order'   => 'integer|min:0',
         ]);
 
-        $method->update($data);
-
-        return $this->success($this->format($method->fresh()), 'Payment method updated');
+        return $this->success($this->service->update($id, $companyId, $data), 'Payment method updated');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
 
-        $method = PaymentMethod::where('company_id', $companyId)->findOrFail($id);
-        $method->delete();
+        $this->service->delete($id, $companyId);
 
         return $this->success(null, 'Payment method deleted');
     }
@@ -77,22 +68,6 @@ class PaymentMethodController extends Controller
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
 
-        $method = PaymentMethod::where('company_id', $companyId)->findOrFail($id);
-        $method->update(['is_active' => !$method->is_active]);
-
-        return $this->success($this->format($method->fresh()), 'Status updated');
-    }
-
-    private function format(PaymentMethod $m): array
-    {
-        return [
-            'id'           => $m->id,
-            'name'         => $m->name,
-            'description'  => $m->description,
-            'icon'         => $m->icon,
-            'gateway_type' => $m->gateway_type ?? 'cod',
-            'isActive'     => $m->is_active,
-            'sortOrder'    => $m->sort_order,
-        ];
+        return $this->success($this->service->toggle($id, $companyId), 'Status updated');
     }
 }
