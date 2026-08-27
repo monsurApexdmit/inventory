@@ -18,6 +18,7 @@ class CreateProductRequest extends FormRequest
         // Accept both camelCase and snake_case
         $fieldMap = [
             'categoryId' => 'category_id',
+            'unitId' => 'unit_id',
             'vendorId' => 'vendor_id',
             'locationId' => 'location_id',
             'salePrice' => 'sale_price',
@@ -83,6 +84,7 @@ class CreateProductRequest extends FormRequest
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'category_id' => 'nullable|integer|min:1',
+            'unit_id' => 'nullable|integer|min:1',
             'vendor_id' => 'nullable|integer|min:1',
             'location_id' => 'nullable|integer|min:1',
             'price' => 'nullable|numeric|min:0',

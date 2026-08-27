@@ -11,6 +11,7 @@ class PermissionSeeder extends Seeder
         'Dashboard',
         'Products',
         'Categories',
+        'Units',
         'Attributes',
         'Coupons',
         'Print Barcode',

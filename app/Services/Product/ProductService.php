@@ -398,6 +398,12 @@ class ProductService
             $dbData['category_id'] = $data['category_id'];
         }
 
+        if (isset($data['unitId'])) {
+            $dbData['unit_id'] = $data['unitId'];
+        } elseif (isset($data['unit_id'])) {
+            $dbData['unit_id'] = $data['unit_id'];
+        }
+
         if (isset($data['vendorId'])) {
             $dbData['vendor_id'] = $data['vendorId'];
         } elseif (isset($data['vendor_id'])) {

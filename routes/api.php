@@ -22,6 +22,8 @@ use App\Http\Controllers\Api\V1\ShippingMethodController;
 use App\Http\Controllers\Api\V1\PaymentMethodController;
 use App\Http\Controllers\Api\V1\Shipping\OrderShipmentController;
 use App\Http\Controllers\Api\V1\StockTransfer\StockTransferController;
+use App\Http\Controllers\Api\V1\StockAdjustment\StockAdjustmentController;
+use App\Http\Controllers\Api\Unit\UnitController;
 use App\Http\Controllers\Api\V1\Vendor\VendorController;
 use App\Http\Controllers\Api\V1\VendorReturn\VendorReturnController;
 use App\Http\Controllers\Api\V1\PurchaseOrder\PurchaseOrderController;
@@ -320,6 +322,15 @@ Route::prefix('categories')->middleware(JwtAuthMiddleware::class)->group(functio
     Route::delete('/{id}',               [CategoryController::class, 'destroy'])->middleware('check_permission:Categories.delete');
 });
 
+Route::prefix('units')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [UnitController::class, 'index'])->middleware('check_permission:Units.read');
+    Route::get('/simple',  [UnitController::class, 'simple'])->middleware('check_permission:Units.read');
+    Route::post('/',       [UnitController::class, 'store'])->middleware('check_permission:Units.write');
+    Route::get('/{id}',    [UnitController::class, 'show'])->middleware('check_permission:Units.read');
+    Route::put('/{id}',    [UnitController::class, 'update'])->middleware('check_permission:Units.write');
+    Route::delete('/{id}', [UnitController::class, 'destroy'])->middleware('check_permission:Units.delete');
+});
+
 Route::prefix('attributes')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',                      [AttributeController::class, 'index'])->middleware('check_permission:Attributes.read');
     Route::get('/simple',                [AttributeController::class, 'simple'])->middleware('check_permission:Attributes.read');
@@ -531,6 +542,12 @@ Route::prefix('transfers')->middleware(JwtAuthMiddleware::class)->group(function
     Route::get('/',            [StockTransferController::class, 'index'])->middleware('check_permission:Transfers.read');
     Route::post('/',           [StockTransferController::class, 'store'])->middleware('check_permission:Transfers.write');
     Route::put('/{id}/cancel', [StockTransferController::class, 'cancelTransfer'])->middleware('check_permission:Transfers.write');
+});
+
+// Stock adjustments (manual increase/decrease/set-to, with audit log)
+Route::prefix('adjustments')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',  [StockAdjustmentController::class, 'index'])->middleware('check_permission:Inventory.read');
+    Route::post('/', [StockAdjustmentController::class, 'store'])->middleware('check_permission:Inventory.write');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
