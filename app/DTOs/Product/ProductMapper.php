@@ -59,6 +59,8 @@ class ProductMapper extends BaseMapper
             companyId: $model->company_id,
             categoryId: $model->category_id,
             categoryName: $model->relationLoaded('category') && $model->category ? $model->category->category_name : null,
+            unitId: $model->unit_id,
+            unitName: $model->relationLoaded('unit') && $model->unit ? $model->unit->unit_name : null,
             vendorId: $model->vendor_id,
             vendorName: $model->relationLoaded('vendor') && $model->vendor ? $model->vendor->name : null,
             locationId: $model->location_id,

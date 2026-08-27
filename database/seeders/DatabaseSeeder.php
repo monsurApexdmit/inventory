@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionSeeder::class,
             PlanSeeder::class,
+            UnitSeeder::class,
         ]);
 
         // Create roles for legacy system
