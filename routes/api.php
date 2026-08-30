@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\Storefront\CustomerAuthController;
 use App\Http\Controllers\Api\Storefront\StorefrontController;
 use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
+use App\Http\Controllers\Api\Storefront\TryOnController;
 use App\Http\Controllers\Api\Storefront\StorefrontProductReviewController;
 use App\Http\Controllers\Api\Storefront\StorefrontSupportController;
 use App\Http\Controllers\Api\Platform\PlatformController;
@@ -110,6 +111,7 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     Route::post('/customer/register', [CustomerAuthController::class, 'register']);
     Route::post('/customer/login',    [CustomerAuthController::class, 'login']);
     Route::post('/contact',           [StorefrontSupportController::class, 'contact']);
+    Route::post('/try-on',            [TryOnController::class, 'generate']);
     Route::post('/realtime/auth',     BroadcastAuthController::class);
     Route::get('/support/guest/{ticketNumber}', [StorefrontSupportController::class, 'showGuest']);
     Route::post('/support/guest/{ticketNumber}/reply', [StorefrontSupportController::class, 'replyGuest']);
