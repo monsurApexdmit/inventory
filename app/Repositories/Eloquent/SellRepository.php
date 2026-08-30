@@ -42,6 +42,11 @@ class SellRepository implements ISellRepository
             $query->where('method', $filters['method']);
         }
 
+        // Filter by source (pos | storefront | manual)
+        if (!empty($filters['source']) && $filters['source'] !== 'all') {
+            $query->where('source', $filters['source']);
+        }
+
         // Filter by customer ID
         if (!empty($filters['customer_id'])) {
             $query->where('customer_id', $filters['customer_id']);

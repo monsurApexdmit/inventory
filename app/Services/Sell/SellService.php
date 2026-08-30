@@ -105,8 +105,8 @@ class SellService
             }
 
             // Validate method
-            if (!empty($data['method']) && !in_array($data['method'], ['Cash', 'Card', 'Online'])) {
-                throw new HttpException(400, 'Invalid payment method. Must be one of: Cash, Card, Online');
+            if (!empty($data['method']) && !in_array($data['method'], ['Cash', 'Card', 'Online', 'COD'])) {
+                throw new HttpException(400, 'Invalid payment method. Must be one of: Cash, Card, Online, COD');
             }
 
             // Auto-generate invoice number if not provided

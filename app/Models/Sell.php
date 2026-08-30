@@ -33,6 +33,7 @@ class Sell extends Model
         'shipping_country',
         'shipping_address_type',
         'method',
+        'source',
         'amount',
         'shipping_cost',
         'shipping_method',

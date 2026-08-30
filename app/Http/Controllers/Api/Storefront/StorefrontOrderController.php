@@ -195,6 +195,7 @@ class StorefrontOrderController extends Controller
             'order_time'             => now(),
             'amount'                 => $total,
             'method'                 => $request->payment_method,
+            'source'                 => 'storefront',
             'status'                 => 'Pending',
             'payment_status'         => 'pending',
             'fulfillment_status'     => 'unfulfilled',
