@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Shipping\OrderShipmentController;
 use App\Http\Controllers\Api\V1\StockTransfer\StockTransferController;
 use App\Http\Controllers\Api\V1\StockAdjustment\StockAdjustmentController;
 use App\Http\Controllers\Api\Unit\UnitController;
+use App\Http\Controllers\Api\Brand\BrandController;
 use App\Http\Controllers\Api\V1\Vendor\VendorController;
 use App\Http\Controllers\Api\V1\VendorReturn\VendorReturnController;
 use App\Http\Controllers\Api\V1\PurchaseOrder\PurchaseOrderController;
@@ -329,6 +330,15 @@ Route::prefix('units')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::get('/{id}',    [UnitController::class, 'show'])->middleware('check_permission:Units.read');
     Route::put('/{id}',    [UnitController::class, 'update'])->middleware('check_permission:Units.write');
     Route::delete('/{id}', [UnitController::class, 'destroy'])->middleware('check_permission:Units.delete');
+});
+
+Route::prefix('brands')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [BrandController::class, 'index'])->middleware('check_permission:Brands.read');
+    Route::get('/simple',  [BrandController::class, 'simple'])->middleware('check_permission:Brands.read');
+    Route::post('/',       [BrandController::class, 'store'])->middleware('check_permission:Brands.write');
+    Route::get('/{id}',    [BrandController::class, 'show'])->middleware('check_permission:Brands.read');
+    Route::put('/{id}',    [BrandController::class, 'update'])->middleware('check_permission:Brands.write');
+    Route::delete('/{id}', [BrandController::class, 'destroy'])->middleware('check_permission:Brands.delete');
 });
 
 Route::prefix('attributes')->middleware(JwtAuthMiddleware::class)->group(function () {

@@ -404,6 +404,12 @@ class ProductService
             $dbData['unit_id'] = $data['unit_id'];
         }
 
+        if (isset($data['brandId'])) {
+            $dbData['brand_id'] = $data['brandId'];
+        } elseif (isset($data['brand_id'])) {
+            $dbData['brand_id'] = $data['brand_id'];
+        }
+
         if (isset($data['vendorId'])) {
             $dbData['vendor_id'] = $data['vendorId'];
         } elseif (isset($data['vendor_id'])) {
@@ -484,6 +490,9 @@ class ProductService
         }
         if (isset($data['barcode'])) {
             $dbData['barcode'] = $data['barcode'];
+        }
+        if (isset($data['barcode_type'])) {
+            $dbData['barcode_type'] = $data['barcode_type'];
         }
         if (isset($data['published'])) {
             $dbData['published'] = $data['published'];
@@ -615,6 +624,9 @@ class ProductService
         }
         if (isset($data['barcode'])) {
             $dbData['barcode'] = $data['barcode'];
+        }
+        if (isset($data['barcode_type'])) {
+            $dbData['barcode_type'] = $data['barcode_type'];
         }
 
         return $dbData;

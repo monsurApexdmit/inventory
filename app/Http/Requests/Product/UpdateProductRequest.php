@@ -19,6 +19,7 @@ class UpdateProductRequest extends FormRequest
         $fieldMap = [
             'categoryId' => 'category_id',
             'unitId' => 'unit_id',
+            'brandId' => 'brand_id',
             'vendorId' => 'vendor_id',
             'locationId' => 'location_id',
             'salePrice' => 'sale_price',
@@ -31,7 +32,7 @@ class UpdateProductRequest extends FormRequest
         ];
 
         // Pass through fields that don't need conversion
-        $passthroughFields = ['name', 'description', 'stock', 'price', 'sku', 'barcode'];
+        $passthroughFields = ['name', 'description', 'stock', 'price', 'sku', 'barcode', 'barcode_type'];
         foreach ($passthroughFields as $field) {
             if ($this->has($field) && !isset($merged[$field])) {
                 $merged[$field] = $this->input($field);
@@ -84,6 +85,7 @@ class UpdateProductRequest extends FormRequest
             'description' => 'sometimes|nullable|string',
             'category_id' => 'sometimes|nullable|integer|min:1',
             'unit_id' => 'sometimes|nullable|integer|min:1',
+            'brand_id' => 'sometimes|nullable|integer|min:1',
             'vendor_id' => 'sometimes|nullable|integer|min:1',
             'location_id' => 'sometimes|nullable|integer|min:1',
             'price' => 'sometimes|nullable|numeric|min:0',
@@ -96,6 +98,7 @@ class UpdateProductRequest extends FormRequest
             'stock' => 'sometimes|nullable|integer|min:0',
             'sku' => 'sometimes|nullable|string|max:100',
             'barcode' => 'sometimes|nullable|string|max:100',
+            'barcode_type' => 'sometimes|nullable|string|max:20',
             'published' => 'sometimes|nullable|boolean',
             'is_hot_deal' => 'sometimes|nullable',
             'is_best_seller' => 'sometimes|nullable',

@@ -12,6 +12,7 @@ class PermissionSeeder extends Seeder
         'Products',
         'Categories',
         'Units',
+        'Brands',
         'Attributes',
         'Coupons',
         'Print Barcode',

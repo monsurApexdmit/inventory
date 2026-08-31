@@ -19,6 +19,7 @@ class CreateProductRequest extends FormRequest
         $fieldMap = [
             'categoryId' => 'category_id',
             'unitId' => 'unit_id',
+            'brandId' => 'brand_id',
             'vendorId' => 'vendor_id',
             'locationId' => 'location_id',
             'salePrice' => 'sale_price',
@@ -31,7 +32,7 @@ class CreateProductRequest extends FormRequest
         ];
 
         // Pass through fields that don't need conversion
-        $passthroughFields = ['stock', 'price', 'sku', 'barcode'];
+        $passthroughFields = ['stock', 'price', 'sku', 'barcode', 'barcode_type'];
         foreach ($passthroughFields as $field) {
             if ($this->has($field) && !isset($merged[$field])) {
                 $merged[$field] = $this->input($field);
@@ -85,6 +86,7 @@ class CreateProductRequest extends FormRequest
             'description' => 'nullable|string',
             'category_id' => 'nullable|integer|min:1',
             'unit_id' => 'nullable|integer|min:1',
+            'brand_id' => 'nullable|integer|min:1',
             'vendor_id' => 'nullable|integer|min:1',
             'location_id' => 'nullable|integer|min:1',
             'price' => 'nullable|numeric|min:0',
@@ -97,6 +99,7 @@ class CreateProductRequest extends FormRequest
             'stock' => 'nullable|integer|min:0',
             'sku' => 'nullable|string|max:100',
             'barcode' => 'nullable|string|max:100',
+            'barcode_type' => 'nullable|string|max:20',
             'published' => 'nullable|boolean',
             'is_hot_deal' => 'nullable',
             'is_best_seller' => 'nullable',
