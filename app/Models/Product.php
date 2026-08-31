@@ -19,6 +19,7 @@ class Product extends Model
         'company_id',
         'category_id',
         'unit_id',
+        'brand_id',
         'vendor_id',
         'location_id',
         'name',
@@ -38,6 +39,7 @@ class Product extends Model
         'tracking_type',
         'sku',
         'barcode',
+        'barcode_type',
         'barcode_image_path',
         'published',
         'is_featured',
@@ -88,6 +90,11 @@ class Product extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     public function vendor(): BelongsTo

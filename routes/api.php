@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Shipping\OrderShipmentController;
 use App\Http\Controllers\Api\V1\StockTransfer\StockTransferController;
 use App\Http\Controllers\Api\V1\StockAdjustment\StockAdjustmentController;
 use App\Http\Controllers\Api\Unit\UnitController;
+use App\Http\Controllers\Api\Brand\BrandController;
 use App\Http\Controllers\Api\V1\Vendor\VendorController;
 use App\Http\Controllers\Api\V1\VendorReturn\VendorReturnController;
 use App\Http\Controllers\Api\V1\PurchaseOrder\PurchaseOrderController;
@@ -39,7 +40,6 @@ use App\Http\Controllers\Api\Storefront\CustomerAuthController;
 use App\Http\Controllers\Api\Storefront\StorefrontController;
 use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
-use App\Http\Controllers\Api\Storefront\TryOnController;
 use App\Http\Controllers\Api\Storefront\StorefrontProductReviewController;
 use App\Http\Controllers\Api\Storefront\StorefrontSupportController;
 use App\Http\Controllers\Api\Platform\PlatformController;
@@ -111,7 +111,6 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     Route::post('/customer/register', [CustomerAuthController::class, 'register']);
     Route::post('/customer/login',    [CustomerAuthController::class, 'login']);
     Route::post('/contact',           [StorefrontSupportController::class, 'contact']);
-    Route::post('/try-on',            [TryOnController::class, 'generate']);
     Route::post('/realtime/auth',     BroadcastAuthController::class);
     Route::get('/support/guest/{ticketNumber}', [StorefrontSupportController::class, 'showGuest']);
     Route::post('/support/guest/{ticketNumber}/reply', [StorefrontSupportController::class, 'replyGuest']);
@@ -331,6 +330,15 @@ Route::prefix('units')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::get('/{id}',    [UnitController::class, 'show'])->middleware('check_permission:Units.read');
     Route::put('/{id}',    [UnitController::class, 'update'])->middleware('check_permission:Units.write');
     Route::delete('/{id}', [UnitController::class, 'destroy'])->middleware('check_permission:Units.delete');
+});
+
+Route::prefix('brands')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [BrandController::class, 'index'])->middleware('check_permission:Brands.read');
+    Route::get('/simple',  [BrandController::class, 'simple'])->middleware('check_permission:Brands.read');
+    Route::post('/',       [BrandController::class, 'store'])->middleware('check_permission:Brands.write');
+    Route::get('/{id}',    [BrandController::class, 'show'])->middleware('check_permission:Brands.read');
+    Route::put('/{id}',    [BrandController::class, 'update'])->middleware('check_permission:Brands.write');
+    Route::delete('/{id}', [BrandController::class, 'destroy'])->middleware('check_permission:Brands.delete');
 });
 
 Route::prefix('attributes')->middleware(JwtAuthMiddleware::class)->group(function () {

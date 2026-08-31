@@ -18,6 +18,7 @@ class ProductRepository implements IProductRepository
             ->with([
                 'category',
                 'unit',
+                'brand',
                 'vendor',
                 'location',
                 'variants' => function ($q) {
@@ -56,7 +57,7 @@ class ProductRepository implements IProductRepository
     {
         return $this->model
             ->where('company_id', $companyId)
-            ->with(['category', 'unit', 'vendor', 'location', 'variants.inventory', 'images', 'attributes', 'bundleItems.product', 'bundleItems.variant'])
+            ->with(['category', 'unit', 'brand', 'vendor', 'location', 'variants.inventory', 'images', 'attributes', 'bundleItems.product', 'bundleItems.variant'])
             ->find($id);
     }
 

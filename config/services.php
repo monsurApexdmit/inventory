@@ -34,13 +34,4 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
-
-    // Virtual try-on. provider: 'mock' (default, no external call) or
-    // 'huggingface' (free Gradio IDM-VTON Space).
-    'tryon' => [
-        'provider' => env('TRYON_PROVIDER', 'mock'),
-        'hf_space' => env('TRYON_HF_SPACE'),   // e.g. https://<user>-idm-vton.hf.space
-        'hf_token' => env('TRYON_HF_TOKEN'),   // optional HF token
-    ],
-
 ];
