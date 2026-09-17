@@ -27,6 +27,8 @@ use App\Http\Controllers\Api\Unit\UnitController;
 use App\Http\Controllers\Api\Brand\BrandController;
 use App\Http\Controllers\Api\V1\Vendor\VendorController;
 use App\Http\Controllers\Api\V1\VendorReturn\VendorReturnController;
+use App\Http\Controllers\Api\V1\Expense\ExpenseController;
+use App\Http\Controllers\Api\V1\Expense\ExpenseCategoryController;
 use App\Http\Controllers\Api\V1\PurchaseOrder\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\SerialBatch\SerialBatchController;
 use App\Http\Controllers\Api\V1\Salary\SalaryPaymentController;
@@ -418,6 +420,23 @@ Route::prefix('vendors')->middleware(JwtAuthMiddleware::class)->group(function (
     Route::get('/{id}',    [VendorController::class, 'show'])->middleware('check_permission:Vendors.read');
     Route::put('/{id}',    [VendorController::class, 'update'])->middleware('check_permission:Vendors.write');
     Route::delete('/{id}', [VendorController::class, 'destroy'])->middleware('check_permission:Vendors.delete');
+});
+
+Route::prefix('expense-categories')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [ExpenseCategoryController::class, 'index'])->middleware('check_permission:Expenses.read');
+    Route::post('/',       [ExpenseCategoryController::class, 'store'])->middleware('check_permission:Expenses.write');
+    Route::get('/{id}',    [ExpenseCategoryController::class, 'show'])->middleware('check_permission:Expenses.read');
+    Route::put('/{id}',    [ExpenseCategoryController::class, 'update'])->middleware('check_permission:Expenses.write');
+    Route::delete('/{id}', [ExpenseCategoryController::class, 'destroy'])->middleware('check_permission:Expenses.delete');
+});
+
+Route::prefix('expenses')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [ExpenseController::class, 'index'])->middleware('check_permission:Expenses.read');
+    Route::post('/',       [ExpenseController::class, 'store'])->middleware('check_permission:Expenses.write');
+    Route::get('/stats',   [ExpenseController::class, 'stats'])->middleware('check_permission:Expenses.read');
+    Route::get('/{id}',    [ExpenseController::class, 'show'])->middleware('check_permission:Expenses.read');
+    Route::put('/{id}',    [ExpenseController::class, 'update'])->middleware('check_permission:Expenses.write');
+    Route::delete('/{id}', [ExpenseController::class, 'destroy'])->middleware('check_permission:Expenses.delete');
 });
 
 Route::prefix('purchase-orders')->middleware(JwtAuthMiddleware::class)->group(function () {
