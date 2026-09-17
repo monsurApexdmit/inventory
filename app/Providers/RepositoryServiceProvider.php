@@ -31,6 +31,8 @@ use App\Repositories\Contracts\IShippingAddressRepository;
 use App\Repositories\Contracts\IOrderShipmentRepository;
 use App\Repositories\Contracts\IVendorRepository;
 use App\Repositories\Contracts\IVendorReturnRepository;
+use App\Repositories\Contracts\IExpenseRepository;
+use App\Repositories\Contracts\IExpenseCategoryRepository;
 use App\Repositories\Contracts\IPurchaseOrderRepository;
 use App\Repositories\Contracts\ISalaryPaymentRepository;
 use App\Repositories\Contracts\IStockTransferRepository;
@@ -67,6 +69,8 @@ use App\Repositories\Eloquent\ShippingAddressRepository;
 use App\Repositories\Eloquent\OrderShipmentRepository;
 use App\Repositories\Eloquent\VendorRepository;
 use App\Repositories\Eloquent\VendorReturnRepository;
+use App\Repositories\Eloquent\ExpenseRepository;
+use App\Repositories\Eloquent\ExpenseCategoryRepository;
 use App\Repositories\Eloquent\PurchaseOrderRepository;
 use App\Repositories\Eloquent\SalaryPaymentRepository;
 use App\Repositories\Eloquent\StockTransferRepository;
@@ -112,6 +116,8 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(IVendorRepository::class, VendorRepository::class);
         $this->app->bind(IVendorReturnRepository::class, VendorReturnRepository::class);
         $this->app->bind(IPurchaseOrderRepository::class, PurchaseOrderRepository::class);
+        $this->app->bind(IExpenseRepository::class, ExpenseRepository::class);
+        $this->app->bind(IExpenseCategoryRepository::class, ExpenseCategoryRepository::class);
 
         // Phase 6 bindings
         $this->app->bind(ICustomerRepository::class, CustomerRepository::class);
