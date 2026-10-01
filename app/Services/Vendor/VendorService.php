@@ -7,6 +7,7 @@ use App\DTOs\Vendor\VendorMapper;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Repositories\Contracts\IVendorRepository;
+use App\Repositories\Eloquent\PurchaseOrderRepository;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -16,15 +17,20 @@ class VendorService
 {
     private readonly VendorMapper $mapper;
 
-    public function __construct(private readonly IVendorRepository $repository)
-    {
+    public function __construct(
+        private readonly IVendorRepository $repository,
+        private readonly PurchaseOrderRepository $purchaseOrderRepository,
+    ) {
         $this->mapper = new VendorMapper();
     }
 
     public function list(int $companyId, array $filters): array
     {
         $paginated = $this->repository->findByCompany($companyId, $filters);
-        $data = array_map(fn ($vendor) => $this->mapper->toDTO($vendor), $paginated->items());
+        $data = array_map(function ($vendor) use ($companyId) {
+            $poDueSummary = $this->purchaseOrderRepository->getVendorDuesSummary($companyId, ['vendor_id' => $vendor->id]);
+            return $this->mapper->toDTO($vendor, $poDueSummary['totalDue']);
+        }, $paginated->items());
         return [
             'data' => $data,
             'total' => $paginated->total(),
@@ -42,7 +48,9 @@ class VendorService
             throw new HttpException(404, 'Vendor not found');
         }
 
-        return $this->mapper->toDTO($vendor);
+        $poDueSummary = $this->purchaseOrderRepository->getVendorDuesSummary($companyId, ['vendor_id' => $id]);
+
+        return $this->mapper->toDTO($vendor, $poDueSummary['totalDue']);
     }
 
     public function create(int $companyId, array $data): VendorDTO

@@ -49,4 +49,9 @@ interface ISellRepository
      * Check if invoice number exists for company
      */
     public function invoiceExists(string $invoiceNo, int $companyId): bool;
+
+    /**
+     * Get sells with outstanding dues for a company, with aging buckets
+     */
+    public function getCustomerDues(int $companyId, array $filters): mixed;
 }

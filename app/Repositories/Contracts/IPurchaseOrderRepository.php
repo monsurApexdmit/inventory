@@ -14,4 +14,5 @@ interface IPurchaseOrderRepository
     public function delete(int $id, int $companyId): void;
     public function nextPoNumber(int $companyId): string;
     public function getStats(int $companyId): array;
+    public function getVendorDues(int $companyId, array $filters): mixed;
 }

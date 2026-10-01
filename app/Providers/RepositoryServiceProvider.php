@@ -40,6 +40,7 @@ use App\Repositories\Contracts\ICouponRepository;
 use App\Repositories\Contracts\ISellRepository;
 use App\Repositories\Contracts\INotificationRepository;
 use App\Repositories\Contracts\ISupportTicketRepository;
+use App\Repositories\Contracts\IDuePaymentRepository;
 use App\Repositories\Eloquent\AttributeRepository;
 use App\Repositories\Eloquent\BillingContactRepository;
 use App\Repositories\Eloquent\CategoryRepository;
@@ -78,6 +79,7 @@ use App\Repositories\Eloquent\CouponRepository;
 use App\Repositories\Eloquent\SellRepository;
 use App\Repositories\Eloquent\NotificationRepository;
 use App\Repositories\Eloquent\SupportTicketRepository;
+use App\Repositories\Eloquent\DuePaymentRepository;
 use Illuminate\Support\ServiceProvider;
 
 class RepositoryServiceProvider extends ServiceProvider
@@ -144,6 +146,9 @@ class RepositoryServiceProvider extends ServiceProvider
 
         // Phase 13 bindings (Support Tickets)
         $this->app->bind(ISupportTicketRepository::class, SupportTicketRepository::class);
+
+        // Phase 14 bindings (Customer Dues)
+        $this->app->bind(IDuePaymentRepository::class, DuePaymentRepository::class);
 
         // Storefront config
         $this->app->bind(IShippingMethodRepository::class, ShippingMethodRepository::class);
