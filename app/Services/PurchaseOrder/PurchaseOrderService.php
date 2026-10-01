@@ -76,6 +76,23 @@ class PurchaseOrderService
 
             $po->update(['total_amount' => $total]);
 
+            $paidAmount = (float) ($data['paidAmount'] ?? 0);
+            if ($paidAmount > $total) {
+                throw new HttpException(422, 'Paid amount cannot exceed the order total');
+            }
+            if ($paidAmount > 0) {
+                $po->payments()->create([
+                    'company_id'     => $companyId,
+                    'direction'      => 'out',
+                    'amount'         => $paidAmount,
+                    'payment_method' => $data['paymentMethod'] ?? 'cash',
+                    'payment_date'   => $data['paymentDate'] ?? now()->toDateString(),
+                    'reference'      => $data['reference'] ?? null,
+                    'notes'          => 'Advance payment at order creation',
+                ]);
+            }
+            $po->recalculate();
+
             return $this->mapper->toDTO(
                 $this->repository->findById($po->id, $companyId)
             );
@@ -119,6 +136,7 @@ class PurchaseOrderService
                     $total += $subtotal;
                 }
                 $po->update(['total_amount' => $total]);
+                $po->recalculate();
             }
 
             return $this->mapper->toDTO(

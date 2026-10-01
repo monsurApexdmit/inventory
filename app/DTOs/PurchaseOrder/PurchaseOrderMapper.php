@@ -29,6 +29,21 @@ class PurchaseOrderMapper extends BaseMapper
             }
         }
 
+        $payments = [];
+        if ($model->relationLoaded('payments')) {
+            foreach ($model->payments as $payment) {
+                $payments[] = [
+                    'id'            => $payment->id,
+                    'amount'        => (float) $payment->amount,
+                    'paymentMethod' => $payment->payment_method,
+                    'paymentDate'   => $payment->payment_date ? $payment->payment_date->format('Y-m-d') : null,
+                    'reference'     => $payment->reference,
+                    'notes'         => $payment->notes,
+                    'createdAt'     => $this->formatTimestamp($payment->created_at),
+                ];
+            }
+        }
+
         return new PurchaseOrderDTO(
             id: $model->id,
             companyId: $model->company_id,
@@ -41,6 +56,10 @@ class PurchaseOrderMapper extends BaseMapper
             expectedDate: $model->expected_date ? $model->expected_date->format('Y-m-d') : null,
             notes: $model->notes,
             totalAmount: (float) $model->total_amount,
+            paidAmount: (float) $model->paid_amount,
+            dueAmount: (float) $model->due_amount,
+            paymentStatus: $model->payment_status ?? 'pending',
+            payments: $payments,
             items: $items,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),

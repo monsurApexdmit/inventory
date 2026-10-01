@@ -11,6 +11,9 @@ use App\Models\Product;
 use App\Models\ProductBundleItem;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
+use App\Repositories\Contracts\IPurchaseOrderRepository;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Models\VariantInventory;
@@ -80,8 +83,19 @@ class ProductService
         // Validate foreign keys
         $this->validateForeignKeys($companyId, $data);
 
+        // Reject an invalid supplier payment before the product is created
+        if (($data['supplier_payment_status'] ?? null) === 'partial') {
+            $qty = !empty($data['variants'])
+                ? (int) collect($data['variants'])->sum(fn($v) => (int) ($v['stock'] ?? 0))
+                : (int) ($data['stock'] ?? 0);
+            $supplierTotal = (float) ($data['cost_price'] ?? 0) * $qty;
+            if ((float) ($data['supplier_paid_amount'] ?? 0) > $supplierTotal) {
+                throw new HttpException(422, 'Paid amount cannot exceed the product cost total');
+            }
+        }
+
         // Map camelCase to snake_case
-        $dbData = $this->mapInputToDb(array_merge($data, [
+        $dbData = $this->mapInputToDb(array_merge($data, ([
             'company_id' => $companyId,
         ]));
         $dbData['company_id'] = $companyId;
@@ -176,7 +190,77 @@ class ProductService
             $this->syncBundleStock($product);
         }
 
+        $this->recordSupplierPurchase($product, $companyId, $data);
+
         return $this->mapper->toDTO($product);
+    }
+
+    /**
+     * When a product is added with a supplier, record what is owed to that supplier as a
+     * received purchase order (cost price x opening stock) and apply the chosen payment.
+     * Stock is already set by product creation, so the PO is created as fully received
+     * and does not touch inventory.
+     */
+    private function recordSupplierPurchase(Product $product, int $companyId, array $data): void
+    {
+        if (!$product->vendor_id) {
+            return;
+        }
+
+        $costPrice = (float) ($product->cost_price ?? 0);
+        $quantity = (int) ($data['stock'] ?? 0);
+        if (!empty($data['variants'])) {
+            $quantity = (int) collect($data['variants'])->sum(fn($v) => (int) ($v['stock'] ?? 0));
+        }
+        $total = $costPrice * $quantity;
+        if ($total <= 0) {
+            return;
+        }
+
+        $status = $data['supplier_payment_status'] ?? 'due';
+        $paid = match ($status) {
+            'paid' => $total,
+            'partial' => (float) ($data['supplier_paid_amount'] ?? 0),
+            default => 0.0,
+        };
+        if ($paid > $total) {
+            throw new HttpException(422, 'Paid amount cannot exceed the product cost total');
+        }
+
+        DB::transaction(function () use ($product, $companyId, $costPrice, $quantity, $total, $paid, $data) {
+            $poRepo = app(IPurchaseOrderRepository::class);
+            $po = $poRepo->create([
+                'company_id'    => $companyId,
+                'vendor_id'     => $product->vendor_id,
+                'location_id'   => $product->location_id,
+                'po_number'     => $poRepo->nextPoNumber($companyId),
+                'status'        => 'received',
+                'notes'         => 'Auto-created from product: ' . $product->name,
+                'total_amount'  => $total,
+            ]);
+
+            PurchaseOrderItem::create([
+                'purchase_order_id' => $po->id,
+                'product_id'        => $product->id,
+                'variant_id'        => null,
+                'quantity_ordered'  => $quantity,
+                'quantity_received' => $quantity,
+                'unit_cost'         => $costPrice,
+                'subtotal'          => $total,
+            ]);
+
+            if ($paid > 0) {
+                $po->payments()->create([
+                    'company_id'     => $companyId,
+                    'direction'      => 'out',
+                    'amount'         => $paid,
+                    'payment_method' => $data['supplier_payment_method'] ?? 'cash',
+                    'payment_date'   => $data['supplier_payment_date'] ?? now()->toDateString(),
+                    'notes'          => 'Payment at product creation',
+                ]);
+            }
+            $po->recalculate();
+        });
     }
 
     public function update(int $id, int $companyId, array $data): ProductDTO

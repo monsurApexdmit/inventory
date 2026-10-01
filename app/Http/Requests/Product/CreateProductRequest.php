@@ -32,7 +32,7 @@ class CreateProductRequest extends FormRequest
         ];
 
         // Pass through fields that don't need conversion
-        $passthroughFields = ['stock', 'price', 'sku', 'barcode', 'barcode_type'];
+        $passthroughFields = ['stock', 'price', 'sku', 'barcode', 'barcode_type', 'supplier_payment_status', 'supplier_paid_amount', 'supplier_payment_method', 'supplier_payment_date'];
         foreach ($passthroughFields as $field) {
             if ($this->has($field) && !isset($merged[$field])) {
                 $merged[$field] = $this->input($field);
@@ -106,6 +106,10 @@ class CreateProductRequest extends FormRequest
             'is_featured' => 'nullable',
             'deal_label' => 'nullable|string|max:50',
             'receipt_number' => 'nullable|string|max:100',
+            'supplier_payment_status' => 'nullable|in:due,partial,paid',
+            'supplier_paid_amount' => 'nullable|numeric|min:0',
+            'supplier_payment_method' => 'nullable|string|max:50',
+            'supplier_payment_date' => 'nullable|date',
             'image' => 'nullable|array',
             'image.*' => 'nullable|file|mimes:jpg,jpeg,png,webp,gif|max:5120',
             'variants' => 'nullable|array',
