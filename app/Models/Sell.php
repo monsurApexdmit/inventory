@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -35,6 +36,8 @@ class Sell extends Model
         'method',
         'source',
         'amount',
+        'paid_amount',
+        'due_amount',
         'shipping_cost',
         'shipping_method',
         'coupon_id',
@@ -58,6 +61,8 @@ class Sell extends Model
 
     protected $casts = [
         'amount' => 'float',
+        'paid_amount' => 'float',
+        'due_amount' => 'float',
         'shipping_cost' => 'float',
         'discount' => 'float',
         'stock_deducted' => 'boolean',
@@ -105,5 +110,24 @@ class Sell extends Model
     public function shippingMethodModel(): BelongsTo
     {
         return $this->belongsTo(ShippingMethod::class, 'shipping_method');
+    }
+
+    public function payments(): MorphMany
+    {
+        return $this->morphMany(DuePayment::class, 'payable');
+    }
+
+    public function recalculate(): void
+    {
+        $this->paid_amount = $this->payments()->where('direction', 'in')->sum('amount');
+        $this->due_amount  = max(0, $this->amount - $this->paid_amount);
+        if ($this->paid_amount <= 0) {
+            $this->payment_status = 'pending';
+        } elseif ($this->due_amount <= 0) {
+            $this->payment_status = 'paid';
+        } else {
+            $this->payment_status = 'partially_paid';
+        }
+        $this->save();
     }
 }

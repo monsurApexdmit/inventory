@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\V1\Salary\SalaryPaymentController;
 use App\Http\Controllers\Api\V1\Coupon\CouponController;
 use App\Http\Controllers\Api\V1\Inventory\InventoryController;
 use App\Http\Controllers\Api\V1\Sell\SellController;
+use App\Http\Controllers\Api\V1\Payment\DuePaymentController;
 use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Realtime\BroadcastAuthController;
 use App\Http\Controllers\Api\Support\SupportTicketController;
@@ -437,6 +438,18 @@ Route::prefix('expenses')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::get('/{id}',    [ExpenseController::class, 'show'])->middleware('check_permission:Expenses.read');
     Route::put('/{id}',    [ExpenseController::class, 'update'])->middleware('check_permission:Expenses.write');
     Route::delete('/{id}', [ExpenseController::class, 'destroy'])->middleware('check_permission:Expenses.delete');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 14: Customer Dues (Due Management Phase 1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+Route::prefix('dues')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/customers', [SellController::class, 'dues'])->middleware('check_permission:Dues.read');
+    Route::get('/vendors', [PurchaseOrderController::class, 'dues'])->middleware('check_permission:Dues.read');
+});
+Route::prefix('payments')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::post('/{payableType}/{id}', [DuePaymentController::class, 'store'])->middleware('check_permission:Dues.write');
 });
 
 Route::prefix('purchase-orders')->middleware(JwtAuthMiddleware::class)->group(function () {

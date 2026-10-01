@@ -213,4 +213,79 @@ class SellRepository implements ISellRepository
             ->where('invoice_no', $invoiceNo)
             ->exists();
     }
+
+    /**
+     * Get sells with outstanding dues for a company, with aging buckets
+     */
+    public function getCustomerDues(int $companyId, array $filters): mixed
+    {
+        $query = $this->buildCustomerDuesQuery($companyId, $filters);
+
+        $query->orderBy('order_time', 'asc');
+
+        $perPage = min($filters['per_page'] ?? 10, 100);
+        $paginated = $query->paginate($perPage);
+
+        $paginated->getCollection()->transform(function ($sell) {
+            $daysOld = $sell->order_time ? $sell->order_time->diffInDays(now()) : 0;
+
+            if ($daysOld < 30) {
+                $bucket = 'current';
+            } elseif ($daysOld < 60) {
+                $bucket = '30-59';
+            } elseif ($daysOld < 90) {
+                $bucket = '60-89';
+            } else {
+                $bucket = '90+';
+            }
+
+            $sell->setAttribute('aging_bucket', $bucket);
+            $sell->setAttribute('days_old', $daysOld);
+
+            return $sell;
+        });
+
+        return $paginated;
+    }
+
+    /**
+     * Compute summary aggregates (totalDue, totalOverdue, count) for customer dues,
+     * scoped by the same filters as getCustomerDues() but without pagination.
+     */
+    public function getCustomerDuesSummary(int $companyId, array $filters): array
+    {
+        $totalsQuery = $this->buildCustomerDuesQuery($companyId, $filters);
+        $totals = $totalsQuery->selectRaw('COALESCE(SUM(due_amount), 0) as total_due, COUNT(*) as cnt')->first();
+
+        $overdueQuery = $this->buildCustomerDuesQuery($companyId, $filters);
+        $overdueQuery->whereRaw('DATEDIFF(CURDATE(), order_time) >= 30');
+        $overdueTotal = $overdueQuery->selectRaw('COALESCE(SUM(due_amount), 0) as total_overdue')->value('total_overdue');
+
+        return [
+            'totalDue' => (float) $totals->total_due,
+            'totalOverdue' => (float) $overdueTotal,
+            'count' => (int) $totals->cnt,
+        ];
+    }
+
+    /**
+     * Build the base query (filters applied, no ordering/pagination) shared by
+     * getCustomerDues() and getCustomerDuesSummary().
+     */
+    private function buildCustomerDuesQuery(int $companyId, array $filters)
+    {
+        $query = $this->model
+            ->where('company_id', $companyId)
+            ->where('due_amount', '>', 0);
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('customer_name', 'like', "%{$search}%")
+                  ->orWhere('invoice_no', 'like', "%{$search}%");
+            });
+        }
+
+        return $query;
+    }
 }

@@ -222,6 +222,39 @@ class PurchaseOrderService
         return $this->repository->getStats($companyId);
     }
 
+    public function getVendorDues(int $companyId, array $filters): array
+    {
+        $paginated = $this->repository->getVendorDues($companyId, $filters);
+
+        $data = [];
+        foreach ($paginated->items() as $po) {
+            $data[] = [
+                'id' => $po->id,
+                'poNumber' => $po->po_number,
+                'vendorId' => $po->vendor_id,
+                'vendorName' => $po->vendor?->name,
+                'expectedDate' => $po->expected_date?->toIso8601String(),
+                'totalAmount' => (float) $po->total_amount,
+                'paidAmount' => (float) $po->paid_amount,
+                'dueAmount' => (float) $po->due_amount,
+                'paymentStatus' => $po->payment_status,
+                'agingBucket' => $po->getAttribute('aging_bucket'),
+                'daysOld' => $po->getAttribute('days_old'),
+            ];
+        }
+
+        $summary = $this->repository->getVendorDuesSummary($companyId, $filters);
+
+        return [
+            'data' => $data,
+            'summary' => $summary,
+            'total' => $paginated->total(),
+            'per_page' => $paginated->perPage(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+        ];
+    }
+
     private function addVariantStock(int $variantId, ?int $locationId, int $qty): void
     {
         if ($locationId) {

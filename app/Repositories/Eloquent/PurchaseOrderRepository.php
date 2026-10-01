@@ -86,4 +86,82 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
             'cancelled'=> (clone $base)->where('status', 'cancelled')->count(),
         ];
     }
+
+    public function getVendorDues(int $companyId, array $filters): mixed
+    {
+        $query = $this->buildVendorDuesQuery($companyId, $filters);
+
+        $query->orderBy('expected_date', 'asc');
+
+        $perPage = min((int) ($filters['per_page'] ?? 10), 100);
+        $paginated = $query->paginate($perPage);
+
+        $paginated->getCollection()->transform(function ($po) {
+            $refDate = $po->expected_date ?? $po->created_at;
+            $daysOld = $refDate ? $refDate->diffInDays(now()) : 0;
+
+            if ($daysOld < 30) {
+                $bucket = 'current';
+            } elseif ($daysOld < 60) {
+                $bucket = '30-59';
+            } elseif ($daysOld < 90) {
+                $bucket = '60-89';
+            } else {
+                $bucket = '90+';
+            }
+
+            $po->setAttribute('aging_bucket', $bucket);
+            $po->setAttribute('days_old', $daysOld);
+
+            return $po;
+        });
+
+        return $paginated;
+    }
+
+    /**
+     * Compute summary aggregates (totalDue, totalOverdue, count) for vendor dues,
+     * scoped by the same filters as getVendorDues() but without pagination.
+     */
+    public function getVendorDuesSummary(int $companyId, array $filters): array
+    {
+        $totalsQuery = $this->buildVendorDuesQuery($companyId, $filters);
+        $totals = $totalsQuery->selectRaw('COALESCE(SUM(due_amount), 0) as total_due, COUNT(*) as cnt')->first();
+
+        $overdueQuery = $this->buildVendorDuesQuery($companyId, $filters);
+        $overdueQuery->whereRaw('DATEDIFF(CURDATE(), COALESCE(expected_date, created_at)) >= 30');
+        $overdueTotal = $overdueQuery->selectRaw('COALESCE(SUM(due_amount), 0) as total_overdue')->value('total_overdue');
+
+        return [
+            'totalDue' => (float) $totals->total_due,
+            'totalOverdue' => (float) $overdueTotal,
+            'count' => (int) $totals->cnt,
+        ];
+    }
+
+    /**
+     * Build the base query (filters applied, no ordering/pagination) shared by
+     * getVendorDues() and getVendorDuesSummary().
+     */
+    private function buildVendorDuesQuery(int $companyId, array $filters)
+    {
+        $query = $this->model
+            ->where('company_id', $companyId)
+            ->where('due_amount', '>', 0)
+            ->with(['vendor']);
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('po_number', 'like', "%{$search}%")
+                  ->orWhereHas('vendor', fn($v) => $v->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if (!empty($filters['vendor_id'])) {
+            $query->where('vendor_id', (int) $filters['vendor_id']);
+        }
+
+        return $query;
+    }
 }

@@ -228,6 +228,37 @@ class SellController extends Controller
     }
 
     /**
+     * GET /dues/customers
+     * List sells with outstanding customer dues, with aging buckets
+     */
+    public function dues(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        if (!$companyId) {
+            return $this->error('Company ID not found in context', 401);
+        }
+
+        try {
+            $filters = $request->query();
+            $result = $this->sellService->getCustomerDues($companyId, $filters);
+
+            return $this->success($result['data'], 'Customer dues retrieved successfully', 200, [
+                'summary' => $result['summary'],
+                'pagination' => [
+                    'page' => $result['current_page'],
+                    'per_page' => $result['per_page'],
+                    'total' => $result['total'],
+                    'last_page' => $result['last_page'],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Customer dues fetch failed', ['message' => $e->getMessage()]);
+            return $this->error('Failed to retrieve customer dues', 500);
+        }
+    }
+
+    /**
      * DELETE /sells/:id
      * Delete a sell (soft delete + stock restoration)
      */

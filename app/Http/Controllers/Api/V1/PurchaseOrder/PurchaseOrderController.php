@@ -99,4 +99,35 @@ class PurchaseOrderController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
         return $this->success($this->service->getStats($companyId));
     }
+
+    /**
+     * GET /dues/vendors
+     * Retrieve vendor dues (purchase orders with an outstanding due amount).
+     */
+    public function dues(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        if (!$companyId) {
+            return $this->error('Company ID not found in context', 401);
+        }
+
+        try {
+            $filters = $request->query();
+            $result = $this->service->getVendorDues($companyId, $filters);
+
+            return $this->success($result['data'], 'Vendor dues retrieved successfully', 200, [
+                'summary' => $result['summary'],
+                'pagination' => [
+                    'page' => $result['current_page'],
+                    'per_page' => $result['per_page'],
+                    'total' => $result['total'],
+                    'last_page' => $result['last_page'],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Vendor dues fetch failed', ['message' => $e->getMessage()]);
+            return $this->error('Failed to retrieve vendor dues', 500);
+        }
+    }
 }

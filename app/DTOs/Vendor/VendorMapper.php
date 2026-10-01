@@ -14,7 +14,7 @@ class VendorMapper extends BaseMapper
     /**
      * Convert Vendor model to DTO
      */
-    public function toDTO(Model $model): VendorDTO
+    public function toDTO(Model $model, float $poDueAmount = 0.0): VendorDTO
     {
         if (!$model instanceof Vendor) {
             throw new \InvalidArgumentException('Model must be instance of Vendor');
@@ -41,6 +41,7 @@ class VendorMapper extends BaseMapper
                 'name' => $model->user->name ?? $model->user->username ?? null,
                 'email' => $model->user->email,
             ] : null,
+            poDueAmount: $poDueAmount,
         );
     }
 }

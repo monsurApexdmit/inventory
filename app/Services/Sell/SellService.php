@@ -314,6 +314,42 @@ class SellService
     }
 
     /**
+     * Get customer dues (sells with outstanding balance) with aging buckets
+     */
+    public function getCustomerDues(int $companyId, array $filters): array
+    {
+        $paginated = $this->repository->getCustomerDues($companyId, $filters);
+
+        $data = [];
+        foreach ($paginated->items() as $sell) {
+            $data[] = [
+                'id' => $sell->id,
+                'invoiceNo' => $sell->invoice_no,
+                'customerId' => $sell->customer_id,
+                'customerName' => $sell->customer_name,
+                'orderTime' => $sell->order_time?->toIso8601String(),
+                'amount' => (float) $sell->amount,
+                'paidAmount' => (float) $sell->paid_amount,
+                'dueAmount' => (float) $sell->due_amount,
+                'paymentStatus' => $sell->payment_status,
+                'agingBucket' => $sell->getAttribute('aging_bucket'),
+                'daysOld' => $sell->getAttribute('days_old'),
+            ];
+        }
+
+        $summary = $this->repository->getCustomerDuesSummary($companyId, $filters);
+
+        return [
+            'data' => $data,
+            'summary' => $summary,
+            'total' => $paginated->total(),
+            'per_page' => $paginated->perPage(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+        ];
+    }
+
+    /**
      * Deduct stock for sell items
      */
     private function deductStock(Sell $sell, array $items): void
