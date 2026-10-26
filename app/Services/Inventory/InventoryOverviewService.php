@@ -215,9 +215,19 @@ class InventoryOverviewService
         }
 
         $rop = $row['reorderPoint'];
-        $health = $onHand === 0 ? 'out'
-            : ($onHand <= $rop ? 'low'
-            : (($rop > 0 && $onHand > $rop * 4) ? 'over' : 'ok'));
+        if (!empty($children)) {
+            // A product with variants is judged by its variants, not by the summed total
+            // against the product's own reorder point: all out → out, any out/low → low,
+            // otherwise overstock only if every variant is overstocked.
+            $childHealth = array_column($children, 'health');
+            $health = $onHand === 0 || !array_diff($childHealth, ['out']) ? 'out'
+                : (array_intersect($childHealth, ['out', 'low']) ? 'low'
+                : (!array_diff($childHealth, ['over']) ? 'over' : 'ok'));
+        } else {
+            $health = $onHand === 0 ? 'out'
+                : ($onHand <= $rop ? 'low'
+                : (($rop > 0 && $onHand > $rop * 4) ? 'over' : 'ok'));
+        }
 
         $row['locations'] = $locs;
         $row['onHand'] = $onHand;
