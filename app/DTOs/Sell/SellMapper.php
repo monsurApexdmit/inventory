@@ -142,6 +142,10 @@ class SellMapper extends BaseMapper
             deliveryNote: $model->delivery_note,
             taxRate: $model->tax_rate !== null ? (float) $model->tax_rate : null,
             taxAmount: $model->tax_amount !== null ? (float) $model->tax_amount : null,
+            followUpCount: (int) ($model->follow_up_count ?? 0),
+            lastFollowUpAt: $this->formatTimestamp($model->last_follow_up_at),
+            lastFollowUpOutcome: $model->last_follow_up_outcome,
+            nextFollowUpAt: $this->formatTimestamp($model->next_follow_up_at),
         );
     }
 

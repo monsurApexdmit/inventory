@@ -182,7 +182,7 @@ class NotificationService
             $companyId,
             self::TYPE_ORDER_PLACED,
             'New Order Received',
-            "Order {$invoiceNo} placed by {$customerName} for $" . number_format($amount, 2),
+            "Order {$invoiceNo} placed by {$customerName} for " . \App\Support\Money::format($companyId, $amount),
             ['invoiceNo' => $invoiceNo, 'customerName' => $customerName, 'amount' => $amount]
         );
 

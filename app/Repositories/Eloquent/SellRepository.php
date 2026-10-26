@@ -83,6 +83,11 @@ class SellRepository implements ISellRepository
             $query->where('fulfillment_status', $filters['fulfillment'])->where('status', '!=', 'Delivered');
         }
 
+        // Follow-up queue: due = needs a call now, scheduled = call-back booked for later
+        if (!empty($filters['followUp']) && in_array($filters['followUp'], ['due', 'scheduled'], true)) {
+            $this->applyFollowUp($query, (string) $filters['followUp']);
+        }
+
         // Filter by payment state: paid | partial | due | unpaid (= due + partial)
         if (!empty($filters['payment']) && $filters['payment'] !== 'all') {
             match ($filters['payment']) {
@@ -162,16 +167,49 @@ class SellRepository implements ISellRepository
     }
 
     /**
-     * Per-tab counts respecting every list filter except status.
+     * Follow-up queue filter.
+     * due: Pending orders never called, with no call-back booked, or whose call-back time has passed;
+     *      plus confirmed (unshipped) orders whose booked call-back has passed.
+     * scheduled: open orders with a call-back booked in the future.
+     */
+    private function applyFollowUp($query, string $mode): void
+    {
+        $now = now();
+        $openConfirmed = fn ($q) => $q->where('status', 'Processing')
+            ->where(fn ($w) => $w->whereNull('fulfillment_status')->orWhere('fulfillment_status', '!=', 'shipped'))
+            ->whereNull('shipped_at');
+
+        if ($mode === 'due') {
+            $query->where(function ($q) use ($now, $openConfirmed) {
+                $q->where(fn ($p) => $p->where('status', 'Pending')
+                        ->where(fn ($w) => $w->whereNull('next_follow_up_at')->orWhere('next_follow_up_at', '<=', $now)))
+                  ->orWhere(fn ($c) => $openConfirmed($c)->whereNotNull('next_follow_up_at')->where('next_follow_up_at', '<=', $now));
+            });
+        } else {
+            $query->where('next_follow_up_at', '>', $now)
+                ->where(fn ($q) => $q->where('status', 'Pending')->orWhere(fn ($c) => $openConfirmed($c)));
+        }
+    }
+
+    /**
+     * Per-tab counts respecting every list filter except status (and follow-up).
      */
     public function tabCounts(int $companyId, array $filters): array
     {
-        $counts = ['all' => (clone $this->buildListQuery($companyId, $filters, false))->count()];
+        $base = $filters;
+        unset($base['followUp']);
+        $counts = ['all' => (clone $this->buildListQuery($companyId, $base, false))->count()];
         foreach (['pending', 'confirmed', 'packed', 'shipped', 'delivered', 'completed', 'cancelled'] as $tab) {
-            $q = $this->buildListQuery($companyId, $filters, false);
+            $q = $this->buildListQuery($companyId, $base, false);
             $this->applyStatusTab($q, $tab);
             $counts[$tab] = $q->count();
         }
+        $q = $this->buildListQuery($companyId, $base, false);
+        $this->applyFollowUp($q, 'due');
+        $counts['followUpDue'] = $q->count();
+        $q = $this->buildListQuery($companyId, $base, false);
+        $this->applyFollowUp($q, 'scheduled');
+        $counts['followUpScheduled'] = $q->count();
         return $counts;
     }
 

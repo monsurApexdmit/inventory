@@ -333,24 +333,11 @@ class StorefrontController extends Controller
             return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
         }
 
-        $district = mb_strtolower(trim((string) $request->query('district', '')));
-
         $methods = ShippingMethod::where('company_id', $companyId)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            // Zone matching: when a district is given, zones that list areas_covered and
-            // do not contain it are dropped (pickup methods and zones without areas stay).
-            ->filter(function ($m) use ($district) {
-                if ($district === '' || ($m->type ?: 'delivery') === 'pickup') {
-                    return true;
-                }
-                $areas = is_array($m->areas_covered) ? implode(',', $m->areas_covered) : (string) $m->areas_covered;
-                $areas = mb_strtolower(trim($areas));
-                return $areas === '' || str_contains($areas, $district);
-            })
-            ->values()
             ->map(fn($m) => [
                 'id'             => $m->id,
                 'name'           => $m->name,
@@ -359,7 +346,6 @@ class StorefrontController extends Controller
                 'express_rate'   => (float) $m->express_rate,
                 'type'           => $m->type ?: 'delivery',
                 'requires_address' => ($m->type ?: 'delivery') !== 'pickup',
-                'areas_covered'  => $m->areas_covered,
                 'estimated_days' => $m->estimated_days,
                 'icon'           => $m->icon,
             ]);

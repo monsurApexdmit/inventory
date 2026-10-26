@@ -64,6 +64,10 @@ class Sell extends Model
         'delivery_note',
         'tax_rate',
         'tax_amount',
+        'follow_up_count',
+        'last_follow_up_at',
+        'last_follow_up_outcome',
+        'next_follow_up_at',
     ];
 
     protected $casts = [
@@ -80,6 +84,9 @@ class Sell extends Model
         'order_time' => 'datetime',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'follow_up_count' => 'integer',
+        'last_follow_up_at' => 'datetime',
+        'next_follow_up_at' => 'datetime',
     ];
 
     /**
@@ -119,6 +126,11 @@ class Sell extends Model
     public function shippingMethodModel(): BelongsTo
     {
         return $this->belongsTo(ShippingMethod::class, 'shipping_method');
+    }
+
+    public function followUps(): HasMany
+    {
+        return $this->hasMany(OrderFollowUp::class, 'sell_id');
     }
 
     public function payments(): MorphMany

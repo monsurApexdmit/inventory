@@ -22,7 +22,6 @@ class ShippingMethodService
     {
         $data = $this->normalizePickup($data);
         $method = $this->repository->create(array_merge($data, ['company_id' => $companyId]));
-
         return $this->format($method);
     }
 
@@ -30,7 +29,6 @@ class ShippingMethodService
     {
         $method = $this->repository->findForCompany($id, $companyId);
         $data = $this->normalizePickup($data, $method->type);
-
         return $this->format($this->repository->update($method, $data));
     }
 
@@ -67,6 +65,19 @@ class ShippingMethodService
         }
 
         return $data;
+    }
+
+    /** Active delivery-type method of the company, or null (used to price storefront delivery orders). */
+    public function findActiveDelivery(int $companyId, $id): ?ShippingMethod
+    {
+        if (! is_numeric($id)) {
+            return null;
+        }
+
+        return ShippingMethod::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->where('type', 'delivery')->orWhereNull('type')->orWhere('type', ''))
+            ->find((int) $id);
     }
 
     private function format(ShippingMethod $m): array

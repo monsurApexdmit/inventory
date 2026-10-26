@@ -47,7 +47,7 @@ class DailySummaryService
             ->where('reorder_point', '>', 0)->whereColumn('stock', '<=', 'reorder_point')->count();
 
         $label = $day->format('M j');
-        $message = "{$label}: {$count} sale(s) totalling " . number_format($total, 2)
+        $message = "{$label}: {$count} sale(s) totalling " . \App\Support\Money::format($companyId, $total)
             . ", {$orders} new order(s), {$low} item(s) low on stock";
 
         return $this->notifications->notifyDailySummary($companyId, $message, [

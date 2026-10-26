@@ -561,6 +561,8 @@ Route::prefix('sells')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::patch('/{id}/status',       [SellController::class, 'updateStatus'])->middleware('check_permission:Orders.write');
     Route::patch('/{id}/fulfillment',  [SellController::class, 'updateFulfillment'])->middleware('check_permission:Orders.write');
     Route::patch('/{id}/delivery',     [SellController::class, 'updateDelivery'])->middleware('check_permission:Orders.write');
+    Route::get('/{id}/follow-ups',     [\App\Http\Controllers\Api\V1\Sell\OrderFollowUpController::class, 'index'])->middleware('check_permission:Orders.read');
+    Route::post('/{id}/follow-ups',    [\App\Http\Controllers\Api\V1\Sell\OrderFollowUpController::class, 'store'])->middleware('check_permission:Orders.write');
     Route::delete('/{id}',             [SellController::class, 'destroy'])->middleware('check_permission:Orders.delete');
 });
 

@@ -161,14 +161,14 @@ class NotificationAlertService
             ->selectRaw('customer_id, customer_name, SUM(due_amount) as due, MIN(order_time) as oldest, COUNT(*) as cnt')
             ->orderByDesc('due')->limit(self::PER_KIND_LIMIT)->get();
 
-        return $rows->map(function ($r) {
+        return $rows->map(function ($r) use ($cid) {
             $days = (int) Carbon::parse($r->oldest)->diffInDays(now());
             $name = $r->customer_name ?: 'A walk-in customer';
             $key = $r->customer_id ? "owes:c{$r->customer_id}" : 'owes:n' . substr(md5((string) $r->customer_name), 0, 12);
 
             return $this->alert(
                 $key, 'customer_overdue', 'high', 'Customer owes over 30 days',
-                "{$name} owes " . number_format((float) $r->due, 2) . " across {$r->cnt} invoice(s), oldest {$days} days",
+                "{$name} owes " . \App\Support\Money::format($cid, (float) $r->due) . " across {$r->cnt} invoice(s), oldest {$days} days",
                 '/dashboard/dues/customers', 'Collect', $r->oldest
             );
         })->all();

@@ -67,6 +67,10 @@ class SellDTO extends BaseDTO
         public ?string $deliveryNote = null,
         public ?float $taxRate = null,
         public ?float $taxAmount = null,
+        public int $followUpCount = 0,
+        public ?string $lastFollowUpAt = null,
+        public ?string $lastFollowUpOutcome = null,
+        public ?string $nextFollowUpAt = null,
     ) {}
 
     public function toArray(): array
@@ -129,6 +133,10 @@ class SellDTO extends BaseDTO
             'deliveryNote' => $this->deliveryNote,
             'taxRate' => $this->taxRate,
             'taxAmount' => $this->taxAmount,
+            'followUpCount' => $this->followUpCount,
+            'lastFollowUpAt' => $this->lastFollowUpAt,
+            'lastFollowUpOutcome' => $this->lastFollowUpOutcome,
+            'nextFollowUpAt' => $this->nextFollowUpAt,
         ];
     }
 }

@@ -90,7 +90,7 @@ class DuePaymentService
                 $companyId,
                 (string) ($payable->invoice_no ?? ('#' . $payable->id)),
                 (string) ($payable->customer_name ?: 'a customer'),
-                number_format($amount, 2),
+                \App\Support\Money::format($companyId, (float) $amount),
                 (string) ($data['payment_method'] ?? 'cash')
             );
         }

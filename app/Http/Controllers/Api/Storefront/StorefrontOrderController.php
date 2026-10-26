@@ -193,7 +193,28 @@ class StorefrontOrderController extends Controller
             }
         }
 
-        $shippingCost = (float) ($request->shipping_cost ?? 0);
+        // Shipping is priced SERVER-SIDE from the chosen method (a client-sent shipping_cost is ignored).
+        // Pickup orders are free; delivery orders must pick an active delivery option of this store.
+        $shippingMethodModel = $request->filled('shipping_method_id')
+            ? ShippingMethod::where('company_id', $companyId)->find($request->shipping_method_id) : null;
+        $isPickup = ($shippingMethodModel?->type === 'pickup') || $request->filled('pickup_location_id');
+        $shippingCost = 0.0;
+        if ($isPickup) {
+            if ($shippingMethodModel && $shippingMethodModel->type !== 'pickup') {
+                $shippingMethodModel = null;
+            }
+        } else {
+            $shippingMethodModel = app(\App\Services\Shipping\ShippingMethodService::class)
+                ->findActiveDelivery($companyId, $request->input('shipping_method_id'));
+            if (!$shippingMethodModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Choose a delivery option',
+                    'errors'  => ['shipping_method_id' => ['Choose a delivery option']],
+                ], 422);
+            }
+            $shippingCost = (float) $shippingMethodModel->price;
+        }
         // Free shipping coupon overrides shipping cost
         if ($appliedCoupon?->free_shipping) {
             $shippingCost = 0;
@@ -226,10 +247,8 @@ class StorefrontOrderController extends Controller
 
         // Pickup orders collect from a chosen pickup point (an is_pickup_point location) and take stock from it
         $locStock = app(LocationStockService::class);
-        $shippingMethodModel = $request->filled('shipping_method_id')
-            ? ShippingMethod::where('company_id', $companyId)->find($request->shipping_method_id) : null;
         $pickupLocationId = null;
-        if (($shippingMethodModel?->type === 'pickup') || $request->filled('pickup_location_id')) {
+        if ($isPickup) {
             if (!$request->filled('pickup_location_id')) {
                 return response()->json(['success' => false, 'message' => 'Choose a pickup point for pickup orders.'], 422);
             }
