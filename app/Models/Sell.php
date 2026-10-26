@@ -35,6 +35,8 @@ class Sell extends Model
         'shipping_address_type',
         'method',
         'source',
+        'location_id',
+        'register_session_id',
         'amount',
         'paid_amount',
         'due_amount',
@@ -57,6 +59,11 @@ class Sell extends Model
         'total_cost',
         'gross_profit',
         'notes',
+        'transaction_id',
+        'zone_name',
+        'delivery_note',
+        'tax_rate',
+        'tax_amount',
     ];
 
     protected $casts = [
@@ -65,6 +72,8 @@ class Sell extends Model
         'due_amount' => 'float',
         'shipping_cost' => 'float',
         'discount' => 'float',
+        'tax_rate' => 'float',
+        'tax_amount' => 'float',
         'stock_deducted' => 'boolean',
         'total_cost' => 'float',
         'gross_profit' => 'float',
@@ -119,7 +128,8 @@ class Sell extends Model
 
     public function recalculate(): void
     {
-        $this->paid_amount = $this->payments()->where('direction', 'in')->sum('amount');
+        $this->paid_amount = max(0, (float) $this->payments()->where('direction', 'in')->sum('amount')
+            - (float) $this->payments()->where('direction', 'out')->sum('amount'));
         $this->due_amount  = max(0, $this->amount - $this->paid_amount);
         if ($this->paid_amount <= 0) {
             $this->payment_status = 'pending';

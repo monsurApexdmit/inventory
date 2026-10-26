@@ -25,6 +25,20 @@ class PurchaseOrderDTO extends BaseDTO
         public readonly array $items,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly string $discountType = 'flat',
+        public readonly float $discountValue = 0.0,
+        public readonly float $discountAmount = 0.0,
+        public readonly float $taxRate = 0.0,
+        public readonly float $taxAmount = 0.0,
+        public readonly float $shippingCost = 0.0,
+        public readonly float $subtotal = 0.0,
+        public readonly string $itemsSummary = 'No items',
+        public readonly int $unitsOrdered = 0,
+        public readonly int $unitsReceived = 0,
+        public readonly bool $isOverdue = false,
+        public readonly ?string $sentAt = null,
+        public readonly ?string $receivedAt = null,
+        public readonly array $receipts = [],
     ) {}
 
     public function toArray(): array
@@ -48,6 +62,20 @@ class PurchaseOrderDTO extends BaseDTO
             'items'        => $this->items,
             'createdAt'    => $this->createdAt,
             'updatedAt'    => $this->updatedAt,
+            'discountType'   => $this->discountType,
+            'discountValue'  => $this->discountValue,
+            'discountAmount' => $this->discountAmount,
+            'taxRate'        => $this->taxRate,
+            'taxAmount'      => $this->taxAmount,
+            'shippingCost'   => $this->shippingCost,
+            'subtotal'       => $this->subtotal,
+            'itemsSummary'   => $this->itemsSummary,
+            'unitsOrdered'   => $this->unitsOrdered,
+            'unitsReceived'  => $this->unitsReceived,
+            'isOverdue'      => $this->isOverdue,
+            'sentAt'         => $this->sentAt,
+            'receivedAt'     => $this->receivedAt,
+            'receipts'       => $this->receipts,
         ];
     }
 }

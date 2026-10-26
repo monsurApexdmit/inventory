@@ -17,4 +17,12 @@ interface IExpenseRepository
     public function delete(int $id): bool;
 
     public function getStats(int $companyId): array;
+
+    public function getListStats(int $companyId, array $filters): array;
+
+    public function getTabCounts(int $companyId, array $filters): array;
+
+    public function getTemplates(int $companyId, int $limit = 6): array;
+
+    public function getDueRecurring(\Carbon\CarbonInterface $today);
 }

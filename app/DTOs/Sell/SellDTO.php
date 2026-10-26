@@ -55,6 +55,18 @@ class SellDTO extends BaseDTO
         public ?float $shippingDepositAmount = null,
         public ?string $shippingDepositTransactionId = null,
         public ?string $paymentTransactionId = null,
+        public float $paidAmount = 0,
+        public float $dueAmount = 0,
+        public ?string $source = null,
+        public ?int $registerSessionId = null,
+        public ?int $locationId = null,
+        public ?string $locationName = null,
+        public ?string $transactionId = null,
+        public ?string $zoneName = null,
+        public ?string $courier = null,
+        public ?string $deliveryNote = null,
+        public ?float $taxRate = null,
+        public ?float $taxAmount = null,
     ) {}
 
     public function toArray(): array
@@ -105,6 +117,18 @@ class SellDTO extends BaseDTO
             'shippingDepositAmount' => $this->shippingDepositAmount,
             'shippingDepositTransactionId' => $this->shippingDepositTransactionId,
             'paymentTransactionId' => $this->paymentTransactionId,
+            'paidAmount' => $this->paidAmount,
+            'dueAmount' => $this->dueAmount,
+            'source' => $this->source,
+            'registerSessionId' => $this->registerSessionId,
+            'locationId' => $this->locationId,
+            'locationName' => $this->locationName,
+            'transactionId' => $this->transactionId,
+            'zoneName' => $this->zoneName,
+            'courier' => $this->courier,
+            'deliveryNote' => $this->deliveryNote,
+            'taxRate' => $this->taxRate,
+            'taxAmount' => $this->taxAmount,
         ];
     }
 }

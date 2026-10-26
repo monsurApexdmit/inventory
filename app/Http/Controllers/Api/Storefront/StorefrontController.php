@@ -33,7 +33,7 @@ class StorefrontController extends Controller
             ->withAvg('reviews', 'rating')
             ->withSum('orderItems', 'quantity')
             ->where('company_id', $companyId)
-            ->where('published', true);
+            ->where('published', true)->where('visible_online', true);
 
         if ($request->filled('search')) {
             $query->where('name', 'like', '%' . $request->search . '%');
@@ -47,7 +47,7 @@ class StorefrontController extends Controller
         if ($request->boolean('is_hot_deal'))    $query->where('is_hot_deal', true);
         if ($request->boolean('is_best_seller')) $query->where('is_best_seller', true);
         if ($request->boolean('is_featured'))    $query->where('is_featured', true);
-        if ($request->boolean('on_sale'))        $query->where(fn($q) => $q->where(fn($q2) => $q2->where('offer_price', '>', 0))->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price')));
+        if ($request->boolean('on_sale'))        $query->where(fn($q) => $q->where(fn($q2) => $q2->where('offer_price', '>', 0)->where(fn($q3) => $q3->whereNull('offer_ends_at')->orWhereDate('offer_ends_at', '>=', now()->toDateString())))->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price')));
 
         $limit    = min((int) $request->query('limit', 20), 100);
         $products = $query->orderBy('created_at', 'desc')->paginate($limit);
@@ -80,18 +80,18 @@ class StorefrontController extends Controller
             ->withAvg('reviews', 'rating')
             ->withSum('orderItems', 'quantity')
             ->where('company_id', $companyId)
-            ->where('published', true);
+            ->where('published', true)->where('visible_online', true);
 
         match ($filter) {
             'hot_deal'    => $query->where('is_hot_deal', true),
             'best_seller' => $query->where('is_best_seller', true),
             'featured'    => $query->where('is_featured', true),
-            'on_sale'     => $query->where(fn($q) => $q->where('offer_price', '>', 0)->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'))),
+            'on_sale'     => $query->where(fn($q) => $q->where(fn($q2) => $q2->where('offer_price', '>', 0)->where(fn($q3) => $q3->whereNull('offer_ends_at')->orWhereDate('offer_ends_at', '>=', now()->toDateString())))->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'))),
             default       => $query->where(function ($q) {
                 $q->where('is_hot_deal', true)
                   ->orWhere('is_best_seller', true)
                   ->orWhere('is_featured', true)
-                  ->orWhere('offer_price', '>', 0)
+                  ->orWhere(fn($q2) => $q2->where('offer_price', '>', 0)->where(fn($q3) => $q3->whereNull('offer_ends_at')->orWhereDate('offer_ends_at', '>=', now()->toDateString())))
                   ->orWhere(fn($q2) => $q2->where('sale_price', '>', 0)->whereColumn('sale_price', '<', 'price'));
             }),
         };
@@ -128,7 +128,7 @@ class StorefrontController extends Controller
             ->withAvg('reviews', 'rating')
             ->withSum('orderItems', 'quantity')
             ->where('company_id', $companyId)
-            ->where('published', true);
+            ->where('published', true)->where('visible_online', true);
 
         if (ctype_digit($slugOrId)) {
             $query->where(function ($builder) use ($slugOrId) {
@@ -189,8 +189,10 @@ class StorefrontController extends Controller
         $coupon = Coupon::where('company_id', $companyId)
             ->where('code', $code)
             ->where('status', true)
+            ->where('channel_online', true)
             ->where('start_date', '<=', now())
-            ->where('end_date', '>=', now())
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', now()->startOfDay()))
+            ->whereRaw('(usage_limit IS NULL OR times_used < usage_limit)')
             ->first();
 
         if (!$coupon) {
@@ -221,8 +223,10 @@ class StorefrontController extends Controller
 
         $coupons = Coupon::where('company_id', $companyId)
             ->where('status', true)
+            ->where('channel_online', true)
             ->where('start_date', '<=', now())
-            ->where('end_date', '>=', now())
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', now()->startOfDay()))
+            ->whereRaw('(usage_limit IS NULL OR times_used < usage_limit)')
             ->orderBy('priority', 'desc')
             ->get()
             ->map(fn($c) => [
@@ -265,7 +269,10 @@ class StorefrontController extends Controller
         };
         $depositActive = $depositEnabled && $depositHasCreds;
 
-        $methods = PaymentMethod::where('company_id', $companyId)
+        $codLimit = (float) ($paymentSettings['cod_limit'] ?? 5000);
+        $codFee   = (float) ($paymentSettings['cod_fee'] ?? 0);
+
+        $legacy = PaymentMethod::where('company_id', $companyId)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -276,11 +283,45 @@ class StorefrontController extends Controller
                 'description'            => $m->description,
                 'icon'                   => $m->icon,
                 'gateway_type'           => $m->gateway_type ?? 'cod',
+                'cod_limit'              => ($m->gateway_type ?? 'cod') === 'cod' ? $codLimit : null,
+                'cod_fee'                => ($m->gateway_type ?? 'cod') === 'cod' ? $codFee : null,
                 'cod_deposit_required'   => ($m->gateway_type ?? 'cod') === 'cod' && $depositActive,
                 'cod_deposit_amount'     => ($m->gateway_type ?? 'cod') === 'cod' && $depositActive ? $depositAmount : null,
             ]);
 
-        return response()->json(['success' => true, 'data' => $methods]);
+        // Methods turned on for online orders in Settings > Payments; gateways keep working beside them
+        $default = null;
+        $methods = $legacy;
+        if (is_array($paymentSettings['methods'] ?? null) && $paymentSettings['methods']) {
+            $labels = \App\Http\Requests\Setting\UpdatePaymentSettingsRequest::METHODS;
+            $saved = [];
+            foreach (StorefrontOrderController::onlineMethodSlugs($paymentSettings) as $slug) {
+                $isCod = $slug === 'cod';
+                $f = $paymentSettings['methods'][$slug]['fields'] ?? [];
+                $saved[] = [
+                    'id'                   => $slug,
+                    'slug'                 => $slug,
+                    'name'                 => $labels[$slug][0] ?? ucfirst($slug),
+                    'description'          => null,
+                    'icon'                 => null,
+                    'gateway_type'         => $isCod ? 'cod' : 'manual',
+                    'account'              => is_array($f) ? ($f['account'] ?? null) : null,
+                    'account_name'         => is_array($f) ? ($f['accountName'] ?? null) : null,
+                    'bank_name'            => is_array($f) ? ($f['bankName'] ?? null) : null,
+                    'cod_limit'            => $isCod ? $codLimit : null,
+                    'cod_fee'              => $isCod ? $codFee : null,
+                    'cod_deposit_required' => $isCod && $depositActive,
+                    'cod_deposit_amount'   => $isCod && $depositActive ? $depositAmount : null,
+                ];
+            }
+            $gateways = $legacy->filter(fn ($m) => $m['gateway_type'] !== 'cod')->values()->all();
+            $methods = array_merge($saved, $gateways);
+            $d = $paymentSettings['default'] ?? null;
+            $default = $d && in_array($d, StorefrontOrderController::onlineMethodSlugs($paymentSettings), true)
+                ? $d : ($saved[0]['slug'] ?? null);
+        }
+
+        return response()->json(['success' => true, 'data' => $methods, 'default' => $default]);
     }
 
     // GET /api/store/shipping-methods?company_id=11
@@ -292,21 +333,92 @@ class StorefrontController extends Controller
             return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
         }
 
+        $district = mb_strtolower(trim((string) $request->query('district', '')));
+
         $methods = ShippingMethod::where('company_id', $companyId)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
+            // Zone matching: when a district is given, zones that list areas_covered and
+            // do not contain it are dropped (pickup methods and zones without areas stay).
+            ->filter(function ($m) use ($district) {
+                if ($district === '' || ($m->type ?: 'delivery') === 'pickup') {
+                    return true;
+                }
+                $areas = is_array($m->areas_covered) ? implode(',', $m->areas_covered) : (string) $m->areas_covered;
+                $areas = mb_strtolower(trim($areas));
+                return $areas === '' || str_contains($areas, $district);
+            })
+            ->values()
             ->map(fn($m) => [
                 'id'             => $m->id,
                 'name'           => $m->name,
                 'description'    => $m->description,
                 'price'          => (float) $m->price,
+                'express_rate'   => (float) $m->express_rate,
+                'type'           => $m->type ?: 'delivery',
+                'requires_address' => ($m->type ?: 'delivery') !== 'pickup',
+                'areas_covered'  => $m->areas_covered,
                 'estimated_days' => $m->estimated_days,
                 'icon'           => $m->icon,
             ]);
 
         return response()->json(['success' => true, 'data' => $methods]);
+    }
+
+    // GET /api/store/pickup-points?company_id=11 — locations flagged is_pickup_point that customers can collect from
+    public function pickupPoints(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $q = \App\Models\Location::where('company_id', $companyId)->pickupPoints()->orderBy('name');
+
+        return response()->json(['success' => true, 'data' => $q->get()->map(fn ($l) => [
+            'id' => $l->id,
+            'name' => $l->name,
+            'address' => $l->address,
+            'district' => $l->district,
+            'phone' => $l->phone,
+        ])->values()]);
+    }
+
+    // GET /api/store/settings/hours?company_id=11 — weekly opening hours + holiday closures
+    public function storeHours(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $setting = Setting::where('company_id', $companyId)->first();
+        $hours = is_array($setting?->store_hours) ? $setting->store_hours : [];
+        $general = is_array($setting?->general_settings) ? $setting->general_settings : [];
+        $today = now()->toDateString();
+        $holidays = collect($general['holidays'] ?? [])
+            ->filter(fn ($d) => is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) && $d >= $today)
+            ->sort()->values();
+
+        $week = [];
+        foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day) {
+            $h = $hours[$day] ?? null;
+            if (is_array($h)) {
+                $week[$day] = ['open' => $h['open'] ?? '', 'close' => $h['close'] ?? '', 'isOpen' => (bool) ($h['isOpen'] ?? false)];
+            }
+        }
+
+        return response()->json(['success' => true, 'data' => [
+            'hours' => $week,
+            'holidays' => $holidays,
+            'closedToday' => $holidays->contains($today),
+            'nextClosure' => $holidays->first(fn ($d) => $d > $today),
+            'today' => $today,
+        ]]);
     }
 
     // GET /api/store/pages/{slug}?company_id=11
@@ -334,9 +446,79 @@ class StorefrontController extends Controller
                 'title' => $page->title,
                 'slug' => $page->slug,
                 'summary' => $page->summary,
+                'type' => $page->type,
+                'place' => $page->place,
+                'body' => $page->body,
                 'content' => $page->content,
                 'publishedAt' => optional($page->published_at)?->toIso8601String(),
                 'updatedAt' => optional($page->updated_at)?->toIso8601String(),
+            ],
+        ]);
+    }
+
+    // GET /api/store/pages?company_id=  — published pages for header/footer links
+    public function pages(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $pages = ContentPage::where('company_id', $companyId)
+            ->where('is_published', true)
+            ->orderBy('title')
+            ->get(['id', 'title', 'slug', 'summary', 'type', 'place', 'body']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $pages->map(fn ($p) => [
+                'id' => $p->id,
+                'title' => $p->title,
+                'slug' => $p->slug,
+                'summary' => $p->summary,
+                'type' => $p->type,
+                'place' => $p->place,
+                'body' => $p->body,
+            ])->values(),
+        ]);
+    }
+
+    // GET /api/store/settings/online-store?company_id=  — public store identity, policies and social links
+    public function onlineStore(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $business = Setting::where('company_id', $companyId)->first()?->business_settings ?? [];
+        $o = is_array($business['onlineStore'] ?? null) ? $business['onlineStore'] : [];
+        $social = is_array($o['social'] ?? null) ? $o['social'] : [];
+        $legacy = is_array($business['socialLinks'] ?? null) ? $business['socialLinks'] : [];
+        $policies = is_array($o['policies'] ?? null) ? $o['policies'] : [];
+        $str = fn ($v) => is_string($v) ? trim($v) : '';
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'name' => $str($o['name'] ?? '') ?: $str($business['businessName'] ?? ''),
+                'slug' => $str($o['slug'] ?? ''),
+                'theme' => $str($o['theme'] ?? ''),
+                'published' => (bool) ($o['published'] ?? true),
+                'policies' => [
+                    'returns' => $str($policies['returns'] ?? ''),
+                    'shipping' => $str($policies['shipping'] ?? ''),
+                    'privacy' => $str($policies['privacy'] ?? ''),
+                ],
+                'social' => [
+                    'facebook' => $str($social['facebook'] ?? '') ?: $str($legacy['facebook'] ?? ''),
+                    'instagram' => $str($social['instagram'] ?? '') ?: $str($legacy['instagram'] ?? ''),
+                    'whatsapp' => $str($social['whatsapp'] ?? ''),
+                    'youtube' => $str($social['youtube'] ?? ''),
+                    'twitter' => $str($legacy['twitter'] ?? ''),
+                ],
             ],
         ]);
     }
@@ -437,6 +619,7 @@ class StorefrontController extends Controller
         $slides = collect($hero['slides'] ?? [])
             ->filter(fn($slide) => is_array($slide))
             ->map(fn($slide) => [
+                'id' => $slide['id'] ?? null,
                 'imagePath' => $slide['imagePath'] ?? null,
                 'tag' => $slide['tag'] ?? '',
                 'title' => $slide['title'] ?? '',
@@ -504,6 +687,11 @@ class StorefrontController extends Controller
 
     private function formatProduct(Product $product): array
     {
+        // Online availability = stock at ships-online locations once location stock is set up, else the flat total
+        $locStock = app(\App\Services\Inventory\LocationStockService::class);
+        $onlineLocs = $locStock->storefrontLocationIds((int) $product->company_id);
+        $stock = $onlineLocs ? $locStock->availableAcross($product, null, $onlineLocs) : $product->stock;
+
         $primaryImage = $product->images->firstWhere('is_primary', true)?->path
             ?? $product->images->first()?->path
             ?? $product->image;
@@ -515,10 +703,12 @@ class StorefrontController extends Controller
             'description'   => $product->description,
             'price'         => $product->price,
             'sale_price'    => $product->sale_price,
-            'offer_price'   => $product->offer_price,
-            'offer_type'    => $product->offer_type,
+            'offer_price'   => $product->isOfferActive() ? $product->offer_price : null,
+            'offer_type'    => $product->isOfferActive() ? $product->offer_type : null,
+            'offer_ends_at' => $product->offer_ends_at?->format('Y-m-d'),
+            'offer_active'  => $product->isOfferActive(),
             'sku'           => $product->sku,
-            'stock'         => $product->stock,
+            'stock'         => $stock,
             'total_sold'    => (int) ($product->order_items_sum_quantity ?? 0),
             'image'         => $primaryImage,
             'images'        => $product->images->sortBy('position')->pluck('path')->values(),
@@ -537,7 +727,9 @@ class StorefrontController extends Controller
                 'sale_price'  => $v->sale_price,
                 'offer_price' => $v->offer_price,
                 'offer_type'  => $v->offer_type,
-                'stock'       => $v->stock,
+                'wholesale_price'   => $v->wholesale_price,
+                'min_wholesale_qty' => $v->min_wholesale_qty,
+                'stock'       => $onlineLocs ? $locStock->availableAcross($product, (int) $v->id, $onlineLocs) : $v->stock,
                 'sku'        => $v->sku,
                 'attributes' => $v->attributes,
             ])->values(),

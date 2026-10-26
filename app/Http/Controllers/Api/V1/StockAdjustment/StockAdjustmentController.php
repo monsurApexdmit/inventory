@@ -28,6 +28,8 @@ class StockAdjustmentController extends Controller
             'per_page'     => $result['per_page'],
             'current_page' => $result['current_page'],
             'last_page'    => $result['last_page'],
+            'stats'        => $result['stats'],
+            'reasons'      => $result['reasons'],
         ]);
     }
 

@@ -10,6 +10,9 @@ interface ISellRepository
      * Find all sells for a company with filters and pagination
      */
     public function findByCompany(int $companyId, array $filters): mixed;
+    public function summarize(int $companyId, array $filters): array;
+    public function tabCounts(int $companyId, array $filters): array;
+    public function kpis(int $companyId): array;
 
     /**
      * Find a sell by ID within a company scope
@@ -39,7 +42,7 @@ interface ISellRepository
     /**
      * Get statistics for sells
      */
-    public function getStats(int $companyId): array;
+    public function getStats(int $companyId, ?string $source = null): array;
 
     public function getWeeklyOrders(int $companyId): array;
 

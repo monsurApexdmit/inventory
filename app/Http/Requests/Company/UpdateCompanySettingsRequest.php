@@ -31,8 +31,13 @@ class UpdateCompanySettingsRequest extends FormRequest
             'currencyDecimalPlaces' => 'nullable|integer|in:0,1,2',
             'weightUnit' => 'nullable|string|in:kg,lb,g,oz',
             'dimensionUnit' => 'nullable|string|in:cm,in,mm',
-            'dateFormat' => 'nullable|string|in:MM/DD/YYYY,DD/MM/YYYY,YYYY-MM-DD',
+            'dateFormat' => 'nullable|string|in:MM/DD/YYYY,DD/MM/YYYY,YYYY-MM-DD,D MMM YYYY',
+            'numberFormat' => 'nullable|string|in:intl,lakh',
             'timeFormat' => 'nullable|string|in:12h,24h',
+            'accentName' => 'nullable|string|max:40',
+            'brandPrimaryColor' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'brandAccentColor' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'brandBackgroundColor' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ];
     }
 
@@ -45,7 +50,7 @@ class UpdateCompanySettingsRequest extends FormRequest
             'currencyDecimalPlaces.in' => 'Decimal places must be 0, 1, or 2',
             'weightUnit.in' => 'Weight unit must be kg, lb, g, or oz',
             'dimensionUnit.in' => 'Dimension unit must be cm, in, or mm',
-            'dateFormat.in' => 'Date format must be MM/DD/YYYY, DD/MM/YYYY, or YYYY-MM-DD',
+            'dateFormat.in' => 'Date format must be MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, or D MMM YYYY',
             'timeFormat.in' => 'Time format must be 12h or 24h',
         ];
     }

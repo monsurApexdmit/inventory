@@ -21,6 +21,7 @@ class SaasUser extends Model implements JWTSubject, Authenticatable
         'company_id',
         'email',
         'full_name',
+        'phone',
         'password',
         'role',
         'role_id',

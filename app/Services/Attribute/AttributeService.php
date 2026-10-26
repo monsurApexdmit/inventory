@@ -60,12 +60,14 @@ class AttributeService
             'name' => $data['name'] ?? null,
             'display_name' => $data['displayName'] ?? null,
             'option_type' => $data['optionType'] ?? 'text',
-            'values' => $data['values'] ?? null,
+            'values' => $this->encodeValues($data['values'] ?? null),
             'description' => $data['description'] ?? null,
             'is_required' => $data['isRequired'] ?? false,
             'status' => $data['status'] ?? true,
             'sort_order' => $data['sortOrder'] ?? 0,
         ];
+
+        $this->assertHasValues($dbData['option_type'], $dbData['values']);
 
         // Check for duplicate name
         if ($this->attributeRepository->existsByNameAndCompany($dbData['name'], $companyId)) {
@@ -97,7 +99,7 @@ class AttributeService
             $dbData['option_type'] = $data['optionType'];
         }
         if (isset($data['values'])) {
-            $dbData['values'] = $data['values'];
+            $dbData['values'] = $this->encodeValues($data['values']);
         }
         if (isset($data['description'])) {
             $dbData['description'] = $data['description'];
@@ -110,6 +112,13 @@ class AttributeService
         }
         if (isset($data['sortOrder'])) {
             $dbData['sort_order'] = $data['sortOrder'];
+        }
+
+        if (array_key_exists('values', $dbData) || isset($dbData['option_type'])) {
+            $this->assertHasValues(
+                $dbData['option_type'] ?? $attribute->option_type,
+                $dbData['values'] ?? $attribute->values,
+            );
         }
 
         // Check for duplicate name (excluding self)
@@ -153,5 +162,39 @@ class AttributeService
     public function bulkDelete(array $ids, int $companyId): int
     {
         return $this->attributeRepository->bulkDelete($ids, $companyId);
+    }
+
+    /** Choice-type attributes need at least one value; free-text may be empty. */
+    private function assertHasValues(string $optionType, ?string $encoded): void
+    {
+        if ($optionType === 'text') {
+            return;
+        }
+        $items = $encoded === null || trim($encoded) === '' ? [] : (str_starts_with(ltrim($encoded), '[')
+            ? (json_decode($encoded, true) ?: [])
+            : array_filter(array_map('trim', explode(',', $encoded)), fn ($v) => $v !== ''));
+        if (count($items) === 0) {
+            throw new HttpException(422, 'Add at least one value');
+        }
+    }
+
+    /** Strings stay as stored (legacy CSV); arrays become JSON with swatch objects normalised to {label,color}. */
+    private function encodeValues(string|array|null $values): ?string
+    {
+        if ($values === null || is_string($values)) {
+            return $values;
+        }
+
+        $out = [];
+        foreach ($values as $v) {
+            if (is_array($v)) {
+                $color = $v['color'] ?? $v['c'] ?? null;
+                $out[] = ['label' => trim($v['label']), 'color' => ($color === '' ? null : $color)];
+            } else {
+                $out[] = $v;
+            }
+        }
+
+        return json_encode($out, JSON_UNESCAPED_UNICODE);
     }
 }

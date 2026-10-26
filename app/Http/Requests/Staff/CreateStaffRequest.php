@@ -2,10 +2,15 @@
 
 namespace App\Http\Requests\Staff;
 
+use App\Models\Location;
+use App\Models\StaffRole;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CreateStaffRequest extends FormRequest
 {
+    public const STATUSES = ['Active', 'Invited', 'On leave', 'Inactive'];
+
     public function authorize(): bool
     {
         return true;
@@ -13,28 +18,24 @@ class CreateStaffRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'bank_account' => $this->bankAccount,
-            'payment_method' => $this->paymentMethod,
-            'joining_date' => $this->joiningDate,
-        ]);
+        StaffRequestRules::normalizeInput($this);
     }
 
     public function rules(): array
     {
-        return [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:staff,email',
-            'contact' => 'nullable|string|max:255',
-            'joining_date' => 'nullable|string|max:255',
-            'role' => 'nullable|string|max:255',
-            'status' => 'nullable|string|in:Active,Inactive',
-            'published' => 'nullable|boolean',
-            'avatar' => 'nullable|string',
-            'password' => 'nullable|string|min:8',
-            'salary' => 'nullable|numeric|min:0',
-            'bank_account' => 'nullable|string|max:255',
-            'payment_method' => 'nullable|string|in:Bank Transfer,Cash,Check',
-        ];
+        $companyId = (int) $this->attributes->get('auth_company_id');
+
+        return StaffRequestRules::rules($companyId, null, true);
+    }
+
+    public function messages(): array
+    {
+        return StaffRequestRules::messages();
+    }
+
+    public function withValidator($validator): void
+    {
+        $companyId = (int) $this->attributes->get('auth_company_id');
+        $validator->after(fn ($v) => StaffRequestRules::crossChecks($v, $this, $companyId));
     }
 }

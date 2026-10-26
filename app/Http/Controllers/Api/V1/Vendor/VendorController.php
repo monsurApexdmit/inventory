@@ -28,6 +28,43 @@ class VendorController extends Controller
         return $this->success($vendors);
     }
 
+    public function overview(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $filters = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'status' => 'nullable|in:all,Active,Inactive,Blocked,owe',
+            'sort' => 'nullable|in:purchased,owed,name,recent',
+            'page' => 'nullable|integer|min:1',
+            'limit' => 'nullable|integer|min:1|max:500',
+        ]);
+
+        return $this->success($this->vendorService->overview($companyId, $filters));
+    }
+
+    public function profile(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->vendorService->profile($id, $companyId));
+    }
+
+    public function pay(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->validate([
+            'amount' => 'required|numeric|gt:0',
+            'method' => 'nullable|string|max:50',
+            'note' => 'nullable|string|max:1000',
+            'date' => 'nullable|date',
+        ]);
+        $recordedBy = $request->attributes->get('auth_user_id');
+
+        $profile = $this->vendorService->recordPayment($id, $companyId, $data, $recordedBy ? (int) $recordedBy : null);
+
+        return $this->success($profile, 'Payment recorded successfully', 201);
+    }
+
     public function show(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');

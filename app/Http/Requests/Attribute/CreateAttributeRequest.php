@@ -16,8 +16,30 @@ class CreateAttributeRequest extends FormRequest
         return [
             'name' => 'required|string|max:100',
             'displayName' => 'required|string|max:150',
-            'optionType' => 'required|in:text,dropdown,radio,checkbox,color,size',
-            'values' => 'nullable|string',
+            'optionType' => 'required|in:text,dropdown,radio,checkbox,color,size,button,swatch',
+            'values' => ['nullable', function ($attr, $value, $fail) {
+                if (is_string($value)) {
+                    return;
+                }
+                if (!is_array($value)) {
+                    $fail('The values must be a string or an array.');
+                    return;
+                }
+                foreach ($value as $v) {
+                    if (is_string($v)) {
+                        continue;
+                    }
+                    if (!is_array($v) || !isset($v['label']) || !is_string($v['label']) || trim($v['label']) === '') {
+                        $fail('Each value must be a string or an object with a label.');
+                        return;
+                    }
+                    $color = $v['color'] ?? $v['c'] ?? null;
+                    if ($color !== null && $color !== '' && !(is_string($color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $color))) {
+                        $fail('Swatch colours must be in #RRGGBB format.');
+                        return;
+                    }
+                }
+            }],
             'description' => 'nullable|string',
             'isRequired' => 'nullable|boolean',
             'status' => 'nullable|boolean',

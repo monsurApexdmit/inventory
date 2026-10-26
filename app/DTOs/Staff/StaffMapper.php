@@ -38,6 +38,14 @@ class StaffMapper extends BaseMapper
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
             user: $model->relationLoaded('user') && $model->user ? $this->formatUser($model->user) : null,
+            staffRoleId: $model->staff_role_id ? (int) $model->staff_role_id : null,
+            nid: $model->nid,
+            emergencyContact: $model->emergency_contact,
+            loginMethod: $model->login_method ?: 'email',
+            hasPin: !empty($model->pin_hash),
+            locationIds: array_values(array_map('intval', $model->location_ids ?? [])),
+            lastActiveAt: $model->last_active_at?->toIso8601String(),
+            invitedAt: $model->invited_at?->toIso8601String(),
         );
     }
 

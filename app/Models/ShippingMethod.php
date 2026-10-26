@@ -13,8 +13,11 @@ class ShippingMethod extends Model
     protected $fillable = [
         'company_id',
         'name',
+        'type',
         'description',
+        'areas_covered',
         'price',
+        'express_rate',
         'estimated_days',
         'icon',
         'is_active',
@@ -23,6 +26,7 @@ class ShippingMethod extends Model
 
     protected $casts = [
         'price'     => 'float',
+        'express_rate' => 'float',
         'is_active' => 'boolean',
     ];
 

@@ -37,6 +37,7 @@ class ShippingAddressMapper extends BaseMapper
             addressType: $model->address_type,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
+            customerName: $model->relationLoaded('customer') ? $model->customer?->name : null,
         );
     }
 }

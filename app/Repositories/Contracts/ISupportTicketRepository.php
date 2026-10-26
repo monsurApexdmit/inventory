@@ -28,5 +28,7 @@ interface ISupportTicketRepository
 
     public function countByStatus(int $companyId): array;
 
+    public function markRead(int $id, int $companyId): void;
+
     public function delete(int $id, int $companyId): bool;
 }

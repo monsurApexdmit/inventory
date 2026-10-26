@@ -36,15 +36,17 @@ class SerialBatchController extends Controller
             'productId'   => 'required|integer|min:1',
             'variantId'   => 'nullable|integer|min:1',
             'locationId'  => 'nullable|integer|min:1',
+            'status'      => 'nullable|in:available,sold,returned,damaged',
             'serials'     => 'required|array|min:1',
             'serials.*.serialNumber'         => 'required|string|max:100',
+            'serials.*.status'               => 'nullable|in:available,sold,returned,damaged',
             'serials.*.purchaseOrderNumber'  => 'nullable|string|max:100',
             'serials.*.receivedDate'         => 'nullable|date',
             'serials.*.notes'                => 'nullable|string',
         ]);
 
-        $created = $this->service->createSerials($companyId, $data);
-        return $this->success($created, 'Serials added successfully', 201);
+        $result = $this->service->createSerials($companyId, $data);
+        return $this->success($result, 'Serials added successfully', 201);
     }
 
     public function updateSerial(Request $request, int $id): JsonResponse
@@ -108,7 +110,10 @@ class SerialBatchController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
 
         $data = $request->validate([
+            'productId'           => 'nullable|integer|min:1',
+            'variantId'           => 'nullable|integer|min:1',
             'locationId'          => 'nullable|integer|min:1',
+            'batchNumber'         => 'nullable|string|max:100',
             'quantityRemaining'   => 'nullable|integer|min:0',
             'manufactureDate'     => 'nullable|date',
             'expiryDate'          => 'nullable|date',

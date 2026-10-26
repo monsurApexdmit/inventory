@@ -44,17 +44,22 @@ class TailorController extends Controller
             'fabric_type'    => 'nullable|string|max:100',
             'color'          => 'nullable|string|max:100',
             'pattern'        => 'nullable|string|max:100',
-            'unit'           => 'nullable|in:goj,gaj',
+            'unit'           => 'nullable|in:goj,gaj,m',
             'purchase_price' => 'nullable|numeric|min:0',
             'selling_price'  => 'nullable|numeric|min:0',
             'stock_quantity' => 'nullable|numeric|min:0',
             'vendor_id'      => 'nullable|integer|exists:vendors,id',
             'image_path'     => 'nullable|string',
             'status'         => 'nullable|in:active,inactive',
+            'code'           => 'nullable|string|max:50',
+            'hex_color'      => 'nullable|string|max:20',
+            'reorder_level'  => 'nullable|numeric|min:0',
         ]);
         try {
             $fabric = $this->tailor->createFabric($this->companyId($request), $validated);
             return $this->success($fabric, 'Fabric created', 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             return $this->error('Failed to create fabric', 500);
         }
@@ -67,17 +72,22 @@ class TailorController extends Controller
             'fabric_type'    => 'nullable|string|max:100',
             'color'          => 'nullable|string|max:100',
             'pattern'        => 'nullable|string|max:100',
-            'unit'           => 'nullable|in:goj,gaj',
+            'unit'           => 'nullable|in:goj,gaj,m',
             'purchase_price' => 'nullable|numeric|min:0',
             'selling_price'  => 'nullable|numeric|min:0',
             'stock_quantity' => 'nullable|numeric|min:0',
             'vendor_id'      => 'nullable|integer|exists:vendors,id',
             'image_path'     => 'nullable|string',
             'status'         => 'nullable|in:active,inactive',
+            'code'           => 'nullable|string|max:50',
+            'hex_color'      => 'nullable|string|max:20',
+            'reorder_level'  => 'nullable|numeric|min:0',
         ]);
         try {
             $fabric = $this->tailor->updateFabric($this->companyId($request), $id, $validated);
             return $this->success($fabric, 'Fabric updated');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             return $this->error('Failed to update fabric', 500);
         }
@@ -88,6 +98,8 @@ class TailorController extends Controller
         try {
             $this->tailor->deleteFabric($this->companyId($request), $id);
             return $this->success(null, 'Fabric deleted');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return $this->error($e->getMessage(), $e->getStatusCode());
         } catch (\Exception $e) {
             return $this->error('Failed to delete fabric', 500);
         }
@@ -335,7 +347,7 @@ class TailorController extends Controller
     public function orderUpdateStatus(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
-            'status' => 'required|in:pending,measurement_taken,assigned,cutting,stitching,ready,delivered,cancelled',
+            'status' => 'required|in:pending,measurement_taken,assigned,cutting,stitching,trial,ready,delivered,cancelled',
             'note'   => 'nullable|string',
         ]);
         try {

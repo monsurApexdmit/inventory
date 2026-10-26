@@ -25,7 +25,14 @@ class ExpenseCategoryController extends Controller
 
         $categories = $this->expenseCategoryService->list($companyId, $filters);
 
-        return $this->success($categories);
+        // data keeps its original shape ({data,total,per_page,...}); the same pagination plus stats is mirrored in meta.
+        return $this->success($categories, 'Success', 200, [
+            'total' => $categories['total'],
+            'per_page' => $categories['per_page'],
+            'current_page' => $categories['current_page'],
+            'last_page' => $categories['last_page'],
+            'stats' => $categories['stats'],
+        ]);
     }
 
     public function show(Request $request, int $id): JsonResponse

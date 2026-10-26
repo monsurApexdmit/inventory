@@ -23,6 +23,11 @@ class Payment extends Model
         'invoice_url',
         'stripe_payment_id',
         'description',
+        'plan_name',
+        'billing_period',
+        'subtotal',
+        'tax_amount',
+        'billing_email',
     ];
 
     protected $casts = [

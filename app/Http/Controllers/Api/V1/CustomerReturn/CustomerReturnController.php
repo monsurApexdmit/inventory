@@ -21,27 +21,38 @@ class CustomerReturnController extends Controller
     public function index(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $filters = $request->query();
+        $result = $this->customerReturnService->list($companyId, $request->query());
 
-        $returns = $this->customerReturnService->list($companyId, $filters);
+        return $this->success($result['data'], 'Customer returns retrieved successfully', 200, [
+            'total'        => $result['total'],
+            'per_page'     => $result['per_page'],
+            'current_page' => $result['current_page'],
+            'last_page'    => $result['last_page'],
+            'counts'       => $result['counts'],
+            'stats'        => $result['stats'],
+        ]);
+    }
 
-        return $this->success($returns);
+    public function returnableOrders(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->customerReturnService->returnableOrders($companyId, $request->query()));
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->customerReturnService->get($id, $companyId);
 
-        return $this->success($dto->toArray());
+        return $this->success($this->customerReturnService->getFull($id, $companyId));
     }
 
     public function store(CreateCustomerReturnRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->customerReturnService->create($companyId, $request->validated());
+        $result = $this->customerReturnService->create($companyId, $request->validated());
 
-        return $this->success($dto->toArray(), 'Customer return created successfully', 201);
+        return $this->success($result, 'Customer return created successfully', 201);
     }
 
     public function update(UpdateCustomerReturnRequest $request, int $id): JsonResponse
@@ -55,17 +66,17 @@ class CustomerReturnController extends Controller
     public function approve(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->customerReturnService->approve($id, $companyId);
+        $result = $this->customerReturnService->approve($id, $companyId);
 
-        return $this->success($dto->toArray(), 'Customer return approved and inventory restocked successfully');
+        return $this->success($result, 'Customer return approved successfully');
     }
 
     public function reject(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->customerReturnService->reject($id, $companyId, $request->all());
+        $result = $this->customerReturnService->reject($id, $companyId, $request->all());
 
-        return $this->success($dto->toArray(), 'Customer return rejected successfully');
+        return $this->success($result, 'Customer return rejected successfully');
     }
 
     public function destroy(Request $request, int $id): JsonResponse

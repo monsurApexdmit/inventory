@@ -25,10 +25,15 @@ class CreateProductRequest extends FormRequest
             'salePrice' => 'sale_price',
             'offerPrice' => 'offer_price',
             'offerType' => 'offer_type',
+            'offerEndsAt' => 'offer_ends_at',
+            'wholesalePrice' => 'wholesale_price',
+            'minWholesaleQty' => 'min_wholesale_qty',
             'costPrice' => 'cost_price',
             'profitMargin' => 'profit_margin',
             'marginType' => 'margin_type',
             'receiptNumber' => 'receipt_number',
+            'availableInPos' => 'available_in_pos',
+            'visibleOnline' => 'visible_online',
         ];
 
         // Pass through fields that don't need conversion
@@ -46,6 +51,16 @@ class CreateProductRequest extends FormRequest
             } elseif ($this->has($snake)) {
                 $merged[$snake] = $this->input($snake);
             }
+        }
+
+        foreach (['available_in_pos', 'visible_online'] as $boolField) {
+            if (array_key_exists($boolField, $merged)) {
+                $merged[$boolField] = filter_var($merged[$boolField], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            }
+        }
+        if ($this->has('tag')) {
+            $t = trim((string) $this->input('tag'));
+            $merged['tag'] = $t === '' ? null : $t;
         }
 
         // Convert string "true"/"false" to boolean for published
@@ -79,6 +94,15 @@ class CreateProductRequest extends FormRequest
         }
     }
 
+    public function messages(): array
+    {
+        return [
+            'image.max' => 'You can upload at most 6 images per product.',
+            'image.*.mimes' => 'Images must be JPG, PNG or WEBP.',
+            'image.*.max' => 'Each image must be 5 MB or smaller.',
+        ];
+    }
+
     public function rules(): array
     {
         return [
@@ -93,6 +117,9 @@ class CreateProductRequest extends FormRequest
             'sale_price' => 'nullable|numeric|min:0',
             'offer_price' => 'nullable|numeric|min:0',
             'offer_type' => 'nullable|in:percentage,flat',
+            'offer_ends_at' => 'nullable|date',
+            'wholesale_price' => 'nullable|numeric|min:0',
+            'min_wholesale_qty' => 'nullable|integer|min:1',
             'cost_price' => 'nullable|numeric|min:0',
             'profit_margin' => 'nullable|numeric|min:0',
             'margin_type' => 'nullable|in:percentage,flat',
@@ -104,13 +131,16 @@ class CreateProductRequest extends FormRequest
             'is_hot_deal' => 'nullable',
             'is_best_seller' => 'nullable',
             'is_featured' => 'nullable',
+            'available_in_pos' => 'nullable|boolean',
+            'visible_online' => 'nullable|boolean',
+            'tag' => 'nullable|string|max:50',
             'deal_label' => 'nullable|string|max:50',
             'receipt_number' => 'nullable|string|max:100',
             'supplier_payment_status' => 'nullable|in:due,partial,paid',
             'supplier_paid_amount' => 'nullable|numeric|min:0',
             'supplier_payment_method' => 'nullable|string|max:50',
             'supplier_payment_date' => 'nullable|date',
-            'image' => 'nullable|array',
+            'image' => 'nullable|array|max:6',
             'image.*' => 'nullable|file|mimes:jpg,jpeg,png,webp,gif|max:5120',
             'variants' => 'nullable|array',
             'variants.*.name' => 'required_with:variants|string',
@@ -120,6 +150,10 @@ class CreateProductRequest extends FormRequest
             'variants.*.profit_margin' => 'nullable|numeric|min:0',
             'variants.*.margin_type' => 'nullable|in:percentage,flat',
             'variants.*.stock' => 'nullable|integer|min:0',
+            'variants.*.offer_price' => 'nullable|numeric|min:0',
+            'variants.*.offer_type' => 'nullable|in:percentage,flat',
+            'variants.*.wholesale_price' => 'nullable|numeric|min:0',
+            'variants.*.min_wholesale_qty' => 'nullable|integer|min:1',
             'variants.*.sku' => 'nullable|string|max:100',
             'variants.*.barcode' => 'nullable|string|max:100',
             'variants.*.attributes' => 'nullable',

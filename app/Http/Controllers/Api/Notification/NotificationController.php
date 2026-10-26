@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Notification;
 
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
+use App\Services\Notification\NotificationAlertService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,7 @@ class NotificationController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private readonly NotificationService $notificationService)
+    public function __construct(private readonly NotificationService $notificationService, private readonly NotificationAlertService $alerts)
     {
     }
 
@@ -26,6 +27,8 @@ class NotificationController extends Controller
 
         $filters = [
             'unread_only' => $request->query('status') === 'unread',
+            'read_only'   => $request->query('status') === 'read',
+            'sort'        => $request->query('sort') === 'oldest' ? 'oldest' : 'newest',
             'type'        => $request->query('type'),
             'per_page'    => (int) $request->query('limit', $request->query('per_page', 20)),
             'page'        => (int) $request->query('page', 1),
@@ -43,8 +46,35 @@ class NotificationController extends Controller
                 'currentPage'  => $result['current_page'],
                 'lastPage'     => $result['last_page'],
                 'unreadCount'  => $result['unreadCount'],
+                'counts'       => $result['counts'],
             ],
         ]);
+    }
+
+    /** GET /notifications/alerts: live alerts computed from data, minus this user's dismissals. */
+    public function alerts(Request $request): JsonResponse
+    {
+        $result = $this->alerts->list((int) $request->attributes->get('auth_company_id'), (int) $request->attributes->get('auth_user_id'));
+
+        return $this->success($result, 'Alerts retrieved');
+    }
+
+    /** POST /notifications/alerts/dismiss  body: { key } */
+    public function dismissAlert(Request $request): JsonResponse
+    {
+        $key = $request->validate(['key' => 'required|string|max:100'])['key'];
+        $this->alerts->dismiss((int) $request->attributes->get('auth_company_id'), (int) $request->attributes->get('auth_user_id'), $key);
+
+        return $this->success(null, 'Alert dismissed');
+    }
+
+    /** POST /notifications/alerts/restore  body: { key? }: bring back dismissed alerts. */
+    public function restoreAlerts(Request $request): JsonResponse
+    {
+        $key = $request->validate(['key' => 'nullable|string|max:100'])['key'] ?? null;
+        $this->alerts->restore((int) $request->attributes->get('auth_company_id'), (int) $request->attributes->get('auth_user_id'), $key);
+
+        return $this->success(null, 'Alerts restored');
     }
 
     /**
@@ -113,6 +143,11 @@ class NotificationController extends Controller
     public function bulkDelete(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
+        if ($request->boolean('all')) {
+            $this->notificationService->deleteAll($companyId);
+            return $this->success(null, 'Notifications deleted');
+        }
+
         $ids = $request->input('ids', []);
 
         if (empty($ids) || !is_array($ids)) {

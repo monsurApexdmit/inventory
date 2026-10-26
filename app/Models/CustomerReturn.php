@@ -24,14 +24,30 @@ class CustomerReturn extends Model
         'request_date',
         'processed_date',
         'refund_method',
+        'refunded_via',
         'notes',
         'processed_by',
+        'location_id',
+        'restock',
+        'subtotal',
+        'refund_amount',
+        'write_off_value',
+        'reason',
+        'rejection_reason',
+        'is_request',
+        'credited_to_customer',
     ];
 
     protected $casts = [
         'total_amount' => 'float',
         'request_date' => 'datetime',
         'processed_date' => 'datetime',
+        'restock' => 'boolean',
+        'is_request' => 'boolean',
+        'credited_to_customer' => 'boolean',
+        'subtotal' => 'float',
+        'refund_amount' => 'float',
+        'write_off_value' => 'float',
     ];
 
     public function company(): BelongsTo

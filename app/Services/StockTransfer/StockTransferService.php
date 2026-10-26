@@ -458,4 +458,17 @@ class StockTransferService
         $variant->stock = $totalStock;
         $variant->save();
     }
+
+    /**
+     * Reverse the stock movement of a single transfer line (no status change).
+     * Used by transfer documents; reuses the same reversal logic as cancelTransfer().
+     */
+    public function reverseLine(StockTransfer $transfer): void
+    {
+        if ($transfer->variant_id) {
+            $this->reverseVariantTransfer($transfer);
+        } else {
+            $this->reverseSimpleProductTransfer($transfer);
+        }
+    }
 }

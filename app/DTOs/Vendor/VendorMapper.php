@@ -42,6 +42,17 @@ class VendorMapper extends BaseMapper
                 'email' => $model->user->email,
             ] : null,
             poDueAmount: $poDueAmount,
+            contactPerson: $model->contact_person,
+            district: $model->district,
+            country: $model->country,
+            paymentTerms: $model->payment_terms,
+            openingBalance: (float) $model->opening_balance,
+            tin: $model->tin,
+            payTo: $model->pay_to,
+            accountNumber: $model->account_number,
+            notes: $model->notes,
+            leadTimeDays: $model->lead_time_days !== null ? (int) $model->lead_time_days : null,
+            safetyDays: $model->safety_days !== null ? (int) $model->safety_days : null,
         );
     }
 }

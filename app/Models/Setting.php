@@ -23,6 +23,8 @@ class Setting extends Model
         'regional_settings',
         'notification_settings',
         'store_hours',
+        'notification_preferences',
+        'sms_balance',
         'logo_url',
         'banner_url',
         'uploaded_by',
@@ -37,6 +39,7 @@ class Setting extends Model
         'regional_settings' => 'array',
         'notification_settings' => 'array',
         'store_hours' => 'array',
+        'notification_preferences' => 'array',
     ];
 
     public function company(): BelongsTo

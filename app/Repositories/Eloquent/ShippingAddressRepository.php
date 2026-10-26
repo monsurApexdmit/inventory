@@ -28,7 +28,21 @@ class ShippingAddressRepository implements IShippingAddressRepository
             $query->where('is_default', true);
         }
 
-        return $query->get()->all();
+        $search = trim((string) ($filters['search'] ?? $filters['q'] ?? ''));
+        if ($search !== '') {
+            $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('full_name', 'like', $like)
+                    ->orWhere('address_line1', 'like', $like)
+                    ->orWhere('address_line2', 'like', $like)
+                    ->orWhere('city', 'like', $like)
+                    ->orWhere('phone', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', $like));
+            });
+        }
+
+        return $query->orderByDesc('created_at')->orderByDesc('id')->get()->all();
     }
 
     public function findByIdAndCompany(int $id, int $companyId): ?ShippingAddress
@@ -56,12 +70,14 @@ class ShippingAddressRepository implements IShippingAddressRepository
         return (bool) $this->model->findOrFail($id)->delete();
     }
 
-    public function setDefault(int $id, int $customerId): ShippingAddress
+    public function setDefault(int $id, ?int $customerId): ShippingAddress
     {
         $address = $this->model->findOrFail($id);
 
         DB::transaction(function () use ($address, $customerId) {
-            $this->model->where('customer_id', $customerId)
+            // exactly one default per customer (customer-less addresses form one group per company)
+            $this->model->where('company_id', $address->company_id)
+                ->where('customer_id', $customerId)
                 ->where('is_default', true)
                 ->update(['is_default' => false]);
 

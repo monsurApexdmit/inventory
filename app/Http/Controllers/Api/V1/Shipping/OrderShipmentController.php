@@ -54,6 +54,23 @@ class OrderShipmentController extends Controller
         return $this->success($dto->toArray(), 'Tracking event added successfully');
     }
 
+    public function readyToShip(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        return $this->success($this->service->readyToShip($companyId, $request->query()));
+    }
+
+    public function recordCodPayment(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->validate([
+            'paymentMethod' => 'nullable|string|max:50',
+            'notes' => 'nullable|string|max:500',
+        ]);
+        $dto = $this->service->recordCodPayment($id, $companyId, $data);
+        return $this->success($dto->toArray(), 'COD payment recorded');
+    }
+
     public function stats(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');

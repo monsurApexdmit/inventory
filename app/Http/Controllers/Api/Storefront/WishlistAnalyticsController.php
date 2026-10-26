@@ -13,7 +13,10 @@ class WishlistAnalyticsController extends Controller
     // GET /api/wishlists/analytics
     public function analytics(Request $request): JsonResponse
     {
-        $companyId = $request->query('company_id');
+        // Tenant comes from the verified token; only a super admin may pick one via ?company_id.
+        $companyId = $request->attributes->get('auth_is_super_admin')
+            ? (int) $request->query('company_id')
+            : (int) $request->attributes->get('auth_company_id');
 
         $totalItems = Wishlist::where('company_id', $companyId)->count();
 

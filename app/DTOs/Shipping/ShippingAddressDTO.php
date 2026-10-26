@@ -26,6 +26,7 @@ class ShippingAddressDTO extends BaseDTO
         public readonly ?string $addressType,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly ?string $customerName = null,
     ) {}
 
     public function toArray(): array
@@ -47,6 +48,7 @@ class ShippingAddressDTO extends BaseDTO
             'addressType' => $this->addressType,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'customerName' => $this->customerName,
         ];
     }
 }

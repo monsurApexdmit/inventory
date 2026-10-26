@@ -16,6 +16,10 @@ class CreateExpenseCategoryRequest extends FormRequest
         return [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'color' => 'nullable|string|max:7',
+            'monthlyBudget' => 'nullable|numeric|min:0',
+            'type' => 'nullable|string|in:Operating cost,Cost of goods,Owner drawing,Tax / fees',
+            'status' => 'nullable|boolean',
         ];
     }
 }

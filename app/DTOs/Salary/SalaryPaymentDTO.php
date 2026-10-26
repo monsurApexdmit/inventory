@@ -22,6 +22,12 @@ class SalaryPaymentDTO extends BaseDTO
         public readonly string $createdAt,
         public readonly string $updatedAt,
         public readonly ?array $staff = null, // Nested staff info
+        public readonly ?float $baseAmount = null,
+        public readonly float $bonus = 0,
+        public readonly float $deduction = 0,
+        public readonly ?string $bonusNote = null,
+        public readonly ?string $deductionNote = null,
+        public readonly ?string $paymentMethod = null,
     ) {}
 
     /**
@@ -41,6 +47,12 @@ class SalaryPaymentDTO extends BaseDTO
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
             'staff' => $this->staff,
+            'baseAmount' => $this->baseAmount,
+            'bonus' => $this->bonus,
+            'deduction' => $this->deduction,
+            'bonusNote' => $this->bonusNote,
+            'deductionNote' => $this->deductionNote,
+            'paymentMethod' => $this->paymentMethod,
         ];
     }
 }

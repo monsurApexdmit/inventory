@@ -52,6 +52,7 @@ class SerialBatchMapper
             notes: $model->notes,
             isExpired: $model->isExpired(),
             isExpiringSoon: $model->isExpiringSoon(),
+            status: $model->isExpired() ? 'expired' : ($model->isExpiringSoon() ? 'soon' : 'ok'),
             createdAt: $model->created_at->toIso8601String(),
             updatedAt: $model->updated_at->toIso8601String(),
         );

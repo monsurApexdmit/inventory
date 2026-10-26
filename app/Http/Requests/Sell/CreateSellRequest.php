@@ -29,16 +29,27 @@ class CreateSellRequest extends FormRequest
             'shippingPostalCode' => 'nullable|string|max:20',
             'shippingCountry' => 'nullable|string|max:100',
             'shippingAddressType' => 'nullable|string|max:50',
-            'method' => 'nullable|string|in:Cash,Card,Online,COD',
+            'method' => 'nullable|string|in:Cash,Card,Online,COD,bKash,Nagad,Bank',
+            'registerSessionId' => 'nullable|integer|min:1',
             'source' => 'nullable|string|in:pos,storefront,manual',
+            'locationId' => 'nullable|integer|min:1',
             'amount' => 'nullable|numeric|min:0',
             'shippingCost' => 'nullable|numeric|min:0',
             'shippingMethod' => 'nullable|string|max:100',
             'couponId' => 'nullable|integer|exists:coupons,id',
             'couponCode' => 'nullable|string|max:100',
             'discount' => 'nullable|numeric|min:0',
-            'status' => 'nullable|string|in:Pending,Processing,Delivered',
+            'manualDiscount' => 'nullable|numeric|min:0', // discount excluding the coupon's
+            'status' => 'nullable|string|in:Pending,Processing,Packed,Shipped,Delivered',
+            'courier' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
+            'paidAmount' => 'nullable|numeric|min:0',
+            'paymentTransactionId' => 'nullable|string|max:100',
+            'transactionId' => 'nullable|string|max:100',
+            'zoneName' => 'nullable|string|max:150',
+            'deliveryNote' => 'nullable|string|max:1000',
+            'taxRate' => 'nullable|numeric|min:0|max:100',
+            'taxAmount' => 'nullable|numeric|min:0',
             'items' => 'nullable|array',
             'items.*.productId' => 'nullable|integer',
             'items.*.variantId' => 'nullable|integer',
@@ -48,6 +59,7 @@ class CreateSellRequest extends FormRequest
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unitPrice' => 'required|numeric|min:0',
             'items.*.price' => 'nullable|numeric|min:0', // alias for unitPrice
+            'items.*.discount' => 'nullable|numeric|min:0', // per-line discount amount
         ];
     }
 
@@ -57,8 +69,8 @@ class CreateSellRequest extends FormRequest
             'customerName.required' => 'Customer name is required',
             'items.*.quantity.required' => 'Item quantity is required and must be at least 1',
             'items.*.unitPrice.required' => 'Item unit price is required',
-            'method.in' => 'Payment method must be one of: Cash, Card, Online',
-            'status.in' => 'Status must be one of: Pending, Processing, Delivered',
+            'method.in' => 'Payment method must be one of: Cash, Card, Online, COD, bKash, Nagad, Bank',
+            'status.in' => 'Status must be one of: Pending, Processing, Packed, Shipped, Delivered',
         ];
     }
 }

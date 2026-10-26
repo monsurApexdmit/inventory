@@ -29,7 +29,10 @@ class ShippingMethodController extends Controller
 
         $data = $request->validate([
             'name'           => 'required|string|max:255',
+            'type'           => 'sometimes|in:delivery,pickup',
             'description'    => 'nullable|string|max:500',
+            'areas_covered'  => 'nullable|string|max:1000',
+            'express_rate'   => 'nullable|numeric|min:0',
             'price'          => 'required|numeric|min:0',
             'estimated_days' => 'nullable|string|max:100',
             'icon'           => 'nullable|string|max:50',
@@ -46,7 +49,10 @@ class ShippingMethodController extends Controller
 
         $data = $request->validate([
             'name'           => 'sometimes|string|max:255',
+            'type'           => 'sometimes|in:delivery,pickup',
             'description'    => 'nullable|string|max:500',
+            'areas_covered'  => 'nullable|string|max:1000',
+            'express_rate'   => 'nullable|numeric|min:0',
             'price'          => 'sometimes|numeric|min:0',
             'estimated_days' => 'nullable|string|max:100',
             'icon'           => 'nullable|string|max:50',

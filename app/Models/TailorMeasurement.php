@@ -18,6 +18,7 @@ class TailorMeasurement extends Model
         'chest', 'waist', 'hip', 'shoulder', 'sleeve', 'length',
         'neck', 'bottom_length', 'inseam', 'pajama_waist', 'pajama_length',
         'custom_fields', 'notes', 'measured_at',
+        'label', 'unit', 'fit_preference', 'values', 'history',
     ];
 
     protected $casts = [
@@ -33,6 +34,8 @@ class TailorMeasurement extends Model
         'pajama_waist'   => 'float',
         'pajama_length'  => 'float',
         'custom_fields'  => 'array',
+        'values'         => 'array',
+        'history'        => 'array',
         'measured_at'    => 'date',
     ];
 

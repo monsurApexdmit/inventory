@@ -15,7 +15,9 @@ class CreateBrandRequest extends FormRequest
     {
         return [
             'brandName' => 'required|string|max:150',
-            'logo'      => 'nullable|string|max:255',
+            'logo'      => 'nullable|string|max:255|url:http,https',
+            'website'   => 'nullable|string|max:255|url:http,https',
+            'description' => 'nullable|string|max:5000',
             'status'    => 'nullable|boolean',
         ];
     }

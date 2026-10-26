@@ -16,6 +16,10 @@ class StaffRoleDTO extends BaseDTO
         public readonly array $permissions,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly ?string $description = null,
+        public readonly bool $locked = false,
+        public readonly int $memberCount = 0,
+        public readonly array $sensitive = [],
     ) {}
 
     public function toArray(): array
@@ -27,6 +31,10 @@ class StaffRoleDTO extends BaseDTO
             'permissions' => $this->permissions,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'description' => $this->description,
+            'locked' => $this->locked,
+            'memberCount' => $this->memberCount,
+            'sensitive' => $this->sensitive,
         ];
     }
 }

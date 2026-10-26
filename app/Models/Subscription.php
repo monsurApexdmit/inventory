@@ -16,6 +16,8 @@ class Subscription extends Model
         'company_id',
         'plan_id',
         'status',
+        'billing_period',
+        'cancel_reason',
         'current_period_start',
         'current_period_end',
         'next_billing_date',

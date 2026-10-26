@@ -15,6 +15,9 @@ class CreateSubscriptionRequest extends FormRequest
     {
         return [
             'planId' => 'required|integer|exists:subscription_plans,id',
+            'billingPeriod' => 'nullable|in:monthly,yearly',
+            'paymentMethod' => 'nullable|in:card,bkash,bank',
+            'billingEmail' => 'nullable|email|max:255',
         ];
     }
 }

@@ -17,12 +17,16 @@ class RolePermission extends Model
         'permission_id',
         'read',
         'write',
+        'create',
+        'edit',
         'delete',
     ];
 
     protected $casts = [
         'read' => 'boolean',
         'write' => 'boolean',
+        'create' => 'boolean',
+        'edit' => 'boolean',
         'delete' => 'boolean',
     ];
 

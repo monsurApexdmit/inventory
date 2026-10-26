@@ -39,22 +39,48 @@ class UpdateCouponRequest extends FormRequest
             // If neither exists in the request, don't add to merged (field not being updated)
         }
 
+        $m = [];
+        // appliesTo + categoryIds/productIds -> applicable_to_* (comma separated ids)
+        $csv = fn ($v) => is_array($v) ? (count($v) ? implode(',', array_map('intval', $v)) : null) : (($v === '' || $v === null) ? null : (string) $v);
+        $applies = $this->input('appliesTo');
+        if ($applies !== null) {
+            $m['applies_to'] = $applies;
+            $m['applicable_to_categories'] = $applies === 'categories' ? $csv($this->input('categoryIds')) : null;
+            $m['applicable_to_products'] = $applies === 'products' ? $csv($this->input('productIds')) : null;
+        } else {
+            if ($this->has('categoryIds')) $m['applicable_to_categories'] = $csv($this->input('categoryIds'));
+            if ($this->has('productIds')) $m['applicable_to_products'] = $csv($this->input('productIds'));
+        }
+        foreach (['channelPos' => 'channel_pos', 'channelOnline' => 'channel_online', 'oncePerCustomer' => 'once_per_customer'] as $camel => $snake) {
+            if ($this->has($camel)) $m[$snake] = $this->input($camel);
+        }
+        $merged = $m + $merged;
+
         if (!empty($merged)) {
             $this->merge($merged);
         }
+    }
+
+    public function messages(): array
+    {
+        return [
+            'code.regex' => 'Use letters, numbers, dashes and underscores only',
+            'usage_limit.integer' => 'Total uses must be a whole number',
+            'usage_limit_per_user.integer' => 'Uses per customer must be a whole number',
+        ];
     }
 
     public function rules(): array
     {
         return [
             'campaign_name' => 'sometimes|nullable|string|min:3|max:200',
-            'code' => 'sometimes|nullable|string|min:3|max:50|alpha_num',
+            'code' => ['sometimes', 'nullable', 'string', 'min:3', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/'],
             'discount' => 'sometimes|nullable|numeric|min:0.01',
             'type' => 'sometimes|nullable|in:percentage,fixed,free_shipping',
             'start_date' => 'sometimes|nullable|date',
             'end_date' => 'sometimes|nullable|date',
             'status' => 'sometimes|nullable|boolean',
-            'usage_limit' => 'sometimes|nullable|integer|min:1',
+            'usage_limit' => 'sometimes|nullable|integer|min:1|max:100000000',
             'usage_limit_per_user' => 'sometimes|nullable|integer|min:1',
             'min_order_amount' => 'sometimes|nullable|numeric|min:0',
             'max_discount' => 'sometimes|nullable|numeric|min:0',
@@ -64,6 +90,10 @@ class UpdateCouponRequest extends FormRequest
             'stackable' => 'sometimes|nullable|boolean',
             'auto_apply' => 'sometimes|nullable|boolean',
             'priority' => 'sometimes|nullable|integer|min:0',
+            'applies_to' => 'sometimes|nullable|in:all,categories,products',
+            'channel_pos' => 'sometimes|nullable|boolean',
+            'channel_online' => 'sometimes|nullable|boolean',
+            'once_per_customer' => 'sometimes|nullable|boolean',
         ];
     }
 }

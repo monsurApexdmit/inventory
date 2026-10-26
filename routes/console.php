@@ -6,3 +6,6 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+\Illuminate\Support\Facades\Schedule::command('expenses:generate-recurring')->daily();
+\Illuminate\Support\Facades\Schedule::command('notifications:daily-summary')->dailyAt('06:00');

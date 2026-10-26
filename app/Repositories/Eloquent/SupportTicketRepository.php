@@ -17,6 +17,7 @@ class SupportTicketRepository implements ISupportTicketRepository
     public function findByCompany(int $companyId, array $filters): LengthAwarePaginator
     {
         $query = $this->model->where('company_id', $companyId)
+            ->withCount('messages')
             ->with(['customer', 'messages' => fn($q) => $q->latest()->limit(1)->with('attachments')]);
 
         if (!empty($filters['status'])) {
@@ -28,6 +29,9 @@ class SupportTicketRepository implements ISupportTicketRepository
         if (!empty($filters['category'])) {
             $query->where('category', $filters['category']);
         }
+        if (!empty($filters['unread'])) {
+            $query->where('admin_unread', true);
+        }
         if (!empty($filters['search'])) {
             $s = $filters['search'];
             $query->where(fn($q) => $q
@@ -35,11 +39,13 @@ class SupportTicketRepository implements ISupportTicketRepository
                 ->orWhere('ticket_number', 'like', "%{$s}%")
                 ->orWhere('customer_email', 'like', "%{$s}%")
                 ->orWhere('customer_name', 'like', "%{$s}%")
+                // description = the customer's messages on the ticket
+                ->orWhereHas('messages', fn($m) => $m->where('body', 'like', "%{$s}%"))
             );
         }
 
-        $query->orderBy('created_at', 'desc');
-        $perPage = min($filters['per_page'] ?? 20, 100);
+        $query->orderBy('updated_at', 'desc')->orderBy('id', 'desc');
+        $perPage = min((int) ($filters['per_page'] ?? 20), 100);
 
         return $query->paginate($perPage);
     }
@@ -96,7 +102,7 @@ class SupportTicketRepository implements ISupportTicketRepository
 
     public function updateStatus(int $id, int $companyId, string $status): bool
     {
-        $extra = $status === 'resolved' ? ['resolved_at' => now()] : [];
+        $extra = in_array($status, ['resolved', 'closed'], true) ? ['resolved_at' => now()] : [];
         return (bool) $this->model
             ->where('id', $id)
             ->where('company_id', $companyId)
@@ -113,13 +119,20 @@ class SupportTicketRepository implements ISupportTicketRepository
 
     public function addMessage(int $ticketId, ?string $body, string $senderType, ?int $customerId, ?string $senderName): SupportMessage
     {
-        return $this->messageModel->create([
+        $message = $this->messageModel->create([
             'ticket_id'   => $ticketId,
             'body'        => $body,
             'sender_type' => $senderType,
             'customer_id' => $customerId,
             'sender_name' => $senderName,
         ]);
+        $this->model->where('id', $ticketId)->update(
+            $senderType === 'customer'
+                ? ['updated_at' => now(), 'admin_unread' => true]
+                : ['updated_at' => now(), 'admin_unread' => false, 'last_read_at' => now()]
+        );
+
+        return $message;
     }
 
     public function countByStatus(int $companyId): array
@@ -136,7 +149,14 @@ class SupportTicketRepository implements ISupportTicketRepository
             'resolved'    => $counts['resolved']     ?? 0,
             'closed'      => $counts['closed']       ?? 0,
             'total'       => array_sum($counts),
+            'unread'      => $this->model->where('company_id', $companyId)->where('admin_unread', true)->count(),
         ];
+    }
+
+    public function markRead(int $id, int $companyId): void
+    {
+        $this->model->where('id', $id)->where('company_id', $companyId)->where('admin_unread', true)
+            ->update(['admin_unread' => false, 'last_read_at' => now()]);
     }
 
     public function delete(int $id, int $companyId): bool

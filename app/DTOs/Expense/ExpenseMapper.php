@@ -41,11 +41,21 @@ class ExpenseMapper extends BaseMapper
             category: $model->relationLoaded('category') && $model->category ? [
                 'id' => $model->category->id,
                 'name' => $model->category->name,
+                'color' => $model->category->color,
             ] : null,
             vendor: $model->relationLoaded('vendor') && $model->vendor ? [
                 'id' => $model->vendor->id,
                 'name' => $model->vendor->name,
             ] : null,
+            locationId: $model->location_id,
+            locationName: $model->relationLoaded('location') ? $model->location?->name : null,
+            paidTo: $model->paid_to,
+            nextDueDate: $model->next_due_date?->format('Y-m-d'),
+            source: $model->source ?: 'manual',
+            locked: ($model->source ?? 'manual') === 'salary',
+            categoryName: $model->relationLoaded('category') ? $model->category?->name : null,
+            categoryColor: $model->relationLoaded('category') ? $model->category?->color : null,
+            vendorName: $model->relationLoaded('vendor') ? $model->vendor?->name : null,
         );
     }
 }

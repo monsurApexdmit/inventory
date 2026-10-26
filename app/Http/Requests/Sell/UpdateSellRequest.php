@@ -24,6 +24,10 @@ class UpdateSellRequest extends FormRequest
             'discount' => 'sometimes|nullable|numeric|min:0',
             'status' => 'sometimes|nullable|string|in:Pending,Processing,Delivered',
             'notes' => 'sometimes|nullable|string',
+            'transactionId' => 'sometimes|nullable|string|max:100',
+            'zoneName' => 'sometimes|nullable|string|max:150',
+            'courier' => 'sometimes|nullable|string|max:100',
+            'deliveryNote' => 'sometimes|nullable|string|max:1000',
         ];
     }
 }

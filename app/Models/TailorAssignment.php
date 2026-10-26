@@ -17,12 +17,17 @@ class TailorAssignment extends Model
         'company_id', 'order_id', 'dorji_id',
         'assigned_date', 'expected_completion',
         'dorji_charge', 'work_status', 'admin_notes',
+        'task', 'pieces', 'rate_per_piece', 'paid_amount', 'completed_at',
     ];
 
     protected $casts = [
         'assigned_date'       => 'date',
         'expected_completion' => 'date',
         'dorji_charge'        => 'float',
+        'rate_per_piece'      => 'float',
+        'paid_amount'         => 'float',
+        'pieces'              => 'integer',
+        'completed_at'        => 'datetime',
     ];
 
     public function order(): BelongsTo

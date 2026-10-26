@@ -25,6 +25,10 @@ class SubscriptionDTO extends BaseDTO
         public readonly ?string $cancelledAt,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly ?string $cancelReason = null,
+        public readonly bool $isTrial = false,
+        public readonly int $periodPrice = 0,
+        public readonly int $daysRemaining = 0,
     ) {}
 
     public function toArray(): array
@@ -45,6 +49,10 @@ class SubscriptionDTO extends BaseDTO
             'cancelledAt' => $this->cancelledAt,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'cancelReason' => $this->cancelReason,
+            'isTrial' => $this->isTrial,
+            'periodPrice' => $this->periodPrice,
+            'daysRemaining' => $this->daysRemaining,
         ];
     }
 }

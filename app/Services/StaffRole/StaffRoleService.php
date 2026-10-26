@@ -15,6 +15,7 @@ class StaffRoleService
     public function __construct(
         private readonly IStaffRoleRepository $staffRoleRepository,
         private readonly IRolePermissionRepository $rolePermissionRepository,
+        private readonly RoleMatrixService $matrixService,
     ) {
         $this->mapper = new StaffRoleMapper();
     }
@@ -39,9 +40,14 @@ class StaffRoleService
 
     public function create(int $companyId, array $data): StaffRoleDTO
     {
+        if (strtolower(trim($data['name'])) === 'owner') {
+            throw new HttpException(422, '"Owner" is a reserved role name.');
+        }
+
         $role = $this->staffRoleRepository->create([
             'company_id' => $companyId,
             'name' => $data['name'],
+            'description' => $data['description'] ?? null,
         ]);
 
         if (isset($data['permissions']) && is_array($data['permissions'])) {
@@ -49,6 +55,8 @@ class StaffRoleService
                 'permission_id' => $perm['permissionId'],
                 'read' => $perm['read'] ?? false,
                 'write' => $perm['write'] ?? false,
+                'create' => $perm['create'] ?? null,
+                'edit' => $perm['edit'] ?? null,
                 'delete' => $perm['delete'] ?? false,
             ], $data['permissions']);
             $this->rolePermissionRepository->createMany($role->id, $permissions);
@@ -65,8 +73,17 @@ class StaffRoleService
             throw new HttpException(404, 'Staff role not found');
         }
 
-        if (isset($data['name'])) {
-            $this->staffRoleRepository->update($id, ['name' => $data['name']]);
+        if ($role->isLocked()) {
+            throw new HttpException(422, 'The Owner role always has full access and can’t be changed.');
+        }
+
+        if (isset($data['name']) && strtolower(trim($data['name'])) === 'owner') {
+            throw new HttpException(422, '"Owner" is a reserved role name.');
+        }
+
+        $roleUpdate = array_intersect_key($data, array_flip(['name', 'description']));
+        if ($roleUpdate) {
+            $this->staffRoleRepository->update($id, $roleUpdate);
         }
 
         if (isset($data['permissions']) && is_array($data['permissions'])) {
@@ -75,6 +92,8 @@ class StaffRoleService
                 'permission_id' => $perm['permissionId'],
                 'read' => $perm['read'] ?? false,
                 'write' => $perm['write'] ?? false,
+                'create' => $perm['create'] ?? null,
+                'edit' => $perm['edit'] ?? null,
                 'delete' => $perm['delete'] ?? false,
             ], $data['permissions']);
             $this->rolePermissionRepository->createMany($id, $permissions);
@@ -90,6 +109,8 @@ class StaffRoleService
         if (!$role) {
             throw new HttpException(404, 'Staff role not found');
         }
+
+        $this->matrixService->assertDeletable($role);
 
         $this->staffRoleRepository->delete($id);
     }

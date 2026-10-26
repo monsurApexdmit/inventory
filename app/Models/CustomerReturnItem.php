@@ -12,6 +12,8 @@ class CustomerReturnItem extends Model
 
     protected $fillable = [
         'return_id',
+        'sell_item_id',
+        'unit_cost',
         'product_id',
         'product_name',
         'variant_id',
@@ -24,6 +26,7 @@ class CustomerReturnItem extends Model
     protected $casts = [
         'quantity' => 'integer',
         'price' => 'float',
+        'unit_cost' => 'float',
     ];
 
     public function return(): BelongsTo

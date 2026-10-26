@@ -15,6 +15,7 @@ class TailorPayment extends Model
     protected $fillable = [
         'company_id', 'order_id', 'amount',
         'payment_method', 'payment_date', 'reference', 'notes',
+        'kind', 'dorji_id', 'payment_type', 'created_by',
     ];
 
     protected $casts = [

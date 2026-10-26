@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Team;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Team\InviteTeamMemberRequest;
+use App\Http\Requests\Team\UpdateTeamMemberRequest;
 use App\Http\Requests\Team\UpdateTeamMemberRoleRequest;
 use App\Http\Traits\ApiResponse;
 use App\Services\Team\TeamService;
@@ -52,7 +53,7 @@ class TeamController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
         $actorId = (int) $request->attributes->get('auth_user_id');
         $validated = $request->validated();
-        $result = $this->teamService->updateRole($userId, $companyId, $actorId, $validated['role']);
+        $result = $this->teamService->updateRole($userId, $companyId, $actorId, $validated['role'] ?? null, isset($validated['roleId']) ? (int) $validated['roleId'] : null);
 
         return $this->success($result);
     }
@@ -65,5 +66,47 @@ class TeamController extends Controller
         $this->teamService->remove($userId, $companyId, $actorId);
 
         return $this->success(['message' => 'Team member removed']);
+    }
+
+    public function update(UpdateTeamMemberRequest $request, int $userId): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $actorId = (int) $request->attributes->get('auth_user_id');
+
+        return $this->success(
+            $this->teamService->update($userId, $companyId, $actorId, $request->validated()),
+            'Team member updated'
+        );
+    }
+
+    public function setStatus(Request $request, int $userId): JsonResponse
+    {
+        $request->validate(['status' => 'required|in:active,inactive']);
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $actorId = (int) $request->attributes->get('auth_user_id');
+
+        return $this->success(
+            $this->teamService->setStatus($userId, $companyId, $actorId, $request->input('status')),
+            'Team member status updated'
+        );
+    }
+
+    public function updateInvitation(UpdateTeamMemberRequest $request, int $invitationId): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success(
+            $this->teamService->updateInvitation($invitationId, $companyId, $request->validated()),
+            'Invitation updated'
+        );
+    }
+
+    public function revokeInvitation(Request $request, int $invitationId): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        $this->teamService->revokeInvitation($invitationId, $companyId);
+
+        return $this->success(['message' => 'Invitation revoked']);
     }
 }

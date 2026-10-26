@@ -13,9 +13,19 @@ class ProductRepository implements IProductRepository
 
     public function findByCompany(int $companyId, array $filters): mixed
     {
-        $query = $this->model
-            ->where('company_id', $companyId)
-            ->with([
+        $query = $this->filteredQuery($companyId, $filters, true);
+        $limit = $filters['limit'] ?? 15;
+
+        return $query->paginate($limit);
+    }
+
+    /** Company products narrowed by every list filter except the stock-state tab. */
+    public function filteredQuery(int $companyId, array $filters, bool $withRelations = false): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = $this->model->newQuery()->where('company_id', $companyId);
+
+        if ($withRelations) {
+            $query->with([
                 'category',
                 'unit',
                 'brand',
@@ -28,29 +38,50 @@ class ProductRepository implements IProductRepository
                 'bundleItems.product',
                 'bundleItems.variant',
             ]);
-
-        if (isset($filters['search'])) {
-            $query->where('name', 'like', '%' . $filters['search'] . '%');
         }
 
-        if (isset($filters['published'])) {
-            $query->where('published', (bool) $filters['published']);
+        $search = trim((string) ($filters['search'] ?? ''));
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('name', 'like', $like)
+                    ->orWhere('sku', 'like', $like)
+                    ->orWhere('barcode', 'like', $like)
+                    ->orWhereHas('vendor', fn ($v) => $v->where('name', 'like', $like))
+                    ->orWhereHas('variants', fn ($v) => $v->where('sku', 'like', $like)->orWhere('barcode', 'like', $like));
+            });
         }
 
-        if (isset($filters['category_id'])) {
-            $query->where('category_id', $filters['category_id']);
+        if (isset($filters['published']) && $filters['published'] !== '') {
+            $query->where('published', filter_var($filters['published'], FILTER_VALIDATE_BOOLEAN));
         }
 
-        if (isset($filters['location_id'])) {
+        $categoryId = $filters['category_id'] ?? $filters['categoryId'] ?? null;
+        if ($categoryId !== null && $categoryId !== '') {
+            $categoryId === 'none' ? $query->whereNull('category_id') : $query->where('category_id', (int) $categoryId);
+        }
+
+        $brandId = $filters['brandId'] ?? $filters['brand_id'] ?? null;
+        if ($brandId !== null && $brandId !== '') {
+            $brandId === 'none' ? $query->whereNull('brand_id') : $query->where('brand_id', (int) $brandId);
+        }
+
+        $supplierId = $filters['supplierId'] ?? $filters['vendor_id'] ?? $filters['vendorId'] ?? null;
+        if ($supplierId !== null && $supplierId !== '') {
+            $supplierId === 'none' ? $query->whereNull('vendor_id') : $query->where('vendor_id', (int) $supplierId);
+        }
+
+        // Legacy filter: products whose home location matches (POS). The warehouse used to
+        // evaluate stock is the camelCase `locationId`, handled by ProductService.
+        if (isset($filters['location_id']) && $filters['location_id'] !== '') {
             $query->where('location_id', $filters['location_id']);
         }
 
-        if (isset($filters['vendor_id'])) {
-            $query->where('vendor_id', $filters['vendor_id']);
+        if (isset($filters['pos']) && filter_var($filters['pos'], FILTER_VALIDATE_BOOLEAN)) {
+            $query->where('available_in_pos', true);
         }
 
-        $limit = $filters['limit'] ?? 15;
-        return $query->paginate($limit);
+        return $query;
     }
 
     public function findByIdAndCompany(int $id, int $companyId): ?Product

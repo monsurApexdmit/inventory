@@ -7,6 +7,7 @@ use App\DTOs\Company\CompanyMapper;
 use App\Repositories\Contracts\ICompanyRepository;
 use App\Repositories\Contracts\ICompanySettingsRepository;
 use App\Repositories\Contracts\ISubscriptionRepository;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CompanyService
@@ -82,8 +83,8 @@ class CompanyService
                 'taxId' => '',
                 'taxIdType' => '',
                 'taxRate' => 0.0,
-                'currency' => 'USD',
-                'timezone' => 'UTC',
+                'currency' => 'BDT',
+                'timezone' => 'Asia/Dhaka',
                 'language' => 'en',
                 'currencySymbolPosition' => 'before',
                 'currencyDecimalSeparator' => '.',
@@ -93,6 +94,11 @@ class CompanyService
                 'dimensionUnit' => 'cm',
                 'dateFormat' => 'MM/DD/YYYY',
                 'timeFormat' => '12h',
+                'numberFormat' => 'lakh',
+                'accentName' => null,
+                'brandPrimaryColor' => null,
+                'brandAccentColor' => null,
+                'brandBackgroundColor' => null,
             ];
         }
 
@@ -102,8 +108,8 @@ class CompanyService
             'taxId' => $settings->tax_id ?? '',
             'taxIdType' => $settings->tax_id_type ?? '',
             'taxRate' => (float) ($settings->tax_rate ?? 0),
-            'currency' => $settings->currency ?? 'USD',
-            'timezone' => $settings->timezone ?? 'UTC',
+            'currency' => $settings->currency ?? 'BDT',
+            'timezone' => $settings->timezone ?? 'Asia/Dhaka',
             'language' => $settings->language ?? 'en',
         ];
 
@@ -117,6 +123,11 @@ class CompanyService
         $result['dimensionUnit'] = $settings->getAttribute('dimension_unit') ?? 'cm';
         $result['dateFormat'] = $settings->getAttribute('date_format') ?? 'MM/DD/YYYY';
         $result['timeFormat'] = $settings->getAttribute('time_format') ?? '12h';
+        $result['numberFormat'] = $settings->getAttribute('number_format') ?? 'lakh';
+        $result['accentName'] = $settings->getAttribute('accent_name');
+        $result['brandPrimaryColor'] = $settings->getAttribute('brand_primary_color');
+        $result['brandAccentColor'] = $settings->getAttribute('brand_accent_color');
+        $result['brandBackgroundColor'] = $settings->getAttribute('brand_background_color');
 
         return $result;
     }
@@ -126,18 +137,15 @@ class CompanyService
         // Get existing settings to check which columns exist in the database
         $existing = $this->companySettingsRepository->findByCompanyId($companyId);
 
-        // Check which international settings columns exist in the database
-        $hasInternationalColumns = false;
-        if ($existing) {
-            $existingAttributes = $existing->getAttributes();
-            $hasInternationalColumns = isset($existingAttributes['currency_symbol_position']);
-        }
+        // International settings columns may not exist on very old databases
+        $hasInternationalColumns = Schema::hasColumn('company_settings', 'currency_symbol_position');
+        $hasNumberFormat = Schema::hasColumn('company_settings', 'number_format');
 
         // Prepare update data - convert camelCase to snake_case
         $updateData = [];
 
-        if (isset($data['taxId'])) {
-            $updateData['tax_id'] = $data['taxId'];
+        if (array_key_exists('taxId', $data)) {
+            $updateData['tax_id'] = $data['taxId']; // null clears it
         } elseif ($existing) {
             $updateData['tax_id'] = $existing->tax_id;
         }
@@ -159,7 +167,7 @@ class CompanyService
         } elseif ($existing) {
             $updateData['currency'] = $existing->currency;
         } else {
-            $updateData['currency'] = 'USD';
+            $updateData['currency'] = 'BDT';
         }
 
         if (isset($data['timezone'])) {
@@ -167,7 +175,7 @@ class CompanyService
         } elseif ($existing) {
             $updateData['timezone'] = $existing->timezone;
         } else {
-            $updateData['timezone'] = 'UTC';
+            $updateData['timezone'] = 'Asia/Dhaka';
         }
 
         if (isset($data['language'])) {
@@ -198,8 +206,9 @@ class CompanyService
                 }
             }
 
-            if (isset($data['currencyThousandsSeparator'])) {
-                $updateData['currency_thousands_separator'] = $data['currencyThousandsSeparator'];
+            if (array_key_exists('currencyThousandsSeparator', $data)) {
+                // '' (None) arrives as null after empty-string normalisation
+                $updateData['currency_thousands_separator'] = $data['currencyThousandsSeparator'] ?? '';
             } elseif ($existing) {
                 $val = $existing->getAttribute('currency_thousands_separator');
                 if ($val !== null) {
@@ -250,6 +259,26 @@ class CompanyService
                 if ($val !== null) {
                     $updateData['time_format'] = $val;
                 }
+            }
+        }
+
+        if ($hasNumberFormat) {
+            if (isset($data['numberFormat'])) {
+                $updateData['number_format'] = $data['numberFormat'];
+            } elseif ($existing && $existing->getAttribute('number_format') !== null) {
+                $updateData['number_format'] = $existing->getAttribute('number_format');
+            }
+        }
+
+        // Appearance (server-stored accent + storefront brand colours)
+        foreach (['accentName' => 'accent_name', 'brandPrimaryColor' => 'brand_primary_color', 'brandAccentColor' => 'brand_accent_color', 'brandBackgroundColor' => 'brand_background_color'] as $key => $col) {
+            if (!Schema::hasColumn('company_settings', $col)) {
+                continue;
+            }
+            if (array_key_exists($key, $data) && $data[$key] !== null) {
+                $updateData[$col] = $data[$key];
+            } elseif ($existing && $existing->getAttribute($col) !== null) {
+                $updateData[$col] = $existing->getAttribute($col);
             }
         }
 

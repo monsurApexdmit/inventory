@@ -20,6 +20,9 @@ class SupportTicketDTO extends BaseDTO
         public readonly ?string $resolvedAt,
         public readonly string  $createdAt,
         public readonly array   $messages,
+        public readonly ?string $updatedAt = null,
+        public readonly int     $messageCount = 0,
+        public readonly bool    $adminUnread = false,
     ) {}
 
     public function toArray(): array
@@ -38,6 +41,9 @@ class SupportTicketDTO extends BaseDTO
             'resolvedAt'    => $this->resolvedAt,
             'createdAt'     => $this->createdAt,
             'messages'      => $this->messages,
+            'updatedAt'     => $this->updatedAt,
+            'messageCount'  => $this->messageCount,
+            'adminUnread'   => $this->adminUnread,
         ];
     }
 }

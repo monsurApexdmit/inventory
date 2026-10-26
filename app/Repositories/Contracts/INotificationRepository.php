@@ -30,4 +30,10 @@ interface INotificationRepository
     public function deleteOld(int $companyId, int $keepDays): int;
 
     public function countUnread(int $companyId): int;
+
+    public function categoryCounts(int $companyId, array $filters): array;
+
+    public function allIds(int $companyId): array;
+
+    public function deleteAll(int $companyId): int;
 }

@@ -16,6 +16,7 @@ class StaffRoleRepository implements IStaffRoleRepository
         return $this->model
             ->where('company_id', $companyId)
             ->with('permissions.permission')
+            ->withCount('staff')
             ->get()
             ->all();
     }
@@ -26,6 +27,7 @@ class StaffRoleRepository implements IStaffRoleRepository
             ->where('id', $id)
             ->where('company_id', $companyId)
             ->with('permissions.permission')
+            ->withCount('staff')
             ->first();
     }
 

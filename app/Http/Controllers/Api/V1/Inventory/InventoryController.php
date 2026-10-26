@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Inventory;
 
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApiResponse;
+use App\Services\Inventory\InventoryOverviewService;
 use App\Services\Inventory\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,8 @@ class InventoryController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private readonly InventoryService $inventoryService)
+    public function __construct(private readonly InventoryService $inventoryService,
+        private readonly InventoryOverviewService $overviewService)
     {
     }
 
@@ -55,5 +57,18 @@ class InventoryController extends Controller
             ]);
             return $this->error('Failed to retrieve inventory', 500);
         }
+    }
+
+    /** GET /inventory/overview — SKU-level stock overview with health, stats and counts */
+    public function overview(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        if (!$companyId) {
+            return $this->error('Company ID not found in context', 401);
+        }
+
+        $result = $this->overviewService->overview($companyId, $request->query());
+
+        return $this->success($result, 'Inventory overview retrieved successfully');
     }
 }

@@ -29,6 +29,11 @@ class CompanySettings extends Model
         'dimension_unit',
         'date_format',
         'time_format',
+        'number_format',
+        'accent_name',
+        'brand_primary_color',
+        'brand_accent_color',
+        'brand_background_color',
     ];
 
     public function company(): BelongsTo

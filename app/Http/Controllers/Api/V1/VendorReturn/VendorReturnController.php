@@ -21,27 +21,38 @@ class VendorReturnController extends Controller
     public function index(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $filters = $request->query();
+        $result = $this->vendorReturnService->list($companyId, $request->query());
 
-        $returns = $this->vendorReturnService->list($companyId, $filters);
+        return $this->success($result['data'], 'Vendor returns retrieved successfully', 200, [
+            'total'        => $result['total'],
+            'per_page'     => $result['per_page'],
+            'current_page' => $result['current_page'],
+            'last_page'    => $result['last_page'],
+            'counts'       => $result['counts'],
+            'stats'        => $result['stats'],
+        ]);
+    }
 
-        return $this->success($returns);
+    public function returnableItems(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->vendorReturnService->returnableItems($companyId, $request->query()));
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->vendorReturnService->get($id, $companyId);
 
-        return $this->success($dto->toArray());
+        return $this->success($this->vendorReturnService->getFull($id, $companyId));
     }
 
     public function store(CreateVendorReturnRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->vendorReturnService->create($companyId, $request->validated());
+        $result = $this->vendorReturnService->create($companyId, $request->validated());
 
-        return $this->success($dto->toArray(), 'Vendor return created successfully', 201);
+        return $this->success($result, 'Vendor return created successfully', 201);
     }
 
     public function update(UpdateVendorReturnRequest $request, int $id): JsonResponse
@@ -55,9 +66,27 @@ class VendorReturnController extends Controller
     public function updateStatus(UpdateVendorReturnRequest $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $dto = $this->vendorReturnService->updateStatus($id, $companyId, $request->validated());
+        $result = $this->vendorReturnService->updateStatus($id, $companyId, $request->validated());
 
-        return $this->success($dto->toArray(), 'Vendor return status updated successfully');
+        return $this->success($result, 'Vendor return status updated successfully');
+    }
+
+    public function addAttachments(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => 'file|mimes:jpg,jpeg,png,webp,gif,pdf|max:5120',
+        ]);
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->vendorReturnService->addAttachments($id, $companyId, $request->file('files')), 'Photos uploaded');
+    }
+
+    public function removeAttachment(Request $request, int $id, int $attachmentId): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->vendorReturnService->removeAttachment($id, $attachmentId, $companyId), 'Attachment removed');
     }
 
     public function destroy(Request $request, int $id): JsonResponse

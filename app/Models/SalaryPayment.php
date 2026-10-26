@@ -23,11 +23,19 @@ class SalaryPayment extends Model
         'payment_method',
         'notes',
         'remarks',
+        'base_amount',
+        'bonus',
+        'deduction',
+        'bonus_note',
+        'deduction_note',
     ];
 
     protected $casts = [
         'amount' => 'float',
         'paid_amount' => 'float',
+        'base_amount' => 'float',
+        'bonus' => 'float',
+        'deduction' => 'float',
         'payment_date' => 'datetime',
     ];
 

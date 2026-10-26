@@ -25,10 +25,15 @@ class UpdateProductRequest extends FormRequest
             'salePrice' => 'sale_price',
             'offerPrice' => 'offer_price',
             'offerType' => 'offer_type',
+            'offerEndsAt' => 'offer_ends_at',
+            'wholesalePrice' => 'wholesale_price',
+            'minWholesaleQty' => 'min_wholesale_qty',
             'costPrice' => 'cost_price',
             'profitMargin' => 'profit_margin',
             'marginType' => 'margin_type',
             'receiptNumber' => 'receipt_number',
+            'availableInPos' => 'available_in_pos',
+            'visibleOnline' => 'visible_online',
         ];
 
         // Pass through fields that don't need conversion
@@ -46,6 +51,16 @@ class UpdateProductRequest extends FormRequest
             } elseif ($this->has($snake)) {
                 $merged[$snake] = $this->input($snake);
             }
+        }
+
+        foreach (['available_in_pos', 'visible_online'] as $boolField) {
+            if (array_key_exists($boolField, $merged)) {
+                $merged[$boolField] = filter_var($merged[$boolField], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            }
+        }
+        if ($this->has('tag')) {
+            $t = trim((string) $this->input('tag'));
+            $merged['tag'] = $t === '' ? null : $t;
         }
 
         // Convert string "true"/"false" to boolean for published
@@ -78,6 +93,15 @@ class UpdateProductRequest extends FormRequest
         }
     }
 
+    public function messages(): array
+    {
+        return [
+            'image.max' => 'You can upload at most 6 images per product.',
+            'image.*.mimes' => 'Images must be JPG, PNG or WEBP.',
+            'image.*.max' => 'Each image must be 5 MB or smaller.',
+        ];
+    }
+
     public function rules(): array
     {
         return [
@@ -92,6 +116,9 @@ class UpdateProductRequest extends FormRequest
             'sale_price' => 'sometimes|nullable|numeric|min:0',
             'offer_price' => 'sometimes|nullable|numeric|min:0',
             'offer_type' => 'sometimes|nullable|in:percentage,flat',
+            'offer_ends_at' => 'sometimes|nullable|date',
+            'wholesale_price' => 'sometimes|nullable|numeric|min:0',
+            'min_wholesale_qty' => 'sometimes|nullable|integer|min:1',
             'cost_price' => 'sometimes|nullable|numeric|min:0',
             'profit_margin' => 'sometimes|nullable|numeric|min:0',
             'margin_type' => 'sometimes|nullable|in:percentage,flat',
@@ -103,9 +130,12 @@ class UpdateProductRequest extends FormRequest
             'is_hot_deal' => 'sometimes|nullable',
             'is_best_seller' => 'sometimes|nullable',
             'is_featured' => 'sometimes|nullable',
+            'available_in_pos' => 'sometimes|nullable|boolean',
+            'visible_online' => 'sometimes|nullable|boolean',
+            'tag' => 'sometimes|nullable|string|max:50',
             'deal_label' => 'sometimes|nullable|string|max:50',
             'receipt_number' => 'sometimes|nullable|string|max:100',
-            'image' => 'sometimes|nullable|array',
+            'image' => 'sometimes|nullable|array|max:6',
             'image.*' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:5120',
             'variants' => 'sometimes|nullable|array',
             'variants.*.name' => 'required_with:variants|string',
@@ -115,6 +145,10 @@ class UpdateProductRequest extends FormRequest
             'variants.*.profit_margin' => 'nullable|numeric|min:0',
             'variants.*.margin_type' => 'nullable|in:percentage,flat',
             'variants.*.stock' => 'nullable|integer|min:0',
+            'variants.*.offer_price' => 'nullable|numeric|min:0',
+            'variants.*.offer_type' => 'nullable|in:percentage,flat',
+            'variants.*.wholesale_price' => 'nullable|numeric|min:0',
+            'variants.*.min_wholesale_qty' => 'nullable|integer|min:1',
             'variants.*.sku' => 'nullable|string|max:100',
             'variants.*.barcode' => 'nullable|string|max:100',
             'variants.*.attributes' => 'nullable',

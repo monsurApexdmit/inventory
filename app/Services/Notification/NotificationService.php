@@ -26,11 +26,22 @@ class NotificationService
     public const TYPE_SUPPORT_TICKET       = 'support_ticket';
     public const TYPE_SUPPORT_MESSAGE      = 'support_message';
     public const TYPE_PRODUCT_REVIEW       = 'product_review';
+    public const TYPE_PAYMENT_REMINDER     = 'payment_reminder';
     public const TYPE_BATCH_EXPIRY         = 'batch_expiry';
+    public const TYPE_STAFF_INVITED        = 'staff_invited';
+    public const TYPE_PAYROLL              = 'payroll';
+    public const TYPE_STOCK_ADJUSTMENT     = 'stock_adjustment';
+    public const TYPE_PAYMENT_RECEIVED     = 'payment_received';
+    public const TYPE_PO_RECEIVED          = 'po_received';
+    public const TYPE_TAILOR_READY         = 'tailor_ready';
+    public const TYPE_DAILY_SUMMARY        = 'daily_summary';
 
     private readonly NotificationMapper $mapper;
 
-    public function __construct(private readonly INotificationRepository $repository)
+    public function __construct(
+        private readonly INotificationRepository $repository,
+        private readonly NotificationPreferenceService $preferences,
+    )
     {
         $this->mapper = new NotificationMapper();
     }
@@ -47,6 +58,7 @@ class NotificationService
         return [
             'data'         => $data,
             'unreadCount'  => $this->repository->countUnread($companyId),
+            'counts'       => $this->repository->categoryCounts($companyId, $filters),
             'total'        => $paginator->total(),
             'per_page'     => $paginator->perPage(),
             'current_page' => $paginator->currentPage(),
@@ -141,6 +153,21 @@ class NotificationService
         }
     }
 
+    public function deleteAll(int $companyId): int
+    {
+        $ids = $this->repository->allIds($companyId);
+        $count = $this->repository->deleteAll($companyId);
+        if ($ids !== []) {
+            $this->dispatchBroadcast(new NotificationsDeleted(
+                companyId: $companyId,
+                action: 'bulk_delete',
+                notificationIds: $ids,
+                unreadCount: 0,
+            ));
+        }
+        return $count;
+    }
+
     public function deleteOld(int $companyId, int $keepDays = 30): array
     {
         $count = $this->repository->deleteOld($companyId, $keepDays);
@@ -151,7 +178,7 @@ class NotificationService
 
     public function notifyOrderPlaced(int $companyId, string $invoiceNo, string $customerName, float $amount): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_ORDER_PLACED,
             'New Order Received',
@@ -164,7 +191,7 @@ class NotificationService
 
     public function notifyOrderStatusChanged(int $companyId, string $invoiceNo, string $oldStatus, string $newStatus): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_ORDER_STATUS_CHANGED,
             'Order Status Updated',
@@ -177,7 +204,7 @@ class NotificationService
 
     public function notifyLowStock(int $companyId, string $productName, int $currentQty, int $threshold): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_LOW_STOCK,
             'Low Stock Alert',
@@ -190,7 +217,7 @@ class NotificationService
 
     public function notifyStaffJoined(int $companyId, string $staffName, string $role): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_STAFF_JOINED,
             'New Staff Member',
@@ -201,9 +228,35 @@ class NotificationService
         $this->broadcastCreatedNotification($notification);
     }
 
+    public function notifyStaffInviteResent(int $companyId, string $staffName, ?string $email): void
+    {
+        $notification = $this->createGated(
+            $companyId,
+            self::TYPE_STAFF_INVITED,
+            'Invite resent',
+            "Invite resent to {$staffName}" . ($email ? " ({$email})" : ''),
+            ['staffName' => $staffName, 'email' => $email]
+        );
+
+        $this->broadcastCreatedNotification($notification);
+    }
+
+    public function notifySalaryPaid(int $companyId, string $staffName, string $amountText, string $monthLabel): void
+    {
+        $notification = $this->createGated(
+            $companyId,
+            self::TYPE_PAYROLL,
+            'Salary paid',
+            "Salary paid to {$staffName} · {$amountText} ({$monthLabel})",
+            ['staffName' => $staffName, 'amount' => $amountText, 'month' => $monthLabel]
+        );
+
+        $this->broadcastCreatedNotification($notification);
+    }
+
     public function notifyCouponUsed(int $companyId, string $couponCode, string $invoiceNo): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_COUPON_USED,
             'Coupon Applied',
@@ -216,7 +269,7 @@ class NotificationService
 
     public function notifyReturnRequested(int $companyId, string $invoiceNo, string $customerName): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_RETURN_REQUESTED,
             'Return Requested',
@@ -229,7 +282,7 @@ class NotificationService
 
     public function notifyStockTransfer(int $companyId, string $fromLocation, string $toLocation, int $itemCount): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_STOCK_TRANSFER,
             'Stock Transfer Created',
@@ -240,11 +293,25 @@ class NotificationService
         $this->broadcastCreatedNotification($notification);
     }
 
+    public function notifyLargeAdjustment(int $companyId, string $number, string $productName, string $locationName, int $delta, string $reason, ?int $movementId = null): void
+    {
+        $signed = $delta > 0 ? "+{$delta}" : (string) $delta;
+        $notification = $this->createGated(
+            $companyId,
+            self::TYPE_STOCK_ADJUSTMENT,
+            'Large stock adjustment',
+            "{$number}: {$productName} adjusted {$signed} at {$locationName} ({$reason})",
+            ['adjustmentNo' => $number, 'adjustmentId' => $movementId, 'productName' => $productName, 'locationName' => $locationName, 'delta' => $delta, 'reason' => $reason]
+        );
+
+        $this->broadcastCreatedNotification($notification);
+    }
+
     public function notifySupportTicketCreated(int $companyId, string $ticketNumber, string $subject, ?string $customerName = null, ?int $ticketId = null): void
     {
         $name = $customerName ?: 'A customer';
 
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_SUPPORT_TICKET,
             'New Support Ticket',
@@ -264,7 +331,7 @@ class NotificationService
     {
         $name = $senderName ?: 'A customer';
 
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_SUPPORT_MESSAGE,
             'Support Reply Received',
@@ -290,7 +357,7 @@ class NotificationService
     ): void {
         $name = $customerName ?: 'A customer';
 
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_PRODUCT_REVIEW,
             'New Product Review',
@@ -307,8 +374,94 @@ class NotificationService
         $this->broadcastCreatedNotification($notification);
     }
 
-    private function broadcastCreatedNotification(Notification $notification): void
+    public function notifyPaymentReminder(int $companyId, string $customerName, string $amountText, string $channel, int $customerId, string $message, float $due): void
     {
+        $notification = $this->createGated(
+            $companyId,
+            self::TYPE_PAYMENT_REMINDER,
+            "Reminder sent to {$customerName} ({$amountText} due)",
+            $message,
+            ['partyType' => 'customer', 'partyId' => $customerId, 'channel' => $channel, 'amount' => $due]
+        );
+
+        $this->broadcastCreatedNotification($notification);
+    }
+
+    /** In-app only; never throws so it cannot break the payment that triggered it. */
+    public function notifyPaymentReceived(int $companyId, string $reference, string $party, string $amountText, string $method): void
+    {
+        $this->safely(fn () => $this->createGated(
+            $companyId, self::TYPE_PAYMENT_RECEIVED, 'Payment received',
+            "{$amountText} received from {$party} for {$reference} ({$method})",
+            ['reference' => $reference, 'customerName' => $party, 'amount' => $amountText, 'method' => $method]
+        ));
+    }
+
+    public function notifyPurchaseOrderReceived(int $companyId, string $poNumber, string $vendorName, bool $complete): void
+    {
+        $this->safely(fn () => $this->createGated(
+            $companyId, self::TYPE_PO_RECEIVED,
+            $complete ? 'Purchase order received' : 'Purchase order partially received',
+            $complete ? "{$poNumber} from {$vendorName} was received into stock" : "Part of {$poNumber} from {$vendorName} was received into stock",
+            ['poNumber' => $poNumber, 'vendorName' => $vendorName, 'complete' => $complete]
+        ));
+    }
+
+    public function notifyTailorOrderReady(int $companyId, string $orderNumber, string $customerName): void
+    {
+        $this->safely(fn () => $this->createGated(
+            $companyId, self::TYPE_TAILOR_READY, 'Tailor order ready',
+            "Tailor order {$orderNumber} for {$customerName} is ready for pickup",
+            ['orderNumber' => $orderNumber, 'customerName' => $customerName]
+        ));
+    }
+
+    public function notifyDailySummary(int $companyId, string $message, array $data): bool
+    {
+        return $this->safely(fn () => $this->createGated($companyId, self::TYPE_DAILY_SUMMARY, 'Daily summary', $message, $data)) !== null;
+    }
+
+    private function safely(\Closure $fn): ?Notification
+    {
+        try {
+            $n = $fn();
+            $this->broadcastCreatedNotification($n);
+
+            return $n;
+        } catch (\Throwable $e) {
+            Log::warning('Notification create failed: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /** Create a notification unless the company switched this event off for the in-app channel. */
+    private function createGated(int $companyId, string $type, string $title, string $message, ?array $data = null): ?Notification
+    {
+        try {
+            if (!$this->preferences->appEnabled($companyId, $type)) {
+                return null;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Notification preference check failed: '.$e->getMessage());
+        }
+
+        return $this->repository->create($companyId, $type, $title, $message, $data);
+    }
+
+    private function broadcastCreatedNotification(?Notification $notification): void
+    {
+        if ($notification === null) {
+            return;
+        }
+        try {
+            // Quiet hours: keep the record in the bell list but don't push it live.
+            if ($this->preferences->inQuietHours($notification->company_id)) {
+                return;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Quiet hours check failed: '.$e->getMessage());
+        }
         $dto = $this->mapper->toDTO($notification);
         $this->dispatchBroadcast(new NotificationCreated(
             companyId: $dto->companyId,
@@ -333,7 +486,7 @@ class NotificationService
 
     public function notifyExpiringBatch(int $companyId, string $batchNumber, string $productName, string $expiryDate, int $qty): void
     {
-        $notification = $this->repository->create(
+        $notification = $this->createGated(
             $companyId,
             self::TYPE_BATCH_EXPIRY,
             'Batch Expiring Soon',

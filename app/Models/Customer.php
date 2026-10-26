@@ -28,12 +28,31 @@ class Customer extends Model
         'status',
         'notes',
         'store_credit',
+        'type',
+        'business_name',
+        'licence_bin',
+        'customer_group',
+        'credit_limit',
+        'opening_balance',
+        'birthday',
+        'tags',
+        'sms_opt_in',
+        'district',
+        'area',
     ];
+
+    /** Auto discount (percent) applied to sales for customers in the VIP group. */
+    public const VIP_DISCOUNT_PERCENT = 5;
 
     protected $hidden = ['password'];
 
     protected $casts = [
         'store_credit' => 'float',
+        'credit_limit' => 'float',
+        'opening_balance' => 'float',
+        'tags' => 'array',
+        'sms_opt_in' => 'boolean',
+        'birthday' => 'date:Y-m-d',
     ];
 
     public function company(): BelongsTo

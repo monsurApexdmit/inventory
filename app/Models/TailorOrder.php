@@ -18,9 +18,9 @@ class TailorOrder extends Model
     protected $fillable = [
         'company_id', 'order_number', 'tracking_token', 'customer_id',
         'order_date', 'delivery_date',
-        'stitching_charge', 'extra_charge', 'discount',
+        'stitching_charge', 'extra_charge', 'discount', 'is_urgent', 'urgent_fee',
         'total_amount', 'paid_amount', 'due_amount',
-        'payment_status', 'order_status', 'notes',
+        'payment_status', 'order_status', 'notes', 'fabric_deducted', 'dorji_id',
     ];
 
     protected $attributes = [
@@ -37,6 +37,9 @@ class TailorOrder extends Model
         'stitching_charge' => 'float',
         'extra_charge'     => 'float',
         'discount'         => 'float',
+        'is_urgent'        => 'boolean',
+        'fabric_deducted'  => 'boolean',
+        'urgent_fee'       => 'float',
         'total_amount'     => 'float',
         'paid_amount'      => 'float',
         'due_amount'       => 'float',
@@ -71,7 +74,7 @@ class TailorOrder extends Model
     public function recalculate(): void
     {
         $fabricCost        = $this->items->sum(fn($i) => $i->fabric_quantity * $i->fabric_unit_price);
-        $this->total_amount = $fabricCost + $this->stitching_charge + $this->extra_charge - $this->discount;
+        $this->total_amount = $fabricCost + $this->stitching_charge + $this->extra_charge + (float) $this->urgent_fee - $this->discount;
         $this->due_amount   = max(0, $this->total_amount - $this->paid_amount);
 
         if ($this->paid_amount <= 0) {
