@@ -9,6 +9,7 @@ use App\Models\Sell;
 use App\Repositories\Contracts\IDuePaymentRepository;
 use App\Repositories\Contracts\IPurchaseOrderRepository;
 use App\Repositories\Contracts\ISellRepository;
+use App\Services\Notification\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -28,6 +29,7 @@ class DuePaymentService
         private readonly IDuePaymentRepository $repository,
         private readonly ISellRepository $sellRepository,
         private readonly IPurchaseOrderRepository $purchaseOrderRepository,
+        private readonly NotificationService $notifications,
     ) {
         $this->mapper = new DuePaymentMapper();
     }
@@ -49,11 +51,18 @@ class DuePaymentService
             throw new HttpException(404, ucfirst(rtrim($payableType, 's')) . ' not found');
         }
 
+        if ($payable instanceof PurchaseOrder && $payable->status === 'cancelled') {
+            throw new HttpException(422, 'Cannot record a payment on a cancelled purchase order');
+        }
+        if (!empty($data['payment_date']) && \Carbon\Carbon::parse($data['payment_date'])->gt(now()->addDay()->endOfDay())) {
+            throw new HttpException(422, 'Payment date cannot be in the future.');
+        }
+
         $totalField = $modelClass === Sell::class ? 'amount' : 'total_amount';
         $amount = (float) $data['amount'];
         $newTotalPaid = (float) $payable->paid_amount + $amount;
 
-        if ($newTotalPaid > (float) $payable->{$totalField}) {
+        if (round($newTotalPaid, 2) > round((float) $payable->{$totalField}, 2)) {
             throw new HttpException(422, 'Payment amount exceeds the outstanding due amount');
         }
 
@@ -75,6 +84,16 @@ class DuePaymentService
 
             return $payment;
         });
+
+        if ($direction === 'in') {
+            $this->notifications->notifyPaymentReceived(
+                $companyId,
+                (string) ($payable->invoice_no ?? ('#' . $payable->id)),
+                (string) ($payable->customer_name ?: 'a customer'),
+                \App\Support\Money::format($companyId, (float) $amount),
+                (string) ($data['payment_method'] ?? 'cash')
+            );
+        }
 
         return $this->mapper->toDTO($duePayment);
     }

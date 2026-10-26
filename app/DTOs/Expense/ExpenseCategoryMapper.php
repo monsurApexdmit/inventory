@@ -27,6 +27,17 @@ class ExpenseCategoryMapper extends BaseMapper
             description: $model->description,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
+            color: $model->color,
+            monthlyBudget: $model->monthly_budget !== null ? (float) $model->monthly_budget : null,
+            type: $model->type ?: 'Operating cost',
+            status: (bool) ($model->status ?? true),
+            system: $model->isSystem(),
+            usage: $model->getAttribute('spent_this_month') !== null ? [
+                'spentThisMonth' => (float) $model->getAttribute('spent_this_month'),
+                'countThisMonth' => (int) $model->getAttribute('count_this_month'),
+                'allTimeSpent' => (float) $model->getAttribute('all_time_spent'),
+                'allTimeCount' => (int) $model->getAttribute('all_time_count'),
+            ] : null,
         );
     }
 }

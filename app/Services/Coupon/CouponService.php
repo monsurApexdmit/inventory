@@ -70,20 +70,7 @@ class CouponService
      */
     public function create(int $companyId, array $data): CouponDTO
     {
-        // Validate date range
-        if ($data['end_date'] <= $data['start_date']) {
-            throw new HttpException(400, 'End date must be after start date');
-        }
-
-        // Check code uniqueness within company
-        $exists = Coupon::where('company_id', $companyId)
-            ->where('code', $data['code'])
-            ->whereNull('deleted_at')
-            ->exists();
-
-        if ($exists) {
-            throw new HttpException(400, 'Coupon code already exists for this company');
-        }
+        $this->assertRules($companyId, $data, null);
 
         $data['company_id'] = $companyId;
         // Set defaults for optional boolean fields
@@ -92,6 +79,10 @@ class CouponService
         $data['stackable'] = $data['stackable'] ?? false;
         $data['auto_apply'] = $data['auto_apply'] ?? false;
         $data['min_order_amount'] = $data['min_order_amount'] ?? 0;
+        $data['channel_pos'] = $data['channel_pos'] ?? true;
+        $data['channel_online'] = $data['channel_online'] ?? true;
+        $data['once_per_customer'] = $data['once_per_customer'] ?? false;
+        unset($data['applies_to']);
 
         return DB::transaction(function () use ($data) {
             $coupon = Coupon::create($data);
@@ -104,22 +95,7 @@ class CouponService
      */
     public function createWithImage(int $companyId, array $data, $imageFile): CouponDTO
     {
-        // Validate date range using Carbon for proper date comparison
-        $startDate = \Carbon\Carbon::parse($data['start_date']);
-        $endDate = \Carbon\Carbon::parse($data['end_date']);
-        if ($endDate->lte($startDate)) {
-            throw new HttpException(400, 'End date must be after start date');
-        }
-
-        // Check code uniqueness
-        $exists = Coupon::where('company_id', $companyId)
-            ->where('code', $data['code'])
-            ->whereNull('deleted_at')
-            ->exists();
-
-        if ($exists) {
-            throw new HttpException(400, 'Coupon code already exists for this company');
-        }
+        $this->assertRules($companyId, $data, null);
 
         $data['company_id'] = $companyId;
         // Set defaults for optional boolean fields
@@ -128,6 +104,10 @@ class CouponService
         $data['stackable'] = $data['stackable'] ?? false;
         $data['auto_apply'] = $data['auto_apply'] ?? false;
         $data['min_order_amount'] = $data['min_order_amount'] ?? 0;
+        $data['channel_pos'] = $data['channel_pos'] ?? true;
+        $data['channel_online'] = $data['channel_online'] ?? true;
+        $data['once_per_customer'] = $data['once_per_customer'] ?? false;
+        unset($data['applies_to']);
 
         return DB::transaction(function () use ($data, $imageFile) {
             // Save image
@@ -152,30 +132,27 @@ class CouponService
             throw new HttpException(404, 'Coupon not found');
         }
 
-        // Filter out only null values (NOT false, 0, or empty string)
-        $data = array_filter($data, fn($value) => !is_null($value));
-
-        // Validate date range if dates are provided
-        if (isset($data['start_date']) && isset($data['end_date'])) {
-            $startDate = Carbon::parse($data['start_date']);
-            $endDate = Carbon::parse($data['end_date']);
-            if ($endDate->lte($startDate)) {
-                throw new HttpException(400, 'End date must be after start date');
+        // Filter out only null values (NOT false, 0, or empty string).
+        // When appliesTo was sent, explicit nulls for the scope columns mean "clear".
+        $clearScope = [];
+        if (array_key_exists('applies_to', $data)) {
+            foreach (['applicable_to_categories', 'applicable_to_products'] as $col) {
+                if (array_key_exists($col, $data) && $data[$col] === null) {
+                    $clearScope[$col] = null;
+                }
             }
         }
-
-        // Check code uniqueness if code is being changed
-        if (isset($data['code']) && $data['code'] !== $coupon->code) {
-            $exists = Coupon::where('company_id', $companyId)
-                ->where('code', $data['code'])
-                ->where('id', '!=', $id)
-                ->whereNull('deleted_at')
-                ->exists();
-
-            if ($exists) {
-                throw new HttpException(400, 'Coupon code already exists for this company');
+        // Optional limits may be cleared explicitly (end date => "No end", limits => unlimited).
+        $clearNullable = [];
+        foreach (['end_date', 'usage_limit', 'usage_limit_per_user', 'max_discount'] as $col) {
+            if (array_key_exists($col, $data) && $data[$col] === null) {
+                $clearNullable[$col] = null;
             }
         }
+        $data = array_filter($data, fn($value) => !is_null($value)) + $clearScope + $clearNullable;
+        unset($data['applies_to']);
+
+        $this->assertRules($companyId, $data, $coupon);
 
         if (!empty($data)) {
             $coupon->update($data);
@@ -198,27 +175,7 @@ class CouponService
         // Filter out only null values (NOT false, 0, or empty string)
         $data = array_filter($data, fn($value) => !is_null($value));
 
-        // Validate date range if dates are provided
-        if (isset($data['start_date']) && isset($data['end_date'])) {
-            $startDate = \Carbon\Carbon::parse($data['start_date']);
-            $endDate = \Carbon\Carbon::parse($data['end_date']);
-            if ($endDate->lte($startDate)) {
-                throw new HttpException(400, 'End date must be after start date');
-            }
-        }
-
-        // Check code uniqueness if code is being changed
-        if (isset($data['code']) && $data['code'] !== $coupon->code) {
-            $exists = Coupon::where('company_id', $companyId)
-                ->where('code', $data['code'])
-                ->where('id', '!=', $id)
-                ->whereNull('deleted_at')
-                ->exists();
-
-            if ($exists) {
-                throw new HttpException(400, 'Coupon code already exists for this company');
-            }
-        }
+        $this->assertRules($companyId, $data, $coupon);
 
         return DB::transaction(function () use ($coupon, $data, $imageFile) {
             // Handle image update
@@ -236,6 +193,58 @@ class CouponService
             $coupon->update($data);
             return $this->mapper->toDTO($coupon->fresh());
         });
+    }
+
+    /**
+     * Business rules shared by create and update. Throws HTTP 422 with a readable message.
+     * $existing is the coupon being edited (null on create); only keys present in $data are checked on update.
+     */
+    private function assertRules(int $companyId, array $data, ?Coupon $existing): void
+    {
+        $has = fn (string $k) => array_key_exists($k, $data);
+        $fail = fn (string $m) => throw new HttpException(422, $m);
+
+        // Code: allowed characters + unique per company (case-insensitive via collation)
+        if ($has('code') && $data['code'] !== null) {
+            if (!preg_match('/^[A-Za-z0-9_-]{3,50}$/', (string) $data['code'])) {
+                $fail('Use letters, numbers, dashes and underscores only (3-50 characters)');
+            }
+            $dup = Coupon::where('company_id', $companyId)
+                ->where('code', $data['code'])
+                ->whereNull('deleted_at')
+                ->when($existing, fn ($q) => $q->where('id', '!=', $existing->id))
+                ->exists();
+            if ($dup) {
+                $fail('A coupon with this code already exists');
+            }
+        }
+
+        // Dates: end date is optional; the end date's whole day counts, so only a strictly earlier day is wrong.
+        $start = $has('start_date') ? $data['start_date'] : $existing?->start_date;
+        $end = $has('end_date') ? $data['end_date'] : $existing?->end_date;
+        if ($start && $end && Carbon::parse($end)->startOfDay()->lt(Carbon::parse($start)->startOfDay())) {
+            $fail('End date cannot be before the start date');
+        }
+
+        // Percentage must be <= 100
+        $type = $has('type') && $data['type'] !== null ? $data['type'] : $existing?->type;
+        $discount = $has('discount') && $data['discount'] !== null ? (float) $data['discount'] : $existing?->discount;
+        if ($type === 'percentage' && $discount !== null && $discount > 100) {
+            $fail('A percentage discount cannot be more than 100%');
+        }
+
+        // Whole numbers for use counts
+        foreach (['usage_limit' => 'Total uses', 'usage_limit_per_user' => 'Uses per customer'] as $k => $label) {
+            if ($has($k) && $data[$k] !== null && (floor((float) $data[$k]) != (float) $data[$k] || (float) $data[$k] < 1)) {
+                $fail("{$label} must be a whole number of at least 1");
+            }
+        }
+
+        // Total uses cannot be below what is already redeemed
+        if ($existing && $has('usage_limit') && $data['usage_limit'] !== null
+            && (int) $data['usage_limit'] < (int) $existing->times_used) {
+            $fail("Total uses cannot be less than the {$existing->times_used} already redeemed");
+        }
     }
 
     /**
@@ -267,9 +276,15 @@ class CouponService
     public function validate(int $companyId, array $data): array
     {
         $code = $data['code'];
-        $customerId = $data['customerId'] ?? null;
-        $orderAmount = $data['orderAmount'];
-        $cartItems = $data['cartItems'] ?? [];
+        $customerId = $data['customerId'] ?? $data['customer_id'] ?? null;
+        $orderAmount = (float) ($data['orderAmount'] ?? $data['order_amount'] ?? $data['subtotal'] ?? 0);
+        $channel = isset($data['channel']) ? strtolower((string) $data['channel']) : null;
+        // Items are optional; scope (categories/products) is only enforced when they are sent.
+        $itemsSent = array_key_exists('items', $data) || array_key_exists('cartItems', $data);
+        $cartItems = $data['items'] ?? $data['cartItems'] ?? [];
+        if (!is_array($cartItems)) {
+            $cartItems = [];
+        }
 
         // 1. Find coupon
         $coupon = $this->repository->findByCodeAndCompany($code, $companyId);
@@ -290,6 +305,18 @@ class CouponService
             ]));
         }
 
+        // 2b. Check sales channel
+        if ($channel !== null && in_array($channel, ['pos', 'online'], true)) {
+            $enabled = $channel === 'pos' ? $coupon->channel_pos : $coupon->channel_online;
+            if (!$enabled) {
+                throw new HttpException(422, json_encode([
+                    'valid' => false,
+                    'error_code' => 'CHANNEL_NOT_ENABLED',
+                    'message' => "This coupon is not valid for {$channel} sales",
+                ]));
+            }
+        }
+
         // 3. Check date range
         $now = Carbon::now();
         if ($now < $coupon->start_date) {
@@ -300,7 +327,8 @@ class CouponService
             ]));
         }
 
-        if ($now > $coupon->end_date) {
+        $endsAt = $coupon->endsAt();
+        if ($endsAt && $now > $endsAt) {
             throw new HttpException(422, json_encode([
                 'valid' => false,
                 'error_code' => 'COUPON_EXPIRED',
@@ -326,14 +354,34 @@ class CouponService
             ]));
         }
 
-        // 6. Check per-user usage limit
-        if ($coupon->usage_limit_per_user !== null && $customerId !== null) {
-            $userUsageCount = $coupon->usages()
-                ->where('customer_id', $customerId)
-                ->whereNull('deleted_at')
-                ->count();
+        // 6. Check per-user usage limit (needs to know who the customer is)
+        $perUserLimit = $coupon->once_per_customer ? 1 : $coupon->usage_limit_per_user;
+        if ($perUserLimit !== null) {
+            $customerEmail = isset($data['customerEmail']) ? strtolower(trim((string) $data['customerEmail'])) : '';
+            if ($customerId !== null && $customerId !== '') {
+                $userUsageCount = $coupon->usages()
+                    ->where('customer_id', $customerId)
+                    ->whereNull('deleted_at')
+                    ->count();
+            } elseif ($customerEmail !== '') {
+                // Guest checkout: match earlier uses of this coupon by the order email
+                $userUsageCount = DB::table('coupon_usages')
+                    ->join('sells', 'sells.id', '=', 'coupon_usages.sell_id')
+                    ->where('coupon_usages.coupon_id', $coupon->id)
+                    ->whereNull('coupon_usages.deleted_at')
+                    ->whereRaw('LOWER(sells.shipping_email) = ?', [$customerEmail])
+                    ->count();
+            } else {
+                throw new HttpException(422, json_encode([
+                    'valid' => false,
+                    'error_code' => 'CUSTOMER_REQUIRED',
+                    'message' => $channel === 'online'
+                        ? 'Sign in or enter your email to use this coupon'
+                        : 'Select a customer to use this coupon',
+                ]));
+            }
 
-            if ($userUsageCount >= $coupon->usage_limit_per_user) {
+            if ($userUsageCount >= $perUserLimit) {
                 throw new HttpException(422, json_encode([
                     'valid' => false,
                     'error_code' => 'PER_USER_LIMIT_EXCEEDED',
@@ -343,7 +391,7 @@ class CouponService
         }
 
         // 7. Check product/category applicability
-        if (!$this->isApplicableToCart($coupon, $cartItems)) {
+        if ($itemsSent && !$this->isApplicableToCart($coupon, $cartItems, $companyId)) {
             throw new HttpException(422, json_encode([
                 'valid' => false,
                 'error_code' => 'NOT_APPLICABLE',
@@ -351,19 +399,23 @@ class CouponService
             ]));
         }
 
-        // 8. Calculate discount
-        $discountAmount = $this->calculateDiscount($coupon, $orderAmount);
+        // 8. Calculate discount; a scoped coupon only discounts the eligible lines (when line totals are sent)
+        $discountBase = $itemsSent ? $this->eligibleSubtotal($coupon, $cartItems, $companyId, $orderAmount) : $orderAmount;
+        $discountAmount = min($this->calculateDiscount($coupon, $discountBase), max(0, $orderAmount));
 
         return [
             'valid' => true,
             'discountAmount' => $discountAmount,
+            'discount' => $discountAmount,
+            'freeShipping' => (bool) $coupon->free_shipping || $coupon->type === 'free_shipping',
+            'coupon' => $this->mapper->toDTO($coupon)->toArray(),
         ];
     }
 
     /**
      * Check if coupon applies to cart items
      */
-    private function isApplicableToCart(Coupon $coupon, array $cartItems): bool
+    private function isApplicableToCart(Coupon $coupon, array $cartItems, int $companyId): bool
     {
         // If no restrictions, applies to all
         if (empty($coupon->applicable_to_products) && empty($coupon->applicable_to_categories)) {
@@ -382,9 +434,22 @@ class CouponService
             ? array_map('intval', explode(',', $coupon->applicable_to_categories))
             : [];
 
+        // Resolve missing category ids from the products table.
+        $needLookup = [];
         foreach ($cartItems as $item) {
-            $productId = $item['product_id'] ?? null;
-            $categoryId = $item['category_id'] ?? null;
+            $pid = $item['product_id'] ?? $item['productId'] ?? null;
+            if ($pid && empty($item['category_id'] ?? $item['categoryId'] ?? null)) {
+                $needLookup[] = (int) $pid;
+            }
+        }
+        $categoryByProduct = $needLookup
+            ? \App\Models\Product::where('company_id', $companyId)->whereIn('id', $needLookup)->pluck('category_id', 'id')->all()
+            : [];
+
+        foreach ($cartItems as $item) {
+            $productId = isset($item['product_id']) ? (int) $item['product_id'] : (isset($item['productId']) ? (int) $item['productId'] : null);
+            $categoryId = $item['category_id'] ?? $item['categoryId'] ?? ($productId ? ($categoryByProduct[$productId] ?? null) : null);
+            $categoryId = $categoryId !== null ? (int) $categoryId : null;
 
             // Check if product is applicable
             if (!empty($applicableProducts) && $productId && in_array($productId, $applicableProducts)) {
@@ -398,6 +463,49 @@ class CouponService
         }
 
         return false;
+    }
+
+    /**
+     * Subtotal the discount applies to: eligible lines for a scoped coupon, else the whole order.
+     * Falls back to the order amount when the lines carry no totals.
+     */
+    private function eligibleSubtotal(Coupon $coupon, array $cartItems, int $companyId, float $orderAmount): float
+    {
+        if (empty($coupon->applicable_to_products) && empty($coupon->applicable_to_categories)) {
+            return $orderAmount;
+        }
+        $products = $coupon->applicable_to_products ? array_map('intval', explode(',', $coupon->applicable_to_products)) : [];
+        $categories = $coupon->applicable_to_categories ? array_map('intval', explode(',', $coupon->applicable_to_categories)) : [];
+
+        $ids = [];
+        foreach ($cartItems as $item) {
+            $pid = $item['product_id'] ?? $item['productId'] ?? null;
+            if ($pid) {
+                $ids[] = (int) $pid;
+            }
+        }
+        $cats = $ids ? \App\Models\Product::where('company_id', $companyId)->whereIn('id', $ids)->pluck('category_id', 'id')->all() : [];
+
+        $sum = 0.0;
+        $hasTotals = false;
+        foreach ($cartItems as $item) {
+            $line = $item['totalPrice'] ?? $item['total_price'] ?? null;
+            if ($line === null && isset($item['unitPrice'], $item['quantity'])) {
+                $line = (float) $item['unitPrice'] * (float) $item['quantity'];
+            }
+            if ($line === null) {
+                continue;
+            }
+            $hasTotals = true;
+            $pid = (int) ($item['product_id'] ?? $item['productId'] ?? 0);
+            $cid = $item['category_id'] ?? $item['categoryId'] ?? ($pid ? ($cats[$pid] ?? null) : null);
+            $cid = $cid !== null ? (int) $cid : null;
+            if (($pid && in_array($pid, $products, true)) || ($cid && in_array($cid, $categories, true))) {
+                $sum += (float) $line;
+            }
+        }
+
+        return $hasTotals ? $sum : $orderAmount;
     }
 
     /**

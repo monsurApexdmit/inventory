@@ -29,6 +29,8 @@ class StaffRoleMapper extends BaseMapper
                     'name' => $rolePermission->permission?->name ?? '',
                     'read' => (bool) $rolePermission->read,
                     'write' => (bool) $rolePermission->write,
+                    'create' => (bool) $rolePermission->create,
+                    'edit' => (bool) $rolePermission->edit,
                     'delete' => (bool) $rolePermission->delete,
                 ];
             })->toArray();
@@ -41,6 +43,10 @@ class StaffRoleMapper extends BaseMapper
             permissions: $permissions,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
+            description: $model->description,
+            locked: $model->isLocked(),
+            memberCount: (int) ($model->staff_count ?? $model->staff()->count()),
+            sensitive: \App\Support\Sensitive::forRole($model),
         );
     }
 }

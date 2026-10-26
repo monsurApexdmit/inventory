@@ -37,6 +37,10 @@ class SellMapper extends BaseMapper
                     'status' => $shipment->status,
                     'shippedAt' => $this->formatTimestamp($shipment->shipped_at),
                     'deliveredAt' => $this->formatTimestamp($shipment->delivered_at),
+                    'shippingCost' => isset($shipment->shipping_cost) ? (float) $shipment->shipping_cost : null,
+                    'codAmount' => isset($shipment->cod_amount) ? (float) $shipment->cod_amount : null,
+                    'zone' => $shipment->zone ?? null,
+                    'courier' => $shipment->courier ?? null,
                 ];
             }, $shipmentsArray);
         }
@@ -75,6 +79,10 @@ class SellMapper extends BaseMapper
         } elseif ($model->shipping_method) {
             $shippingMethodName = $model->shipping_method;
         }
+
+        // Stock location (additive; null when the sale has no location)
+        $locationId = $model->location_id !== null ? (int) $model->location_id : null;
+        $locationName = $locationId ? \App\Models\Location::where('id', $locationId)->value('name') : null;
 
         return new SellDTO(
             id: $model->id,
@@ -122,6 +130,22 @@ class SellMapper extends BaseMapper
             shippingDepositAmount: $model->shipping_deposit_amount !== null ? (float) $model->shipping_deposit_amount : null,
             shippingDepositTransactionId: $model->shipping_deposit_transaction_id,
             paymentTransactionId: $model->payment_transaction_id,
+            paidAmount: (float) $model->paid_amount,
+            dueAmount: (float) $model->due_amount,
+            source: $model->source,
+            registerSessionId: $model->register_session_id !== null ? (int) $model->register_session_id : null,
+            locationId: $locationId,
+            locationName: $locationName,
+            transactionId: $model->transaction_id ?: $model->payment_transaction_id,
+            zoneName: $model->zone_name,
+            courier: $model->carrier,
+            deliveryNote: $model->delivery_note,
+            taxRate: $model->tax_rate !== null ? (float) $model->tax_rate : null,
+            taxAmount: $model->tax_amount !== null ? (float) $model->tax_amount : null,
+            followUpCount: (int) ($model->follow_up_count ?? 0),
+            lastFollowUpAt: $this->formatTimestamp($model->last_follow_up_at),
+            lastFollowUpOutcome: $model->last_follow_up_outcome,
+            nextFollowUpAt: $this->formatTimestamp($model->next_follow_up_at),
         );
     }
 
@@ -150,6 +174,7 @@ class SellMapper extends BaseMapper
                 'quantity' => $item->quantity,
                 'unitPrice' => $item->unit_price,
                 'totalPrice' => $item->total_price,
+                'discount' => isset($item->discount) ? (float) $item->discount : 0,
                 'unitCost' => $item->unit_cost,
                 'totalCost' => $item->total_cost,
                 'bundleItems' => $this->getBundleChildren($item->product_id, $item->quantity),

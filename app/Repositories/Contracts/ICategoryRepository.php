@@ -18,6 +18,10 @@ interface ICategoryRepository
 
     public function hasChildren(int $id): bool;
 
+    public function nextSortOrder(int $companyId, ?int $parentId): int;
+
+    public function setSortOrders(array $ids, int $companyId): void;
+
     public function create(array $data): Category;
 
     public function update(int $id, array $data): Category;

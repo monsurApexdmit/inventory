@@ -16,7 +16,11 @@ class Category extends Model
         'company_id',
         'category_name',
         'parent_id',
+        'description',
+        'image',
+        'color',
         'status',
+        'sort_order',
     ];
 
     protected $casts = [
@@ -31,6 +35,11 @@ class Category extends Model
     public function children(): HasMany
     {
         return $this->hasMany(Category::class, 'parent_id');
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'category_id');
     }
 
     public function company(): BelongsTo

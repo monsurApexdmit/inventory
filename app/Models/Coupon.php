@@ -34,6 +34,9 @@ class Coupon extends Model
         'stackable',
         'auto_apply',
         'priority',
+        'channel_pos',
+        'channel_online',
+        'once_per_customer',
     ];
 
     protected $casts = [
@@ -41,6 +44,9 @@ class Coupon extends Model
         'free_shipping' => 'boolean',
         'stackable' => 'boolean',
         'auto_apply' => 'boolean',
+        'channel_pos' => 'boolean',
+        'channel_online' => 'boolean',
+        'once_per_customer' => 'boolean',
         'discount' => 'float',
         'min_order_amount' => 'float',
         'max_discount' => 'float',
@@ -51,6 +57,29 @@ class Coupon extends Model
         'start_date' => 'datetime',
         'end_date' => 'datetime',
     ];
+
+    /** Last moment the coupon can be used: the end of its end date's day (null = no end). */
+    public function endsAt(): ?\Carbon\Carbon
+    {
+        return $this->end_date ? $this->end_date->copy()->endOfDay() : null;
+    }
+
+    public function isUsedUp(): bool
+    {
+        return $this->usage_limit !== null && (int) $this->times_used >= (int) $this->usage_limit;
+    }
+
+    /** disabled -> used_up -> scheduled -> expired -> active */
+    public function phase(): string
+    {
+        if (!$this->status) return 'disabled';
+        if ($this->isUsedUp()) return 'used_up';
+        $now = \Carbon\Carbon::now();
+        if ($this->start_date && $now->lt($this->start_date)) return 'scheduled';
+        $end = $this->endsAt();
+        if ($end && $now->gt($end)) return 'expired';
+        return 'active';
+    }
 
     public function company(): BelongsTo
     {

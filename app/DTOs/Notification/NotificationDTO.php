@@ -7,7 +7,7 @@ use App\DTOs\BaseDTO;
 class NotificationDTO extends BaseDTO
 {
     // Maps internal types → frontend NotificationType
-    private const TYPE_MAP = [
+    public const TYPE_MAP = [
         'order_placed'          => 'order',
         'order_status_changed'  => 'order',
         'coupon_used'           => 'order',
@@ -18,10 +18,19 @@ class NotificationDTO extends BaseDTO
         'support_ticket'        => 'support',
         'support_message'       => 'support',
         'product_review'        => 'review',
+        'payment_reminder'      => 'payment',
+        'payroll'               => 'payment',
+        'batch_expiry'          => 'stock_alert',
+        'staff_invited'         => 'system',
+        'payment_received'      => 'payment',
+        'po_received'           => 'stock_alert',
+        'tailor_ready'          => 'order',
+        'daily_summary'         => 'system',
+        'stock_adjustment'      => 'stock_alert',
     ];
 
     // Maps internal types → frontend NotificationPriority
-    private const PRIORITY_MAP = [
+    public const PRIORITY_MAP = [
         'order_placed'          => 'medium',
         'order_status_changed'  => 'medium',
         'coupon_used'           => 'low',
@@ -32,7 +41,22 @@ class NotificationDTO extends BaseDTO
         'support_ticket'        => 'medium',
         'support_message'       => 'medium',
         'product_review'        => 'medium',
+        'payment_reminder'      => 'low',
+        'payroll'               => 'low',
+        'batch_expiry'          => 'high',
+        'staff_invited'         => 'low',
+        'payment_received'      => 'medium',
+        'po_received'           => 'low',
+        'tailor_ready'          => 'medium',
+        'daily_summary'         => 'low',
+        'stock_adjustment'      => 'medium',
     ];
+
+    /** Internal types that belong to a frontend category (the 'system' bucket also holds unknown types). */
+    public static function typesForCategory(string $category): array
+    {
+        return array_keys(array_filter(self::TYPE_MAP, fn($c) => $c === $category));
+    }
 
     public function __construct(
         public readonly int     $id,
@@ -70,14 +94,30 @@ class NotificationDTO extends BaseDTO
     private function resolveActionUrl(): ?string
     {
         return match ($this->type) {
-            'order_placed', 'order_status_changed', 'coupon_used', 'return_requested'
+            'coupon_used'
+                => '/dashboard/coupons',
+            'order_placed', 'order_status_changed', 'return_requested'
                 => isset($this->data['invoiceNo'])
                     ? "/dashboard/orders?search={$this->data['invoiceNo']}"
                     : '/dashboard/orders',
-            'low_stock', 'stock_transfer'
+            'low_stock'
+                => '/dashboard/vendors/purchase-orders?new=1',
+            'stock_transfer'
                 => '/dashboard/inventory',
-            'staff_joined'
+            'stock_adjustment'
+                => '/dashboard/inventory/adjustment',
+            'po_received'
+                => '/dashboard/dues/vendors',
+            'payment_received'
+                => '/dashboard/dues/customers',
+            'staff_joined', 'staff_invited'
                 => '/dashboard/staff',
+            'payroll'
+                => '/dashboard/staff/salary',
+            'payment_reminder'
+                => '/dashboard/dues/customers',
+            'batch_expiry'
+                => '/dashboard/inventory/serial-batch',
             'support_ticket', 'support_message'
                 => isset($this->data['ticketId'])
                     ? "/dashboard/support?ticket={$this->data['ticketId']}"

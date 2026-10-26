@@ -10,6 +10,9 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Sell;
 use App\Models\VariantInventory;
+use App\Models\Location;
+use App\Models\ShippingMethod;
+use App\Services\Inventory\LocationStockService;
 use App\Models\PaymentMethod;
 use App\Models\Setting;
 use App\Services\Coupon\CouponService;
@@ -116,6 +119,8 @@ class StorefrontOrderController extends Controller
             'shipping_address.address' => 'required|string',
             'shipping_address.phone'   => $customer ? 'nullable|string' : 'required|string',
             'payment_method'           => 'required|string',
+            'shipping_method_id'       => 'nullable|integer',
+            'pickup_location_id'       => 'nullable|integer',
         ]);
 
         // Buyer identity: real customer when logged in, else the guest details.
@@ -138,7 +143,11 @@ class StorefrontOrderController extends Controller
                 ], 422);
             }
 
-            $price     = ($product->sale_price && $product->sale_price > 0) ? $product->sale_price : $product->price;
+            // Normal price, the live offer price (expired offers price at normal) or the wholesale price from the minimum quantity
+            $variantModel = !empty($item['variant_id'])
+                ? ProductVariant::where('product_id', $product->id)->find($item['variant_id'])
+                : null;
+            $price     = \App\Services\Pricing\PriceService::resolve($product, $variantModel, (float) $item['quantity'])['unit'];
             $lineTotal = $price * $item['quantity'];
             $subtotal += $lineTotal;
 
@@ -165,6 +174,12 @@ class StorefrontOrderController extends Controller
                     'code'        => $request->coupon_code,
                     'orderAmount' => $subtotal,
                     'customerId'  => $customerId,
+                    'customerEmail' => $customerEmail,
+                    'channel'     => 'online',
+                    'items'       => array_map(fn ($oi) => [
+                        'productId'  => $oi['product_id'],
+                        'totalPrice' => $oi['total_price'],
+                    ], $orderItems),
                 ]);
                 $discount      = $couponData['discountAmount'] ?? 0;
                 $couponCode    = $request->coupon_code;
@@ -173,17 +188,114 @@ class StorefrontOrderController extends Controller
                     ->where('code', $request->coupon_code)
                     ->first();
             } catch (HttpException $e) {
-                return response()->json(['success' => false, 'message' => $e->getMessage()], $e->getStatusCode());
+                $decoded = json_decode($e->getMessage(), true);
+                return response()->json(['success' => false, 'message' => is_array($decoded) ? ($decoded['message'] ?? 'Coupon is not valid') : $e->getMessage()], $e->getStatusCode());
             }
         }
 
-        $shippingCost = (float) ($request->shipping_cost ?? 0);
+        // Shipping is priced SERVER-SIDE from the chosen method (a client-sent shipping_cost is ignored).
+        // Pickup orders are free; delivery orders must pick an active delivery option of this store.
+        $shippingMethodModel = $request->filled('shipping_method_id')
+            ? ShippingMethod::where('company_id', $companyId)->find($request->shipping_method_id) : null;
+        $isPickup = ($shippingMethodModel?->type === 'pickup') || $request->filled('pickup_location_id');
+        $shippingCost = 0.0;
+        if ($isPickup) {
+            if ($shippingMethodModel && $shippingMethodModel->type !== 'pickup') {
+                $shippingMethodModel = null;
+            }
+        } else {
+            $shippingMethodModel = app(\App\Services\Shipping\ShippingMethodService::class)
+                ->findActiveDelivery($companyId, $request->input('shipping_method_id'));
+            if (!$shippingMethodModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Choose a delivery option',
+                    'errors'  => ['shipping_method_id' => ['Choose a delivery option']],
+                ], 422);
+            }
+            $shippingCost = (float) $shippingMethodModel->price;
+        }
         // Free shipping coupon overrides shipping cost
         if ($appliedCoupon?->free_shipping) {
             $shippingCost = 0;
         }
 
-        $total = max(0, $subtotal - $discount) + $shippingCost;
+        // Chosen payment method must be enabled for online orders (Payments settings), legacy gateways still work
+        $codFee = 0.0;
+        $paySettings = Setting::where('company_id', $companyId)->first()?->payment_settings ?? [];
+        $selectedMethod = PaymentMethod::where('company_id', $companyId)
+            ->whereRaw('LOWER(name) = ?', [strtolower((string) $request->payment_method)])
+            ->first();
+        $chosen = strtolower(trim((string) $request->payment_method));
+        $manualSlug = null;
+        $savedMethods = is_array($paySettings['methods'] ?? null) ? $paySettings['methods'] : [];
+        if ($savedMethods) {
+            $labels = \App\Http\Requests\Setting\UpdatePaymentSettingsRequest::METHODS;
+            foreach (self::onlineMethodSlugs($paySettings) as $slug) {
+                if ($chosen === $slug || $chosen === strtolower($labels[$slug][0] ?? '')) {
+                    $manualSlug = $slug;
+                    break;
+                }
+            }
+            $legacyGateway = $selectedMethod && $selectedMethod->is_active && ($selectedMethod->gateway_type ?? 'cod') !== 'cod';
+            if (!$manualSlug && !$legacyGateway) {
+                return response()->json(['success' => false, 'message' => 'This payment method is not available for online orders.'], 422);
+            }
+        }
+        // 'manual' = enabled non-COD method with no gateway record (bKash/Nagad/card/bank/cash): no COD rules
+        $gatewayType = $selectedMethod?->gateway_type ?? ($manualSlug && $manualSlug !== 'cod' ? 'manual' : 'cod');
+
+        // Pickup orders collect from a chosen pickup point (an is_pickup_point location) and take stock from it
+        $locStock = app(LocationStockService::class);
+        $pickupLocationId = null;
+        if ($isPickup) {
+            if (!$request->filled('pickup_location_id')) {
+                return response()->json(['success' => false, 'message' => 'Choose a pickup point for pickup orders.'], 422);
+            }
+            $pickupQ = Location::where('company_id', $companyId)->whereKey($request->pickup_location_id)->pickupPoints();
+            $pickupLocationId = $pickupQ->value('id');
+            if (!$pickupLocationId) {
+                return response()->json(['success' => false, 'message' => 'The selected pickup point is not available.'], 422);
+            }
+            $pickupLocationId = (int) $pickupLocationId;
+        }
+
+        // Stock check against the locations this order draws from
+        $onlineLocs = $locStock->storefrontLocationIds($companyId);
+        $drawLocs = $pickupLocationId ? [$pickupLocationId] : $onlineLocs;
+        if ($drawLocs && $locStock->hasLocationStock($companyId)) {
+            $need = [];
+            foreach ($request->items as $item) {
+                $k = $item['product_id'] . '|' . ($item['variant_id'] ?? '');
+                $need[$k] = [$item['product_id'], $item['variant_id'] ?? null, ($need[$k][2] ?? 0) + (int) $item['quantity']];
+            }
+            foreach ($need as [$pid, $vid, $qty]) {
+                $p = Product::where('company_id', $companyId)->find($pid);
+                if (!$p) {
+                    continue;
+                }
+                $have = $locStock->availableAcross($p, $vid ? (int) $vid : null, $drawLocs);
+                if ($have < $qty) {
+                    $where = $pickupLocationId ? ' at ' . Location::whereKey($pickupLocationId)->value('name') : '';
+                    return response()->json(['success' => false, 'message' => "Only {$have} {$p->name} in stock{$where}"], 422);
+                }
+            }
+        }
+
+        // Cash-on-delivery rules (Payments settings): order limit (default 5000) + extra COD fee.
+        if ($gatewayType === 'cod') {
+            $codCfg   = $paySettings;
+            $codLimit = (float) ($codCfg['cod_limit'] ?? 5000);
+            if ($codLimit > 0 && max(0, $subtotal - $discount) >= $codLimit) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cash on delivery is only available for orders under ' . rtrim(rtrim(number_format($codLimit, 2, '.', ''), '0'), '.') . '. Please choose another payment method.',
+                ], 422);
+            }
+            $codFee = max(0, (float) ($codCfg['cod_fee'] ?? 0));
+        }
+
+        $total = max(0, $subtotal - $discount) + $shippingCost + $codFee;
 
         $addr = $request->shipping_address;
 
@@ -210,36 +322,63 @@ class StorefrontOrderController extends Controller
             'coupon_code'            => $couponCode,
             'discount'               => $discount,
             'shipping_cost'          => $shippingCost,
+            'shipping_method'        => $shippingMethodModel?->id,
+            'location_id'            => $pickupLocationId,
         ]);
 
         foreach ($orderItems as $item) {
             $sell->items()->create($item);
         }
 
-        // Deduct stock
-        foreach ($request->items as $item) {
-            $qty = (int) $item['quantity'];
-            if (!empty($item['variant_id'])) {
-                // Deduct from variant inventory (sum across all locations)
-                VariantInventory::where('variant_id', $item['variant_id'])
-                    ->orderByDesc('quantity')
-                    ->get()
-                    ->each(function (VariantInventory $inv) use (&$qty) {
-                        if ($qty <= 0) return false;
-                        $deduct = min($qty, $inv->quantity);
-                        $inv->decrement('quantity', $deduct);
-                        $qty -= $deduct;
-                    });
-                // Also keep variant stock field in sync
-                ProductVariant::where('id', $item['variant_id'])
-                    ->decrement('stock', (int) $item['quantity']);
-            } else {
-                // Simple product — decrement product stock
-                Product::where('id', $item['product_id'])
-                    ->where('company_id', $companyId)
-                    ->decrement('stock', $qty);
+        // Deduct stock: per location when location stock is set up (pickup point, else ships-online
+        // locations biggest first), otherwise the flat/legacy way
+        if ($drawLocs && $locStock->hasLocationStock($companyId)) {
+            $byLoc = [];
+            $meta = ['reference_type' => 'sell', 'reference_id' => $sell->id, 'reason' => 'Online order', 'notes' => $sell->invoice_no];
+            foreach ($request->items as $item) {
+                $product = Product::where('company_id', $companyId)->find($item['product_id']);
+                $variantId = !empty($item['variant_id']) ? (int) $item['variant_id'] : null;
+                try {
+                    $taken = $pickupLocationId
+                        ? $locStock->deductGreedy($companyId, $product, $variantId, [$pickupLocationId], (int) $item['quantity'], $meta)
+                        : $locStock->deductGreedy($companyId, $product, $variantId, $drawLocs, (int) $item['quantity'], $meta);
+                } catch (HttpException $e) {
+                    $locStock->reverseSale($companyId, $sell->id);
+                    $sell->items()->delete();
+                    $sell->delete();
+                    return response()->json(['success' => false, 'message' => $e->getMessage()], $e->getStatusCode());
+                }
+                foreach ($taken as $loc => $q) {
+                    $byLoc[$loc] = ($byLoc[$loc] ?? 0) + $q;
+                }
+            }
+            if (!$pickupLocationId && $byLoc) {
+                arsort($byLoc);
+                $sell->update(['location_id' => array_key_first($byLoc)]);
+            }
+        } else {
+            foreach ($request->items as $item) {
+                $qty = (int) $item['quantity'];
+                if (!empty($item['variant_id'])) {
+                    VariantInventory::where('variant_id', $item['variant_id'])
+                        ->orderByDesc('quantity')
+                        ->get()
+                        ->each(function (VariantInventory $inv) use (&$qty) {
+                            if ($qty <= 0) return false;
+                            $deduct = min($qty, $inv->quantity);
+                            $inv->decrement('quantity', $deduct);
+                            $qty -= $deduct;
+                        });
+                    ProductVariant::where('id', $item['variant_id'])
+                        ->decrement('stock', (int) $item['quantity']);
+                } else {
+                    Product::where('id', $item['product_id'])
+                        ->where('company_id', $companyId)
+                        ->decrement('stock', $qty);
+                }
             }
         }
+        $sell->update(['stock_deducted' => true]);
 
         // Record coupon usage
         if ($appliedCoupon) {
@@ -253,7 +392,7 @@ class StorefrontOrderController extends Controller
                 'final_amount'     => $total,
                 'used_at'          => now(),
             ]);
-            $appliedCoupon->increment('usage_count');
+            $appliedCoupon->increment('times_used');
         }
 
         $this->notificationService->notifyOrderPlaced(
@@ -263,11 +402,6 @@ class StorefrontOrderController extends Controller
             $total
         );
 
-        // Resolve gateway_type from PaymentMethod record
-        $paymentMethodRecord = PaymentMethod::where('company_id', $companyId)
-            ->whereRaw('LOWER(name) = ?', [strtolower($request->payment_method)])
-            ->first();
-        $gatewayType = $paymentMethodRecord?->gateway_type ?? 'cod';
 
         if (in_array($gatewayType, ['sslcommerz', 'portwallet', 'stripe', 'paypal', 'bkash', 'nagad'])) {
             $sell->update(['payment_status' => 'pending_payment']);
@@ -332,6 +466,7 @@ class StorefrontOrderController extends Controller
                     $paymentUrl = $service->initPayment($gatewayParams);
                 }
             } catch (\Throwable $e) {
+                $locStock->reverseSale($companyId, $sell->id);
                 $sell->items()->delete();
                 $sell->delete();
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
@@ -427,6 +562,7 @@ class StorefrontOrderController extends Controller
                         $paymentUrl = $service->initPayment($depositParams);
                     }
                 } catch (\Throwable $e) {
+                    $locStock->reverseSale($companyId, $sell->id);
                     $sell->items()->delete();
                     $sell->delete();
                     return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
@@ -446,6 +582,25 @@ class StorefrontOrderController extends Controller
             'success' => true,
             'data'    => $this->formatOrder($sell->load('items')),
         ], 201);
+    }
+
+    /**
+     * Slugs of the payment methods enabled for the online channel (settings payments.methods).
+     * A method may carry `channels`; when set it must include "online".
+     */
+    public static function onlineMethodSlugs(array $paySettings): array
+    {
+        $out = [];
+        foreach (($paySettings['methods'] ?? []) as $slug => $m) {
+            if (!is_array($m) || !filter_var($m['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                continue;
+            }
+            if (isset($m['channels']) && is_array($m['channels']) && !in_array('online', $m['channels'], true)) {
+                continue;
+            }
+            $out[] = (string) $slug;
+        }
+        return $out;
     }
 
     private function formatOrder(Sell $order): array

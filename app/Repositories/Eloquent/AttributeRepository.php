@@ -13,7 +13,7 @@ class AttributeRepository implements IAttributeRepository
 
     public function findByCompany(int $companyId, array $filters): mixed
     {
-        $query = $this->model->where('company_id', $companyId);
+        $query = $this->model->withCount('products')->where('company_id', $companyId);
 
         // Handle search
         if (!empty($filters['search'])) {
@@ -28,6 +28,10 @@ class AttributeRepository implements IAttributeRepository
             $query->where('status', true);
         }
 
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            $query->where('status', filter_var($filters['status'], FILTER_VALIDATE_BOOLEAN));
+        }
+
         $limit = $filters['limit'] ?? 15;
 
         return $query->paginate($limit);
@@ -36,6 +40,7 @@ class AttributeRepository implements IAttributeRepository
     public function findByIdAndCompany(int $id, int $companyId): ?Attribute
     {
         return $this->model
+            ->withCount('products')
             ->where('id', $id)
             ->where('company_id', $companyId)
             ->first();
@@ -44,6 +49,7 @@ class AttributeRepository implements IAttributeRepository
     public function findSimpleByCompany(int $companyId): array
     {
         return $this->model
+            ->withCount('products')
             ->where('company_id', $companyId)
             ->where('status', true)
             ->get()

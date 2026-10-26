@@ -35,6 +35,8 @@ class Sell extends Model
         'shipping_address_type',
         'method',
         'source',
+        'location_id',
+        'register_session_id',
         'amount',
         'paid_amount',
         'due_amount',
@@ -57,6 +59,15 @@ class Sell extends Model
         'total_cost',
         'gross_profit',
         'notes',
+        'transaction_id',
+        'zone_name',
+        'delivery_note',
+        'tax_rate',
+        'tax_amount',
+        'follow_up_count',
+        'last_follow_up_at',
+        'last_follow_up_outcome',
+        'next_follow_up_at',
     ];
 
     protected $casts = [
@@ -65,12 +76,17 @@ class Sell extends Model
         'due_amount' => 'float',
         'shipping_cost' => 'float',
         'discount' => 'float',
+        'tax_rate' => 'float',
+        'tax_amount' => 'float',
         'stock_deducted' => 'boolean',
         'total_cost' => 'float',
         'gross_profit' => 'float',
         'order_time' => 'datetime',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'follow_up_count' => 'integer',
+        'last_follow_up_at' => 'datetime',
+        'next_follow_up_at' => 'datetime',
     ];
 
     /**
@@ -112,6 +128,11 @@ class Sell extends Model
         return $this->belongsTo(ShippingMethod::class, 'shipping_method');
     }
 
+    public function followUps(): HasMany
+    {
+        return $this->hasMany(OrderFollowUp::class, 'sell_id');
+    }
+
     public function payments(): MorphMany
     {
         return $this->morphMany(DuePayment::class, 'payable');
@@ -119,7 +140,8 @@ class Sell extends Model
 
     public function recalculate(): void
     {
-        $this->paid_amount = $this->payments()->where('direction', 'in')->sum('amount');
+        $this->paid_amount = max(0, (float) $this->payments()->where('direction', 'in')->sum('amount')
+            - (float) $this->payments()->where('direction', 'out')->sum('amount'));
         $this->due_amount  = max(0, $this->amount - $this->paid_amount);
         if ($this->paid_amount <= 0) {
             $this->payment_status = 'pending';

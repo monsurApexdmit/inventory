@@ -18,6 +18,17 @@ class LocationDTO extends BaseDTO
         public readonly bool $isDefault,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly string $type = 'Shop',
+        public readonly ?string $district = null,
+        public readonly ?string $phone = null,
+        public readonly ?string $manager = null,
+        public readonly bool $sellsInPos = false,
+        public readonly bool $shipsOnline = false,
+        public readonly bool $isPickupPoint = false,
+        public readonly float $stockValue = 0,
+        public readonly int $skus = 0,
+        public readonly int $units = 0,
+        public readonly int $staffCount = 0,
     ) {}
 
     public function toArray(): array
@@ -31,6 +42,17 @@ class LocationDTO extends BaseDTO
             'isDefault' => $this->isDefault,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'type' => $this->type,
+            'district' => $this->district,
+            'phone' => $this->phone,
+            'manager' => $this->manager,
+            'sellsInPos' => $this->sellsInPos,
+            'shipsOnline' => $this->shipsOnline,
+            'isPickupPoint' => $this->isPickupPoint,
+            'stockValue' => $this->stockValue,
+            'skus' => $this->skus,
+            'units' => $this->units,
+            'staffCount' => $this->staffCount,
         ];
     }
 }

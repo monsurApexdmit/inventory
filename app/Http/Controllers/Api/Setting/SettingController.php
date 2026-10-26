@@ -7,6 +7,7 @@ use App\Http\Requests\Setting\UpdateSettingRequest;
 use App\Http\Requests\Setting\UpdateRegionalSettingRequest;
 use App\Http\Requests\Setting\UploadImageRequest;
 use App\Http\Traits\ApiResponse;
+use App\Services\Notification\NotificationPreferenceService;
 use App\Services\Setting\SettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,26 @@ class SettingController extends Controller
     public function updateGeneral(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
+        $request->validate([
+            'storeName' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'legalName' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'storePhone' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'storeEmail' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'storeAddress' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'bin' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'licence' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'invoicePrefix' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'nextInvoiceNumber' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'poPrefix' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'lowStockDefault' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'receiptPaper' => ['sometimes', 'nullable', 'in:58,80,a4'],
+            'receiptFooter' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'holidays' => ['sometimes', 'nullable', 'array'],
+            'holidays.*' => ['date_format:Y-m-d'],
+            'primaryColor' => ['sometimes', 'nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'accentColor' => ['sometimes', 'nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'backgroundColor' => ['sometimes', 'nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+        ]);
         $result = $this->settingService->updateSection($companyId, 'general', $request->all());
         return $this->success($result, 'General settings updated successfully');
     }
@@ -56,17 +77,75 @@ class SettingController extends Controller
         return $this->success($result, 'Shipping settings updated successfully');
     }
 
-    public function updatePayment(Request $request): JsonResponse
+    public function getPayment(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        return $this->success($this->settingService->getPaymentMethods($companyId));
+    }
+
+    public function updatePayment(\App\Http\Requests\Setting\UpdatePaymentSettingsRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
         $result = $this->settingService->updateSection($companyId, 'payment', $request->all());
         return $this->success($result, 'Payment settings updated successfully');
     }
 
+    public function clearWishlist(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $deleted = \App\Models\Wishlist::where('company_id', $companyId)->delete();
+        return $this->success(['deleted' => $deleted], 'Wishlist data cleared');
+    }
+
     public function updateBusiness(Request $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $result = $this->settingService->updateSection($companyId, 'business', $request->all());
+        $url = ['nullable', 'string', 'max:255', 'regex:/^https?:\/\/[^\s\/$.?#][^\s]*$/i'];
+        $data = $request->validate([
+            'businessName' => ['sometimes', 'required', 'string', 'max:255'],
+            'businessType' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'registrationNumber' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'gstNumber' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'website' => ['sometimes'] + $url,
+            'socialLinks' => ['sometimes', 'nullable', 'array'],
+            'socialLinks.facebook' => $url,
+            'socialLinks.instagram' => $url,
+            'socialLinks.twitter' => $url,
+            'onlineStore' => ['sometimes', 'nullable', 'array'],
+            'onlineStore.name' => ['nullable', 'string', 'max:255'],
+            'onlineStore.slug' => ['nullable', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:[-.][a-z0-9]+)*$/'],
+            'onlineStore.theme' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'onlineStore.published' => ['nullable', 'boolean'],
+            'onlineStore.apiUrl' => $url,
+            'onlineStore.companyId' => ['nullable', 'string', 'max:50'],
+            'onlineStore.policies' => ['nullable', 'array'],
+            'onlineStore.policies.returns' => ['nullable', 'string', 'max:5000'],
+            'onlineStore.policies.shipping' => ['nullable', 'string', 'max:5000'],
+            'onlineStore.policies.privacy' => ['nullable', 'string', 'max:5000'],
+            'onlineStore.social' => ['nullable', 'array'],
+            'onlineStore.social.facebook' => $url,
+            'onlineStore.social.instagram' => $url,
+            'onlineStore.social.youtube' => $url,
+            'onlineStore.social.whatsapp' => ['nullable', 'string', 'max:255', 'regex:/^(\+?[0-9][0-9\s\-]{6,}|https?:\/\/[^\s\/$.?#][^\s]*)$/i'],
+            'auraShopHero' => ['sometimes', 'nullable', 'array'],
+            'auraShopHero.autoplayMs' => ['nullable', 'integer', 'min:2000', 'max:600000'],
+            'auraShopHero.slides' => ['nullable', 'array', 'max:20'],
+            'auraShopHero.slides.*.id' => ['nullable', 'string', 'max:64'],
+            'auraShopHero.slides.*.imagePath' => ['nullable', 'string', 'max:500'],
+            'auraShopHero.slides.*.tag' => ['nullable', 'string', 'max:120'],
+            'auraShopHero.slides.*.title' => ['nullable', 'string', 'max:255', 'required_if:auraShopHero.slides.*.enabled,true,1'],
+            'auraShopHero.slides.*.subtitle' => ['nullable', 'string', 'max:500'],
+            'auraShopHero.slides.*.cta' => ['nullable', 'string', 'max:80'],
+            'auraShopHero.slides.*.link' => ['nullable', 'string', 'max:500', 'regex:/^(\/|https?:\/\/)/i'],
+            'auraShopHero.slides.*.gradient' => ['nullable', 'string', 'max:255'],
+            'auraShopHero.slides.*.enabled' => ['nullable', 'boolean'],
+        ]);
+        if (data_get($data, 'onlineStore.published') && !trim((string) data_get($data, 'onlineStore.slug', ''))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['onlineStore.slug' => ['Add a domain or slug before publishing the store.']]);
+        }
+        // Preserve unrelated business keys (e.g. promoBanner) written by other screens.
+        $all = $request->all();
+        $result = $this->settingService->updateSection($companyId, 'business', $all);
         return $this->success($result, 'Business settings updated successfully');
     }
 
@@ -82,6 +161,18 @@ class SettingController extends Controller
         $companyId = (int) $request->attributes->get('auth_company_id');
         $result = $this->settingService->updateSection($companyId, 'notifications', $request->all());
         return $this->success($result, 'Notification settings updated successfully');
+    }
+
+    public function getNotificationPreferences(Request $request, NotificationPreferenceService $service): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        return $this->success($service->get($companyId));
+    }
+
+    public function updateNotificationPreferences(Request $request, NotificationPreferenceService $service): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        return $this->success($service->update($companyId, $request->all()), 'Notification preferences saved');
     }
 
     public function getStoreHours(Request $request): JsonResponse
@@ -160,6 +251,30 @@ class SettingController extends Controller
             'Banner uploaded successfully',
             201
         );
+    }
+
+    /** Restore logo / banner URLs (used by settings import). Files themselves are not copied. */
+    public function updateBranding(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $rule = ['sometimes', 'nullable', 'string', 'max:500', 'regex:/^(\/storage\/|https?:\/\/)\S+$/i'];
+        $data = $request->validate(['logoUrl' => $rule, 'bannerUrl' => $rule]);
+
+        return $this->success($this->settingService->updateBranding($companyId, $data), 'Branding updated');
+    }
+
+    public function removeLogo(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->settingService->removeLogo($companyId), 'Logo removed');
+    }
+
+    public function removeBanner(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->settingService->removeBanner($companyId), 'Banner removed');
     }
 
     public function uploadStorefrontImage(UploadImageRequest $request): JsonResponse

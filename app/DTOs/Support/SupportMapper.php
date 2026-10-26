@@ -58,6 +58,9 @@ class SupportMapper extends BaseMapper
             resolvedAt:    $this->formatTimestamp($model->resolved_at),
             createdAt:     $this->formatTimestamp($model->created_at),
             messages:      $messages,
+            updatedAt:     $this->formatTimestamp($model->updated_at),
+            messageCount:  (int) ($model->messages_count ?? count($messages)),
+            adminUnread:   (bool) $model->admin_unread,
         );
     }
 

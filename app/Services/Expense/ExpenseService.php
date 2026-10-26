@@ -6,6 +6,10 @@ use App\DTOs\Expense\ExpenseDTO;
 use App\DTOs\Expense\ExpenseMapper;
 use App\Repositories\Contracts\IExpenseCategoryRepository;
 use App\Repositories\Contracts\IExpenseRepository;
+use App\Models\Expense;
+use App\Models\Location;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ExpenseService
@@ -29,6 +33,9 @@ class ExpenseService
             'per_page' => $paginated->perPage(),
             'current_page' => $paginated->currentPage(),
             'last_page' => $paginated->lastPage(),
+            'stats' => array_merge($this->repository->getListStats($companyId, $filters), [
+                'counts' => $this->repository->getTabCounts($companyId, $filters),
+            ]),
         ];
     }
 
@@ -45,12 +52,23 @@ class ExpenseService
 
     public function create(int $companyId, array $data, ?\Illuminate\Http\UploadedFile $receipt = null): ExpenseDTO
     {
-        if (isset($data['expenseCategoryId'])) {
-            $this->assertCategoryBelongsToCompany($data['expenseCategoryId'], $companyId);
-        }
+        $this->assertRelations($data, $companyId);
+        $this->assertDateOrder($data['expenseDate'] ?? null, $data['nextDueDate'] ?? null, $data['recurringEndDate'] ?? null, !empty($data['isRecurring']));
 
         $dbData = $this->mapInputToDb($data);
         $dbData['company_id'] = $companyId;
+        $dbData['source'] = 'manual';
+        if (!empty($dbData['is_recurring'])) {
+            if (empty($dbData['recurring_frequency'])) {
+                throw new HttpException(422, 'A recurring expense needs a frequency');
+            }
+            $dbData['next_due_date'] ??= Expense::advanceDate(Carbon::parse($dbData['expense_date']), $dbData['recurring_frequency'])->toDateString();
+        } else {
+            $dbData['is_recurring'] = false;
+            $dbData['recurring_frequency'] = null;
+            $dbData['recurring_end_date'] = null;
+            $dbData['next_due_date'] = null;
+        }
 
         if ($receipt) {
             $dbData['receipt_path'] = $receipt->store('expenses', 'public');
@@ -58,7 +76,7 @@ class ExpenseService
 
         $expense = $this->repository->create($dbData);
 
-        return $this->mapper->toDTO($expense->fresh(['category', 'vendor']));
+        return $this->mapper->toDTO($expense->fresh(['category', 'vendor', 'location']));
     }
 
     public function update(int $id, int $companyId, array $data, ?\Illuminate\Http\UploadedFile $receipt = null): ExpenseDTO
@@ -69,11 +87,34 @@ class ExpenseService
             throw new HttpException(404, 'Expense not found');
         }
 
-        if (isset($data['expenseCategoryId'])) {
-            $this->assertCategoryBelongsToCompany($data['expenseCategoryId'], $companyId);
-        }
+        $this->assertNotLocked($expense);
+        $this->assertRelations($data, $companyId);
 
         $dbData = $this->mapInputToDb($data);
+
+        $isRecurring = array_key_exists('is_recurring', $dbData) ? (bool) $dbData['is_recurring'] : (bool) $expense->is_recurring;
+        $this->assertDateOrder(
+            $dbData['expense_date'] ?? $expense->expense_date?->toDateString(),
+            array_key_exists('next_due_date', $dbData) ? $dbData['next_due_date'] : $expense->next_due_date?->toDateString(),
+            array_key_exists('recurring_end_date', $dbData) ? $dbData['recurring_end_date'] : $expense->recurring_end_date?->toDateString(),
+            $isRecurring,
+        );
+        if (!$isRecurring) {
+            if (array_key_exists('is_recurring', $dbData)) {
+                $dbData['recurring_frequency'] = null;
+                $dbData['recurring_end_date'] = null;
+                $dbData['next_due_date'] = null;
+            }
+        } else {
+            $freq = $dbData['recurring_frequency'] ?? $expense->recurring_frequency;
+            if (!$freq) {
+                throw new HttpException(422, 'A recurring expense needs a frequency');
+            }
+            if (empty($dbData['next_due_date']) && !$expense->next_due_date) {
+                $from = Carbon::parse($dbData['expense_date'] ?? $expense->expense_date);
+                $dbData['next_due_date'] = Expense::advanceDate($from, $freq)->toDateString();
+            }
+        }
 
         if ($receipt) {
             $dbData['receipt_path'] = $receipt->store('expenses', 'public');
@@ -92,6 +133,8 @@ class ExpenseService
             throw new HttpException(404, 'Expense not found');
         }
 
+        $this->assertNotLocked($expense);
+
         $this->repository->delete($id);
     }
 
@@ -109,47 +152,140 @@ class ExpenseService
         }
     }
 
+    public function templates(int $companyId): array
+    {
+        return $this->repository->getTemplates($companyId, 6);
+    }
+
+    /**
+     * Create child expenses for every recurring template that is due. Idempotent:
+     * each template's next_due_date is advanced past $today, so a re-run creates nothing.
+     *
+     * @return int number of expenses created
+     */
+    public function generateRecurring(?Carbon $today = null): int
+    {
+        $today = ($today ?? now())->copy()->startOfDay();
+        $created = 0;
+
+        foreach ($this->repository->getDueRecurring($today) as $due) {
+            $created += DB::transaction(function () use ($due, $today) {
+                $template = Expense::lockForUpdate()->find($due->id);
+                if (!$template || !$template->is_recurring || !$template->next_due_date) {
+                    return 0;
+                }
+
+                $count = 0;
+                $next = Carbon::instance($template->next_due_date)->startOfDay();
+                $guard = 0;
+                while ($next->lte($today) && $guard++ < 1000) {
+                    if ($template->recurring_end_date !== null && $next->gt($template->recurring_end_date)) {
+                        break;
+                    }
+                    Expense::create([
+                        'company_id' => $template->company_id,
+                        'expense_category_id' => $template->expense_category_id,
+                        'vendor_id' => $template->vendor_id,
+                        'location_id' => $template->location_id,
+                        'title' => $template->title,
+                        'paid_to' => $template->paid_to,
+                        'amount' => $template->amount,
+                        'expense_date' => $next->toDateString(),
+                        'payment_method' => $template->payment_method,
+                        'reference_no' => $template->reference_no,
+                        'notes' => $template->notes,
+                        'is_recurring' => false,
+                        'source' => 'recurring',
+                        'uploaded_by' => $template->uploaded_by,
+                    ]);
+                    $count++;
+                    $next = Expense::advanceDate($next, $template->recurring_frequency);
+                }
+
+                $template->next_due_date = $next->toDateString();
+                $template->save();
+
+                return $count;
+            });
+        }
+
+        return $created;
+    }
+
+    /** Next due and repeat-end dates may not fall before the expense date (only checked for recurring expenses). */
+    private function assertDateOrder(mixed $expenseDate, mixed $nextDue, mixed $recEnd, bool $recurring): void
+    {
+        if (!$recurring || !$expenseDate) {
+            return;
+        }
+        $date = Carbon::parse($expenseDate)->startOfDay();
+        if ($nextDue && Carbon::parse($nextDue)->startOfDay()->lt($date)) {
+            throw new HttpException(422, 'Next due date must be on or after the expense date.');
+        }
+        if ($recEnd && Carbon::parse($recEnd)->startOfDay()->lt($date)) {
+            throw new HttpException(422, 'The repeat end date must be on or after the expense date.');
+        }
+    }
+
+    private function assertNotLocked(Expense $expense): void
+    {
+        if (($expense->source ?? 'manual') === 'dorji_payout') {
+            throw new HttpException(422, 'Dorji payout expenses are generated from Tailor payments and cannot be edited or deleted here');
+        }
+        if (($expense->source ?? 'manual') === 'salary') {
+            throw new HttpException(422, 'Salary expenses are generated from salary payments and cannot be edited or deleted here');
+        }
+    }
+
+    private function assertRelations(array $data, int $companyId): void
+    {
+        if (!empty($data['expenseCategoryId'])) {
+            $this->assertCategoryBelongsToCompany($data['expenseCategoryId'], $companyId);
+        }
+        if (!empty($data['locationId']) && !Location::where('company_id', $companyId)->where('id', $data['locationId'])->exists()) {
+            throw new HttpException(404, 'Location not found');
+        }
+    }
+
     private function mapInputToDb(array $data): array
     {
-        $dbData = [];
+        $map = [
+            'expenseCategoryId' => 'expense_category_id',
+            'vendorId' => 'vendor_id',
+            'locationId' => 'location_id',
+            'title' => 'title',
+            'paidTo' => 'paid_to',
+            'amount' => 'amount',
+            'expenseDate' => 'expense_date',
+            'paymentMethod' => 'payment_method',
+            'referenceNo' => 'reference_no',
+            'notes' => 'notes',
+            'isRecurring' => 'is_recurring',
+            'recurringFrequency' => 'recurring_frequency',
+            'recurringEndDate' => 'recurring_end_date',
+            'nextDueDate' => 'next_due_date',
+            'uploadedBy' => 'uploaded_by',
+        ];
+        // Columns that may be explicitly cleared with null; the rest are NOT NULL.
+        $nullable = ['expense_category_id', 'vendor_id', 'location_id', 'paid_to', 'reference_no', 'notes', 'recurring_frequency', 'recurring_end_date', 'next_due_date', 'uploaded_by'];
 
-        if (isset($data['expenseCategoryId'])) {
-            $dbData['expense_category_id'] = $data['expenseCategoryId'];
+        $db = [];
+        foreach ($map as $in => $col) {
+            if (!array_key_exists($in, $data)) {
+                continue;
+            }
+            if ($data[$in] === null && !in_array($col, $nullable, true)) {
+                continue;
+            }
+            $db[$col] = $data[$in];
         }
-        if (isset($data['vendorId'])) {
-            $dbData['vendor_id'] = $data['vendorId'];
+        if (isset($db['recurring_frequency'])) {
+            $db['recurring_frequency'] = Expense::normalizeFrequency($db['recurring_frequency']);
         }
-        if (isset($data['title'])) {
-            $dbData['title'] = $data['title'];
-        }
-        if (isset($data['amount'])) {
-            $dbData['amount'] = $data['amount'];
-        }
-        if (isset($data['expenseDate'])) {
-            $dbData['expense_date'] = $data['expenseDate'];
-        }
-        if (isset($data['paymentMethod'])) {
-            $dbData['payment_method'] = $data['paymentMethod'];
-        }
-        if (isset($data['referenceNo'])) {
-            $dbData['reference_no'] = $data['referenceNo'];
-        }
-        if (isset($data['notes'])) {
-            $dbData['notes'] = $data['notes'];
-        }
-        if (isset($data['isRecurring'])) {
-            $dbData['is_recurring'] = $data['isRecurring'];
-        }
-        if (isset($data['recurringFrequency'])) {
-            $dbData['recurring_frequency'] = $data['recurringFrequency'];
-        }
-        if (isset($data['recurringEndDate'])) {
-            $dbData['recurring_end_date'] = $data['recurringEndDate'];
-        }
-        if (isset($data['uploadedBy'])) {
-            $dbData['uploaded_by'] = $data['uploadedBy'];
+        if (isset($db['is_recurring'])) {
+            $db['is_recurring'] = filter_var($db['is_recurring'], FILTER_VALIDATE_BOOLEAN);
         }
 
-        return $dbData;
+        return $db;
     }
 }

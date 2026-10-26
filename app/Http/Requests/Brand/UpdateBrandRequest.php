@@ -15,7 +15,9 @@ class UpdateBrandRequest extends FormRequest
     {
         return [
             'brandName' => 'sometimes|required|string|max:150',
-            'logo'      => 'sometimes|nullable|string|max:255',
+            'logo'      => 'sometimes|nullable|string|max:255|url:http,https',
+            'website'   => 'sometimes|nullable|string|max:255|url:http,https',
+            'description' => 'sometimes|nullable|string|max:5000',
             'status'    => 'sometimes|nullable|boolean',
         ];
     }

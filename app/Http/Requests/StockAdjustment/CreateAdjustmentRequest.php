@@ -29,7 +29,8 @@ class CreateAdjustmentRequest extends FormRequest
             'location_id' => 'required|integer|min:1|exists:locations,id',
             'type'        => 'required|string|in:increase,decrease,set',
             'quantity'    => 'required|integer|min:0',
-            'reason'      => 'required|string|max:1000',
+            'reason'      => ['required', 'string', 'max:1000', 'regex:/\S/'],
+            'note'        => 'nullable|string|max:2000',
         ];
     }
 }

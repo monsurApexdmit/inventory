@@ -15,13 +15,15 @@ class AttributeDTO extends BaseDTO
         public readonly string $name,
         public readonly string $displayName,
         public readonly string $optionType,
-        public readonly ?string $values,
+        public readonly string|array|null $values,
         public readonly ?string $description,
         public readonly bool $isRequired,
         public readonly bool $status,
         public readonly int $sortOrder,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly array $valueItems = [],
+        public readonly int $usedInProducts = 0,
     ) {}
 
     public function toArray(): array
@@ -33,6 +35,8 @@ class AttributeDTO extends BaseDTO
             'displayName' => $this->displayName,
             'optionType' => $this->optionType,
             'values' => $this->values,
+            'valueItems' => $this->valueItems,
+            'usedInProducts' => $this->usedInProducts,
             'description' => $this->description,
             'isRequired' => $this->isRequired,
             'status' => $this->status,

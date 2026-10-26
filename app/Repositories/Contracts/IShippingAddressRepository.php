@@ -16,5 +16,5 @@ interface IShippingAddressRepository
 
     public function delete(int $id): bool;
 
-    public function setDefault(int $id, int $customerId): ShippingAddress;
+    public function setDefault(int $id, ?int $customerId): ShippingAddress;
 }

@@ -16,6 +16,7 @@ class Invitation extends Model
         'company_id',
         'email',
         'full_name',
+        'phone',
         'role_id',
         'status',
         'invitation_token',

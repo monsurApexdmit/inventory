@@ -27,6 +27,17 @@ class VendorDTO extends BaseDTO
         public readonly string $updatedAt,
         public readonly ?array $user = null,
         public readonly float $poDueAmount = 0.0,
+        public readonly ?string $contactPerson = null,
+        public readonly ?string $district = null,
+        public readonly ?string $country = null,
+        public readonly ?string $paymentTerms = null,
+        public readonly float $openingBalance = 0.0,
+        public readonly ?string $tin = null,
+        public readonly ?string $payTo = null,
+        public readonly ?string $accountNumber = null,
+        public readonly ?string $notes = null,
+        public readonly ?int $leadTimeDays = null,
+        public readonly ?int $safetyDays = null,
     ) {}
 
     public function toArray(): array
@@ -49,6 +60,17 @@ class VendorDTO extends BaseDTO
             'updatedAt' => $this->updatedAt,
             'user' => $this->user,
             'poDueAmount' => $this->poDueAmount,
+            'contactPerson' => $this->contactPerson,
+            'district' => $this->district,
+            'country' => $this->country,
+            'paymentTerms' => $this->paymentTerms,
+            'openingBalance' => $this->openingBalance,
+            'tin' => $this->tin,
+            'payTo' => $this->payTo,
+            'accountNumber' => $this->accountNumber,
+            'notes' => $this->notes,
+            'leadTimeDays' => $this->leadTimeDays,
+            'safetyDays' => $this->safetyDays,
         ];
     }
 }

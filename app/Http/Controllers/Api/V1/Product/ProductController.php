@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api\V1\Product;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Product\AdjustStockProductRequest;
+use App\Http\Requests\Product\BulkPriceProductRequest;
 use App\Http\Requests\Product\CreateProductRequest;
+use App\Http\Requests\Product\ImportProductsRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
 use App\Http\Requests\Product\UpdateProductStatusRequest;
 use App\Http\Traits\ApiResponse;
@@ -36,6 +39,27 @@ class ProductController extends Controller
         $filters = $request->all();
 
         return $this->success($this->productService->list($companyId, $filters));
+    }
+
+    public function bulkPrice(BulkPriceProductRequest $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->productService->bulkPrice($companyId, $request->validated()), 'Prices updated');
+    }
+
+    public function bulkAdjustStock(AdjustStockProductRequest $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->productService->adjustStock($companyId, $request->validated()));
+    }
+
+    public function import(ImportProductsRequest $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->productService->import($companyId, $request->validated()['rows']));
     }
 
     public function show(Request $request, int $id): JsonResponse

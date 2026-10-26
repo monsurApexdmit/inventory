@@ -16,11 +16,15 @@ class TailorOrderItem extends Model
         'order_id', 'product_type', 'fabric_id',
         'fabric_quantity', 'fabric_unit_price',
         'measurement_id', 'notes',
+        'quantity', 'stitching_price', 'fabric_source', 'own_fabric_note', 'style_options',
     ];
 
     protected $casts = [
         'fabric_quantity'   => 'float',
         'fabric_unit_price' => 'float',
+        'quantity'          => 'integer',
+        'stitching_price'   => 'float',
+        'style_options'     => 'array',
     ];
 
     public function order(): BelongsTo

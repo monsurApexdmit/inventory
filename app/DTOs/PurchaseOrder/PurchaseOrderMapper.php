@@ -35,6 +35,8 @@ class PurchaseOrderMapper extends BaseMapper
                 $payments[] = [
                     'id'            => $payment->id,
                     'amount'        => (float) $payment->amount,
+                    'date'          => $payment->payment_date ? $payment->payment_date->format('Y-m-d') : null,
+                    'method'        => $payment->payment_method,
                     'paymentMethod' => $payment->payment_method,
                     'paymentDate'   => $payment->payment_date ? $payment->payment_date->format('Y-m-d') : null,
                     'reference'     => $payment->reference,
@@ -43,6 +45,37 @@ class PurchaseOrderMapper extends BaseMapper
                 ];
             }
         }
+
+        $receipts = [];
+        if ($model->relationLoaded('receipts')) {
+            foreach ($model->receipts as $receipt) {
+                $lines = $receipt->items ?? [];
+                $text = collect($lines)->take(2)
+                    ->map(fn($l) => ($l['productName'] ?? 'Item') . ' ×' . ($l['quantity'] ?? 0))->implode(', ');
+                if (count($lines) > 2) {
+                    $text .= ' +' . (count($lines) - 2) . ' more';
+                }
+                $receipts[] = [
+                    'id'           => $receipt->id,
+                    'date'         => $receipt->received_at ? $receipt->received_at->format('Y-m-d') : null,
+                    'receivedAt'   => $this->formatTimestamp($receipt->received_at),
+                    'locationId'   => $receipt->location_id,
+                    'locationName' => $receipt->relationLoaded('location') && $receipt->location ? $receipt->location->name : null,
+                    'itemsSummary' => $text,
+                    'items'        => $lines,
+                ];
+            }
+        }
+
+        $itemsLoaded = $model->relationLoaded('items');
+        $itemSubtotal = $itemsLoaded ? (float) $model->items->sum('subtotal') : (float) $model->total_amount;
+        $totals = PurchaseOrder::computeTotals(
+            $itemSubtotal,
+            (string) ($model->discount_type ?? 'flat'),
+            (float) $model->discount_value,
+            (float) $model->tax_rate,
+            (float) $model->shipping_cost,
+        );
 
         return new PurchaseOrderDTO(
             id: $model->id,
@@ -63,6 +96,20 @@ class PurchaseOrderMapper extends BaseMapper
             items: $items,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
+            discountType: (string) ($model->discount_type ?? 'flat'),
+            discountValue: (float) $model->discount_value,
+            discountAmount: $totals['discountAmount'],
+            taxRate: (float) $model->tax_rate,
+            taxAmount: $totals['taxAmount'],
+            shippingCost: (float) $model->shipping_cost,
+            subtotal: $totals['subtotal'],
+            itemsSummary: $itemsLoaded ? $model->itemsSummary() : 'No items',
+            unitsOrdered: $itemsLoaded ? (int) $model->items->sum('quantity_ordered') : 0,
+            unitsReceived: $itemsLoaded ? (int) $model->items->sum('quantity_received') : 0,
+            isOverdue: $model->isOverdue(),
+            sentAt: $model->sent_at ? $this->formatTimestamp($model->sent_at) : null,
+            receivedAt: $model->received_at ? $this->formatTimestamp($model->received_at) : null,
+            receipts: $receipts,
         );
     }
 }

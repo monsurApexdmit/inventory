@@ -16,5 +16,11 @@ interface IOrderShipmentRepository
 
     public function update(int $id, array $data): OrderShipment;
 
+    public function readyToShip(int $companyId, array $filters): mixed;
+
+    public function readyToShipQuery(int $companyId);
+
+    public function trackingExists(int $companyId, string $trackingNumber, ?int $ignoreId = null): bool;
+
     public function getStats(int $companyId): array;
 }

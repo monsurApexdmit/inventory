@@ -41,6 +41,8 @@ class ProductVariantMapper extends BaseMapper
             costPrice: (float) $model->cost_price,
             offerPrice: $model->offer_price ? (float) $model->offer_price : null,
             offerType: $model->offer_type,
+            wholesalePrice: $model->wholesale_price !== null ? (float) $model->wholesale_price : null,
+            minWholesaleQty: $model->min_wholesale_qty !== null ? (int) $model->min_wholesale_qty : null,
             stock: (int) $model->stock,
             reorderPoint: (int) ($model->reorder_point ?? 0),
             sku: $model->sku,

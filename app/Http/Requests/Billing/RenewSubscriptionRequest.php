@@ -16,6 +16,9 @@ class RenewSubscriptionRequest extends FormRequest
         return [
             'subscriptionId' => 'required|integer|exists:subscriptions,id',
             'autoRenew' => 'nullable|boolean',
+            'billingPeriod' => 'nullable|in:monthly,yearly',
+            'paymentMethod' => 'nullable|in:card,bkash,bank',
+            'billingEmail' => 'nullable|email|max:255',
         ];
     }
 }

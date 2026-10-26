@@ -12,19 +12,40 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
 
     public function findByCompany(int $companyId, array $filters): LengthAwarePaginator
     {
-        $query = $this->model->with(['vendor', 'location', 'items.product', 'items.variant', 'payments'])
-            ->where('company_id', $companyId);
+        $query = $this->filteredQuery($companyId, $filters)
+            ->with(['vendor', 'location', 'items.product', 'items.variant', 'payments', 'receipts.location']);
+
+        $perPage = max(1, min((int) ($filters['per_page'] ?? $filters['limit'] ?? 15), 100));
+        return $query->orderByDesc('created_at')->orderByDesc('id')->paginate($perPage);
+    }
+
+    /** Company-scoped query with the list filters applied (no eager loads). */
+    private function filteredQuery(int $companyId, array $filters)
+    {
+        $query = $this->model->newQuery()->where('company_id', $companyId);
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('po_number', 'like', "%{$search}%")
-                  ->orWhereHas('vendor', fn($v) => $v->where('name', 'like', "%{$search}%"));
+                  ->orWhereHas('vendor', fn($v) => $v->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('items.product', fn($p) => $p->where('name', 'like', "%{$search}%"));
             });
         }
 
         if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+            $query->where('status', $filters['status'] === 'ordered' ? 'sent' : $filters['status']);
+        }
+
+        if (!empty($filters['payment'])) {
+            $map = ['paid' => 'paid', 'partial' => 'partially_paid', 'unpaid' => 'pending'];
+            if (isset($map[$filters['payment']])) {
+                $query->where('payment_status', $map[$filters['payment']]);
+            }
+        }
+
+        if (!empty($filters['location_id'])) {
+            $query->where('location_id', (int) $filters['location_id']);
         }
 
         if (!empty($filters['payment_status'])) {
@@ -35,13 +56,20 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
             $query->where('vendor_id', (int) $filters['vendor_id']);
         }
 
-        $perPage = min((int) ($filters['per_page'] ?? 15), 100);
-        return $query->orderByDesc('created_at')->paginate($perPage);
+        return $query;
+    }
+
+    /** Outstanding amount over every PO matching the filters (cancelled orders excluded). */
+    public function sumDue(int $companyId, array $filters): float
+    {
+        return round((float) $this->filteredQuery($companyId, $filters)
+            ->where('status', '<>', 'cancelled')
+            ->sum('due_amount'), 2);
     }
 
     public function findById(int $id, int $companyId): ?PurchaseOrder
     {
-        return $this->model->with(['vendor', 'location', 'items.product', 'items.variant', 'payments'])
+        return $this->model->with(['vendor', 'location', 'items.product', 'items.variant', 'payments', 'receipts.location'])
             ->where('id', $id)
             ->where('company_id', $companyId)
             ->first();
@@ -55,7 +83,7 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
     public function update(PurchaseOrder $po, array $data): PurchaseOrder
     {
         $po->update($data);
-        return $po->fresh(['vendor', 'location', 'items.product', 'items.variant', 'payments']);
+        return $po->fresh(['vendor', 'location', 'items.product', 'items.variant', 'payments', 'receipts.location']);
     }
 
     public function delete(int $id, int $companyId): void
@@ -65,6 +93,10 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
 
     public function nextPoNumber(int $companyId): string
     {
+        if ($configured = \App\Support\DocumentNumbers::nextPo($companyId)) {
+            return $configured;
+        }
+
         $year = date('Y');
         $prefix = "PO-{$year}-";
         $last = $this->model
@@ -79,15 +111,41 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
 
     public function getStats(int $companyId): array
     {
-        $base = $this->model->where('company_id', $companyId);
+        $rows = $this->model->where('company_id', $companyId)
+            ->groupBy('status')
+            ->selectRaw('status, COUNT(*) AS cnt, COALESCE(SUM(total_amount), 0) AS amount')
+            ->get()
+            ->keyBy('status');
+
+        $count = fn(string $st) => (int) ($rows[$st]->cnt ?? 0);
+        $amount = fn(string $st) => round((float) ($rows[$st]->amount ?? 0), 2);
+
+        $totalDue = (float) $this->model->where('company_id', $companyId)
+            ->whereIn('status', ['sent', 'partial', 'received'])
+            ->where('due_amount', '>', 0)
+            ->sum('due_amount');
+
+        $reorderCount = (int) \App\Models\Product::where('company_id', $companyId)
+            ->whereColumn('stock', '<=', 'reorder_point')
+            ->count();
 
         return [
-            'total'    => (clone $base)->count(),
-            'draft'    => (clone $base)->where('status', 'draft')->count(),
-            'sent'     => (clone $base)->where('status', 'sent')->count(),
-            'partial'  => (clone $base)->where('status', 'partial')->count(),
-            'received' => (clone $base)->where('status', 'received')->count(),
-            'cancelled'=> (clone $base)->where('status', 'cancelled')->count(),
+            'total'    => (int) $rows->sum('cnt'),
+            'draft'    => $count('draft'),
+            'sent'     => $count('sent'),
+            'partial'  => $count('partial'),
+            'received' => $count('received'),
+            'cancelled'=> $count('cancelled'),
+            'count'    => (int) $rows->sum('cnt'),
+            'totalDue' => round($totalDue, 2),
+            'reorderCount' => $reorderCount,
+            'byStatus' => [
+                'draft'     => ['count' => $count('draft'),     'amount' => $amount('draft')],
+                'ordered'   => ['count' => $count('sent'),      'amount' => $amount('sent')],
+                'partial'   => ['count' => $count('partial'),   'amount' => $amount('partial')],
+                'received'  => ['count' => $count('received'),  'amount' => $amount('received')],
+                'cancelled' => ['count' => $count('cancelled'), 'amount' => $amount('cancelled')],
+            ],
         ];
     }
 

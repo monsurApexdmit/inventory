@@ -29,6 +29,9 @@ class Product extends Model
         'sale_price',
         'offer_price',
         'offer_type',
+        'offer_ends_at',
+        'wholesale_price',
+        'min_wholesale_qty',
         'cost_price',
         'profit_margin',
         'margin_type',
@@ -47,6 +50,9 @@ class Product extends Model
         'is_best_seller',
         'deal_label',
         'receipt_number',
+        'available_in_pos',
+        'visible_online',
+        'tag',
         'image',
     ];
 
@@ -54,6 +60,9 @@ class Product extends Model
         'price' => 'float',
         'sale_price' => 'float',
         'offer_price' => 'float',
+        'offer_ends_at' => 'date:Y-m-d',
+        'wholesale_price' => 'float',
+        'min_wholesale_qty' => 'integer',
         'cost_price' => 'float',
         'profit_margin' => 'float',
         'stock' => 'integer',
@@ -64,7 +73,25 @@ class Product extends Model
         'is_featured' => 'boolean',
         'is_hot_deal' => 'boolean',
         'is_best_seller' => 'boolean',
+        'available_in_pos' => 'boolean',
+        'visible_online' => 'boolean',
     ];
+
+    /** True while the offer end date (inclusive, end of day) has not passed; no end date = open. */
+    public function isOfferWindowOpen(): bool
+    {
+        return $this->offer_ends_at === null || now()->startOfDay()->lte($this->offer_ends_at->copy()->startOfDay());
+    }
+
+    /** Offer is live when offer_price is set and the end date (if any) has not passed. */
+    public function isOfferActive(): bool
+    {
+        if ($this->offer_price === null || (float) $this->offer_price <= 0) {
+            return false;
+        }
+
+        return $this->isOfferWindowOpen();
+    }
 
     protected static function booted(): void
     {
@@ -99,7 +126,7 @@ class Product extends Model
 
     public function vendor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'vendor_id');
+        return $this->belongsTo(Vendor::class, 'vendor_id');
     }
 
     public function location(): BelongsTo

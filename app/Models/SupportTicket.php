@@ -22,10 +22,14 @@ class SupportTicket extends Model
         'customer_email',
         'guest_access_token',
         'resolved_at',
+        'admin_unread',
+        'last_read_at',
     ];
 
     protected $casts = [
         'resolved_at' => 'datetime',
+        'admin_unread' => 'boolean',
+        'last_read_at' => 'datetime',
     ];
 
     public function company(): BelongsTo

@@ -31,10 +31,22 @@ class Staff extends Model
         'salary',
         'bank_account',
         'payment_method',
+        'nid',
+        'emergency_contact',
+        'login_method',
+        'pin_hash',
+        'location_ids',
+        'last_active_at',
+        'invited_at',
     ];
+
+    protected $hidden = ['pin_hash'];
 
     protected $casts = [
         'published' => 'boolean',
+        'location_ids' => 'array',
+        'last_active_at' => 'datetime',
+        'invited_at' => 'datetime',
     ];
 
     public function company(): BelongsTo

@@ -19,6 +19,9 @@ class UpdateStaffRoleRequest extends FormRequest
             'permissions.*.permissionId' => 'required_with:permissions|integer|exists:permissions,id',
             'permissions.*.read' => 'nullable|boolean',
             'permissions.*.write' => 'nullable|boolean',
+            'permissions.*.create' => 'nullable|boolean',
+            'permissions.*.edit' => 'nullable|boolean',
+            'description' => 'nullable|string|max:255',
             'permissions.*.delete' => 'nullable|boolean',
         ];
     }

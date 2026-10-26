@@ -68,6 +68,18 @@ class SaasAuthController extends Controller
         ]);
     }
 
+    public function pinLogin(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'companyId'  => 'required|integer',
+            'identifier' => 'required|string|max:255',
+            'pin'        => ['required', 'regex:/^\d{4}$/'],
+        ]);
+        $data = $this->authService->pinLogin((int) $v['companyId'], $v['identifier'], $v['pin']);
+
+        return response()->json(['message' => 'Login successful', 'data' => $data]);
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $token = $request->attributes->get('auth_token');

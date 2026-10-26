@@ -17,12 +17,13 @@ class TailorDorji extends Model
     protected $fillable = [
         'company_id', 'name', 'phone', 'address',
         'speciality', 'commission_type', 'commission_value',
-        'status', 'notes',
+        'status', 'notes', 'max_pieces',
     ];
 
     protected $casts = [
         'speciality'       => 'array',
         'commission_value' => 'float',
+        'max_pieces'       => 'integer',
     ];
 
     public function company(): BelongsTo

@@ -6,6 +6,7 @@ use App\Models\SaasUser;
 use App\Models\Staff;
 use App\Models\User;
 use App\Services\Auth\JwtService;
+use App\Support\StaffActivity;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -82,6 +83,13 @@ class JwtAuthMiddleware
         $request->setUserResolver(static fn() => $isLegacy
             ? User::find($userId)
             : SaasUser::find($userId));
+
+        // Track staff activity (throttled; failures are swallowed)
+        if ($isLegacy) {
+            StaffActivity::touchLegacyUser((int) $userId);
+        } elseif ($saasUser) {
+            StaffActivity::touchSaasUser($saasUser);
+        }
 
         return $next($request);
     }

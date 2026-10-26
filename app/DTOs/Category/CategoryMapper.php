@@ -37,6 +37,11 @@ class CategoryMapper extends BaseMapper
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
             parent: $parent,
+            productsCount: isset($model->products_count) ? (int) $model->products_count : null,
+            description: $model->description,
+            image: $model->image,
+            color: $model->color,
+            sortOrder: (int) ($model->sort_order ?? 0),
         );
     }
 }

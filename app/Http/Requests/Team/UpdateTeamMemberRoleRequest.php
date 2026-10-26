@@ -14,7 +14,8 @@ class UpdateTeamMemberRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'role' => 'required|string|in:owner,admin,staff',
+            'role' => 'nullable|string|in:owner,admin,staff|required_without:roleId',
+            'roleId' => 'nullable|integer|exists:staff_roles,id|required_without:role',
         ];
     }
 }

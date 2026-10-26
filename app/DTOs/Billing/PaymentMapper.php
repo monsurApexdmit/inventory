@@ -32,6 +32,11 @@ class PaymentMapper extends BaseMapper
             invoiceUrl: $model->invoice_url,
             stripePaymentId: $model->stripe_payment_id,
             description: $model->description,
+            planName: $model->plan_name,
+            billingPeriod: $model->billing_period,
+            subtotal: $model->subtotal !== null ? (int) $model->subtotal : null,
+            taxAmount: $model->tax_amount !== null ? (int) $model->tax_amount : null,
+            billingEmail: $model->billing_email,
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
         );

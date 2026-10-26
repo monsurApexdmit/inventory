@@ -29,6 +29,15 @@ class ExpenseDTO extends BaseDTO
         public readonly string $updatedAt,
         public readonly ?array $category = null,
         public readonly ?array $vendor = null,
+        public readonly ?int $locationId = null,
+        public readonly ?string $locationName = null,
+        public readonly ?string $paidTo = null,
+        public readonly ?string $nextDueDate = null,
+        public readonly string $source = 'manual',
+        public readonly bool $locked = false,
+        public readonly ?string $categoryName = null,
+        public readonly ?string $categoryColor = null,
+        public readonly ?string $vendorName = null,
     ) {}
 
     public function toArray(): array
@@ -53,6 +62,15 @@ class ExpenseDTO extends BaseDTO
             'updatedAt' => $this->updatedAt,
             'category' => $this->category,
             'vendor' => $this->vendor,
+            'locationId' => $this->locationId,
+            'locationName' => $this->locationName,
+            'paidTo' => $this->paidTo,
+            'nextDueDate' => $this->nextDueDate,
+            'source' => $this->source,
+            'locked' => $this->locked,
+            'categoryName' => $this->categoryName,
+            'categoryColor' => $this->categoryColor,
+            'vendorName' => $this->vendorName,
         ];
     }
 }

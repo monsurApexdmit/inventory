@@ -65,6 +65,59 @@ class SellService
     }
 
     /**
+     * Count and revenue total of all sells matching the list filters
+     */
+    public function summarize(int $companyId, array $filters): array
+    {
+        return $this->repository->summarize($companyId, $filters);
+    }
+
+    public function tabCounts(int $companyId, array $filters): array
+    {
+        return $this->repository->tabCounts($companyId, $filters);
+    }
+
+    public function kpis(int $companyId): array
+    {
+        return $this->repository->kpis($companyId);
+    }
+
+    /**
+     * Update delivery details (receiver, phone, address, note) of an open order
+     */
+    public function updateDelivery(int $id, int $companyId, array $data): SellDTO
+    {
+        $sell = $this->repository->findByIdAndCompany($id, $companyId);
+        if (!$sell) {
+            throw new HttpException(404, 'Sell not found');
+        }
+        if ($sell->status === 'Cancelled') {
+            throw new HttpException(422, 'A cancelled order cannot be changed');
+        }
+        if ($sell->status === 'Delivered') {
+            throw new HttpException(422, 'A delivered order cannot be changed');
+        }
+
+        $update = [
+            'shipping_full_name' => trim($data['shippingFullName']),
+            'shipping_phone' => trim($data['shippingPhone']),
+            'shipping_address_line1' => trim($data['shippingAddressLine1']),
+        ];
+        if (array_key_exists('note', $data)) {
+            $update['notes'] = $data['note'] !== null ? trim($data['note']) : null;
+        }
+        foreach (['deliveryNote' => 'delivery_note', 'zoneName' => 'zone_name', 'courier' => 'carrier', 'transactionId' => 'transaction_id'] as $in => $col) {
+            if (array_key_exists($in, $data)) {
+                $v = $data[$in] !== null ? trim((string) $data[$in]) : null;
+                $update[$col] = $v === '' ? null : $v;
+            }
+        }
+        $this->repository->update($id, $update);
+
+        return $this->mapper->toDTO($this->repository->findByIdAndCompany($id, $companyId));
+    }
+
+    /**
      * Get a single sell by ID
      */
     public function get(int $id, int $companyId): SellDTO
@@ -100,18 +153,69 @@ class SellService
             }
 
             // Validate status
-            if (!empty($data['status']) && !in_array($data['status'], ['Pending', 'Processing', 'Delivered'])) {
-                throw new HttpException(400, 'Invalid status. Must be one of: Pending, Processing, Delivered');
+            if (!empty($data['status']) && !in_array($data['status'], ['Pending', 'Processing', 'Packed', 'Shipped', 'Delivered'])) {
+                throw new HttpException(400, 'Invalid status. Must be one of: Pending, Processing, Packed, Shipped, Delivered');
+            }
+
+            // Packed / Shipped are fulfillment stages of a Processing order, not order statuses
+            $initialFulfillment = null;
+            if (($data['status'] ?? null) === 'Packed' || ($data['status'] ?? null) === 'Shipped') {
+                $initialFulfillment = strtolower($data['status']);
+                $data['status'] = 'Processing';
+            }
+
+            // Cash on delivery needs a customer to collect from, and is never paid up front
+            if (($data['method'] ?? null) === 'COD') {
+                if (empty($data['customerId'])) {
+                    throw new HttpException(422, 'Cash on delivery needs a customer.');
+                }
+                if ((float) ($data['paidAmount'] ?? 0) > 0) {
+                    throw new HttpException(422, 'Cash on delivery orders are paid on delivery, not at checkout.');
+                }
+            }
+            $courier = isset($data['courier']) ? trim((string) $data['courier']) : '';
+            unset($data['courier']);
+
+            // Payment reference: transactionId and paymentTransactionId are aliases
+            $txnRef = $data['transactionId'] ?? $data['paymentTransactionId'] ?? null;
+            if ($txnRef !== null && trim((string) $txnRef) !== '') {
+                $data['transactionId'] = $data['paymentTransactionId'] = trim((string) $txnRef);
+            } else {
+                unset($data['transactionId'], $data['paymentTransactionId']);
+            }
+            // Tax is stored as sent (the amount already includes it)
+            foreach (['taxRate' => [0, 100], 'taxAmount' => [0, null]] as $k => [$lo, $hi]) {
+                if (isset($data[$k]) && $data[$k] !== '') {
+                    $v = (float) $data[$k];
+                    if ($v < $lo || ($hi !== null && $v > $hi)) {
+                        throw new HttpException(422, $k === 'taxRate' ? 'Tax rate must be between 0 and 100.' : 'Tax amount cannot be negative.');
+                    }
+                    $data[$k] = round($v, 2);
+                } else {
+                    unset($data[$k]);
+                }
             }
 
             // Validate method
-            if (!empty($data['method']) && !in_array($data['method'], ['Cash', 'Card', 'Online', 'COD'])) {
-                throw new HttpException(400, 'Invalid payment method. Must be one of: Cash, Card, Online, COD');
+            if (!empty($data['method']) && !in_array($data['method'], ['Cash', 'Card', 'Online', 'COD', 'bKash', 'Nagad', 'Bank'])) {
+                throw new HttpException(400, 'Invalid payment method. Must be one of: Cash, Card, Online, COD, bKash, Nagad, Bank');
+            }
+
+            // Validate register shift (POS)
+            if (!empty($data['registerSessionId'])) {
+                $shiftOpen = \App\Models\RegisterSession::where('id', (int) $data['registerSessionId'])
+                    ->where('company_id', $companyId)
+                    ->where('status', 'open')
+                    ->exists();
+                if (!$shiftOpen) {
+                    throw new HttpException(422, 'The register shift is closed. Open a shift before taking a sale.');
+                }
             }
 
             // Auto-generate invoice number if not provided
             if (empty($data['invoiceNo'])) {
-                $data['invoiceNo'] = 'INV-' . (int)(microtime(true) * 10000);
+                $data['invoiceNo'] = \App\Support\DocumentNumbers::nextInvoice($companyId)
+                    ?? 'INV-' . (int)(microtime(true) * 10000);
             }
 
             // Check uniqueness of invoice number
@@ -130,6 +234,7 @@ class SellService
             // Process items
             $items = $data['items'] ?? [];
             $totalCost = 0;
+            $priceDelta = 0.0; // change the server made to the line totals the client priced
 
             foreach ($items as &$item) {
                 // Resolve unit price (allow both 'unitPrice' and 'price')
@@ -137,8 +242,18 @@ class SellService
                     $item['unitPrice'] = $item['price'];
                 }
 
-                // Calculate totals
-                $item['totalPrice'] = ($item['unitPrice'] ?? 0) * ($item['quantity'] ?? 0);
+                // Price check: expired offers are ignored, wholesale kicks in from the minimum quantity
+                $beforeGross = (float) ($item['unitPrice'] ?? 0) * (float) ($item['quantity'] ?? 0);
+                $this->applyServerPrice($companyId, $item);
+                $priceDelta += (float) ($item['unitPrice'] ?? 0) * (float) ($item['quantity'] ?? 0) - $beforeGross;
+
+                // Calculate totals (per-line discount comes off the line)
+                $lineGross = ($item['unitPrice'] ?? 0) * ($item['quantity'] ?? 0);
+                $item['discount'] = round((float) ($item['discount'] ?? 0), 2);
+                if ($item['discount'] > $lineGross + 0.005) {
+                    throw new HttpException(422, 'A line discount cannot be more than the line total.');
+                }
+                $item['totalPrice'] = $lineGross - $item['discount'];
 
                 // Snapshot cost price
                 if ($item['variantId'] ?? null) {
@@ -154,6 +269,41 @@ class SellService
             }
             unset($item);
 
+            // Keep the order total in step with any line the server re-priced (wholesale)
+            if (abs($priceDelta) > 0.004) {
+                $data['amount'] = round(max(0, (float) ($data['amount'] ?? 0) + $priceDelta), 2);
+            }
+
+            // Coupon: re-validate against the cart and compute the discount here
+            $this->applyServerCoupon($companyId, $data, $items);
+
+            // VIP auto discount: a VIP customer's sale gets the group discount (Customer::VIP_DISCOUNT_PERCENT)
+            // automatically, but ONLY when the request did not specify a discount itself.
+            if (!empty($data['customerId']) && (float) ($data['discount'] ?? 0) <= 0) {
+                $isVip = \App\Models\Customer::where('company_id', $companyId)
+                    ->where('id', (int) $data['customerId'])->where('customer_group', 'vip')->exists();
+                if ($isVip) {
+                    $vipSubtotal = (float) array_sum(array_column($items, 'totalPrice'));
+                    $vipDiscount = round($vipSubtotal * \App\Models\Customer::VIP_DISCOUNT_PERCENT / 100, 2);
+                    if ($vipDiscount > 0 && (float) ($data['amount'] ?? 0) >= $vipDiscount) {
+                        $data['discount'] = $vipDiscount;
+                        $data['amount'] = round((float) $data['amount'] - $vipDiscount, 2);
+                    }
+                }
+            }
+
+            // Discounts above 10% of the subtotal need the role's `discount` flag
+            $discountAmount = (float) ($data['discount'] ?? 0);
+            if ($discountAmount > 0) {
+                $subtotal = (float) array_sum(array_column($items, 'totalPrice'));
+                if ($subtotal <= 0) {
+                    $subtotal = (float) ($data['amount'] ?? 0) + $discountAmount;
+                }
+                if ($discountAmount > $subtotal * 0.10 + 0.005) {
+                    \App\Support\Sensitive::require('discount', 'You do not have permission to give discounts above 10%');
+                }
+            }
+
             // Set computed fields
             $data['company_id'] = $companyId;
             $data['total_cost'] = $totalCost;
@@ -161,6 +311,21 @@ class SellService
             $data['status'] = $data['status'] ?? 'Pending';
             $data['method'] = $data['method'] ?? 'Cash';
             $data['stock_deducted'] = false;
+            if ($courier !== '') {
+                $data['carrier'] = $courier;
+            }
+            if ($initialFulfillment) {
+                $data['fulfillmentStatus'] = $initialFulfillment;
+            }
+
+            // Initial payment is recorded through due_payments after the sell exists
+            $hasInitialPayment = array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null;
+            $initialPaid = $hasInitialPayment ? (float) $data['paidAmount'] : 0.0;
+            if ($initialPaid > (float) ($data['amount'] ?? 0)) {
+                throw new HttpException(422, 'Paid amount cannot exceed the sale total');
+            }
+            $paymentReference = $data['paymentTransactionId'] ?? null;
+            unset($data['paidAmount']);
 
             // Convert camelCase to snake_case
             $sellData = $this->mapInputToDb($data);
@@ -180,10 +345,32 @@ class SellService
                     'variant_name' => $item['variantName'] ?? null,
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unitPrice'],
+                    'discount' => $item['discount'] ?? 0,
                     'total_price' => $item['totalPrice'],
                     'unit_cost' => $item['unitCost'] ?? 0,
                     'total_cost' => $item['totalCost'] ?? 0,
                 ]);
+            }
+
+            // Record the initial payment (only when the client sent paidAmount, so older
+            // callers such as the storefront keep their existing behaviour)
+            if ($hasInitialPayment) {
+                if ($initialPaid > 0) {
+                    $sell->payments()->create([
+                        'company_id'     => $companyId,
+                        'direction'      => 'in',
+                        'amount'         => $initialPaid,
+                        'payment_method' => $sell->method,
+                        'payment_date'   => now()->toDateString(),
+                        'reference'      => $paymentReference,
+                        'notes'          => 'Payment at sale creation',
+                    ]);
+                }
+                $sell->recalculate();
+            } else {
+                // No initial payment sent: still set due = amount so the sale shows up in dues.
+                // (The storefront does not go through this service.)
+                $sell->recalculate();
             }
 
             // Deduct stock
@@ -191,6 +378,11 @@ class SellService
 
             // Mark stock as deducted
             $sell->update(['stock_deducted' => true]);
+
+            // Orders going out with a courier get a linked shipment
+            if ($courier !== '') {
+                $this->createLinkedShipment($sell->fresh(), $companyId, $courier, $initialFulfillment);
+            }
 
             // Handle coupon usage
             if ($sell->coupon_id) {
@@ -204,6 +396,7 @@ class SellService
                     'final_amount' => $sell->amount,
                     'used_at' => now(),
                 ]);
+                Coupon::where('id', $sell->coupon_id)->increment('times_used');
 
                 $this->notificationService->notifyCouponUsed(
                     $companyId,
@@ -225,6 +418,111 @@ class SellService
     }
 
     /**
+     * Server-side line pricing. Sets wholesale when the quantity qualifies and rejects a client
+     * price below every currently valid price (e.g. an offer that has since expired).
+     * Custom lines without a product are left alone.
+     */
+    private function applyServerPrice(int $companyId, array &$item): void
+    {
+        if (empty($item['productId'])) {
+            return;
+        }
+        $product = Product::where('company_id', $companyId)->find((int) $item['productId']);
+        if (!$product) {
+            return;
+        }
+        $variant = !empty($item['variantId']) ? ProductVariant::where('product_id', $product->id)->find((int) $item['variantId']) : null;
+        $qty = (float) ($item['quantity'] ?? 0);
+        $priced = \App\Services\Pricing\PriceService::resolve($product, $variant, $qty);
+
+        $client = round((float) ($item['unitPrice'] ?? 0), 2);
+        $lowest = min($priced['valid']);
+        if ($client + 0.011 < $lowest) {
+            throw new HttpException(422, 'Price is out of date for ' . ($item['productName'] ?? $product->name) . '. Refresh the product and try again.');
+        }
+        // Wholesale quantity reached: the wholesale price wins unless the client already went lower
+        if ($priced['wholesale'] !== null && $client > $priced['wholesale'] + 0.004) {
+            $item['unitPrice'] = $priced['wholesale'];
+            $item['price'] = $priced['wholesale'];
+        }
+    }
+
+    /**
+     * Re-validate the sale's coupon against the cart and take the discount from the server.
+     * The posted `discount` is the manual discount plus the coupon's; `manualDiscount` (when sent)
+     * is the manual part. Rejects with 422 when the coupon does not apply.
+     */
+    private function applyServerCoupon(int $companyId, array &$data, array $items): void
+    {
+        if (empty($data['couponId']) && empty($data['couponCode'])) {
+            return;
+        }
+        $coupon = !empty($data['couponId'])
+            ? Coupon::where('company_id', $companyId)->where('id', (int) $data['couponId'])->lockForUpdate()->first()
+            : Coupon::where('company_id', $companyId)->where('code', $data['couponCode'])->lockForUpdate()->first();
+        if (!$coupon) {
+            throw new HttpException(422, 'This coupon does not exist');
+        }
+
+        $subtotal = round((float) array_sum(array_column($items, 'totalPrice')), 2);
+        $isStore = ($data['source'] ?? null) === 'storefront';
+        try {
+            $result = app(\App\Services\Coupon\CouponService::class)->validate($companyId, [
+                'code' => $coupon->code,
+                'orderAmount' => $subtotal,
+                'customerId' => !empty($data['customerId']) ? (int) $data['customerId'] : null,
+                'customerEmail' => $data['shippingEmail'] ?? $data['customerEmail'] ?? null,
+                'channel' => $isStore ? 'online' : 'pos',
+                'items' => array_map(fn ($i) => [
+                    'productId' => $i['productId'] ?? null,
+                    'totalPrice' => $i['totalPrice'] ?? 0,
+                ], $items),
+            ]);
+        } catch (HttpException $e) {
+            $decoded = json_decode($e->getMessage(), true);
+            throw new HttpException($e->getStatusCode(), is_array($decoded) ? ($decoded['message'] ?? 'Coupon is not valid') : $e->getMessage());
+        }
+
+        $couponDiscount = (float) $result['discountAmount'];
+        $clientDiscount = (float) ($data['discount'] ?? 0);
+        $manual = array_key_exists('manualDiscount', $data)
+            ? max(0, (float) $data['manualDiscount'])
+            : max(0, $clientDiscount - $couponDiscount);
+        $newDiscount = round(min($manual + $couponDiscount, $subtotal), 2);
+
+        $data['couponId'] = $coupon->id;
+        $data['couponCode'] = $coupon->code;
+        $data['discount'] = $newDiscount;
+        // The order total moves with the discount the server settled on
+        $data['amount'] = round(max(0, (float) ($data['amount'] ?? 0) + $clientDiscount - $newDiscount), 2);
+        unset($data['manualDiscount']);
+    }
+
+    /**
+     * Auto-create the shipment for a delivered sale (blank tracking number is generated).
+     * COD orders collect the outstanding balance on delivery.
+     */
+    private function createLinkedShipment(Sell $sell, int $companyId, string $courier, ?string $stage): void
+    {
+        $sell->recalculate();
+        $status = $sell->status === 'Delivered' ? 'delivered' : ($stage === 'shipped' ? 'in_transit' : 'pending');
+        $isCod = strcasecmp((string) $sell->method, 'COD') === 0;
+        app(\App\Services\Shipping\OrderShipmentService::class)->create($companyId, [
+            'sellId' => $sell->id,
+            'carrier' => $courier,
+            'shippingMethod' => $sell->shipping_method,
+            'status' => $status,
+            'shippingCost' => (float) $sell->shipping_cost,
+            'codAmount' => $isCod ? (float) $sell->due_amount : 0,
+            'shippedAt' => $status === 'in_transit' ? now() : null,
+        ]);
+        // The shipment sync resets the fulfillment stage; restore the stage picked at checkout
+        if ($stage && $sell->status !== 'Delivered') {
+            $sell->update(['fulfillment_status' => $stage]);
+        }
+    }
+
+    /**
      * Update a sell (no stock changes)
      */
     public function update(int $id, int $companyId, array $data): SellDTO
@@ -235,7 +533,7 @@ class SellService
         }
 
         // Only allow certain fields to be updated
-        $allowedFields = ['invoiceNo', 'orderTime', 'customerId', 'customerName', 'method', 'amount', 'shippingCost', 'discount', 'status', 'notes'];
+        $allowedFields = ['invoiceNo', 'orderTime', 'customerId', 'customerName', 'method', 'amount', 'shippingCost', 'discount', 'status', 'notes', 'transactionId', 'zoneName', 'courier', 'deliveryNote'];
         $updateData = array_intersect_key($data, array_flip($allowedFields));
 
         if (!empty($updateData)) {
@@ -257,12 +555,62 @@ class SellService
             throw new HttpException(404, 'Sell not found');
         }
 
-        if (!in_array($status, ['Pending', 'Processing', 'Delivered'])) {
-            throw new HttpException(400, 'Invalid status. Must be one of: Pending, Processing, Delivered');
+        if (!in_array($status, ['Pending', 'Processing', 'Delivered', 'Cancelled'])) {
+            throw new HttpException(400, 'Invalid status. Must be one of: Pending, Processing, Delivered, Cancelled');
         }
 
         $oldStatus = $sell->status;
-        $this->repository->update($id, ['status' => $status]);
+        if ($oldStatus === 'Cancelled' && $status !== 'Cancelled') {
+            throw new HttpException(422, 'A cancelled order cannot be reopened. Create a new sale instead.');
+        }
+
+        if ($oldStatus === 'Delivered' && $status !== 'Delivered' && $status !== 'Cancelled') {
+            throw new HttpException(422, 'A delivered order cannot be moved back to ' . $status . '. Use a return instead.');
+        }
+        if ($status === 'Pending' && $oldStatus !== 'Pending') {
+            $liveShipment = $sell->shipments->first(fn ($sh) => $sh->isLive());
+            if ($liveShipment) {
+                throw new HttpException(422, 'This order has an active shipment. Cancel the shipment before moving the order back to Pending.');
+            }
+        }
+
+        if ($status === 'Pending' && $oldStatus !== 'Pending') {
+            $this->repository->update($id, ['status' => 'Pending', 'fulfillment_status' => 'unfulfilled', 'shipped_at' => null]);
+        } elseif ($status === 'Cancelled' && $oldStatus !== 'Cancelled') {
+            if ($oldStatus === 'Delivered') {
+                throw new HttpException(422, 'A delivered order cannot be cancelled. Use a return instead.');
+            }
+            \App\Support\Sensitive::require('void', 'You do not have permission to void sales');
+            DB::transaction(function () use ($sell, $id) {
+                // Put the stock back and stop chasing money for an order that will not happen
+                if ($sell->stock_deducted) {
+                    $this->restoreStock($sell);
+                }
+                $this->repository->update($id, [
+                    'status' => 'Cancelled',
+                    'stock_deducted' => false,
+                    'due_amount' => 0,
+                    'fulfillment_status' => 'unfulfilled',
+                ]);
+            });
+        } elseif ($status === 'Delivered' && $oldStatus !== 'Delivered') {
+            DB::transaction(function () use ($sell, $id, $companyId) {
+                // Close out live shipments through the shipment service so tracking history and COD collection stay in sync
+                $shipmentService = app(\App\Services\Shipping\OrderShipmentService::class);
+                foreach ($sell->shipments as $shipment) {
+                    if ($shipment->isOpen()) {
+                        $shipmentService->updateStatus($shipment->id, $companyId, ['status' => 'delivered']);
+                    }
+                }
+                $this->repository->update($id, [
+                    'status' => 'Delivered',
+                    'fulfillment_status' => 'delivered',
+                    'delivered_at' => now(),
+                ]);
+            });
+        } else {
+            $this->repository->update($id, ['status' => $status]);
+        }
         $sell = $this->repository->findByIdAndCompany($id, $companyId);
 
         if ($oldStatus !== $status) {
@@ -278,6 +626,67 @@ class SellService
     }
 
     /**
+     * Mark an order as packed (or put it back to unfulfilled). Shipped / delivered stages are
+     * driven by shipments and the order status, so they are not set here.
+     */
+    public function updateFulfillment(int $id, int $companyId, string $value): SellDTO
+    {
+        $sell = $this->repository->findByIdAndCompany($id, $companyId);
+        if (!$sell) {
+            throw new HttpException(404, 'Sell not found');
+        }
+        if (!in_array($value, ['packed', 'shipped', 'unfulfilled'], true)) {
+            throw new HttpException(400, 'Invalid fulfillment status. Must be one of: packed, shipped, unfulfilled');
+        }
+        if ($sell->status === 'Cancelled') {
+            throw new HttpException(422, 'A cancelled order cannot be changed');
+        }
+        if ($sell->status === 'Delivered') {
+            throw new HttpException(422, 'A delivered order cannot be changed');
+        }
+        if ($sell->fulfillment_status === 'shipped' && $value !== 'shipped') {
+            throw new HttpException(422, 'This order has already been shipped');
+        }
+
+        if ($value === 'shipped') {
+            DB::transaction(function () use ($sell, $id, $companyId) {
+                $shipmentService = app(\App\Services\Shipping\OrderShipmentService::class);
+                $live = $sell->shipments->first(fn ($sh) => $sh->isOpen());
+                $isCod = strcasecmp((string) $sell->method, 'COD') === 0;
+                if ($live) {
+                    if (in_array($live->status, ['pending', null, ''], true)) {
+                        $shipmentService->updateStatus($live->id, $companyId, ['status' => 'in_transit', 'description' => 'Handed to courier']);
+                    }
+                } else {
+                    // No shipment yet: hand the order to a courier by creating a linked one
+                    $shipmentService->create($companyId, [
+                        'sellId' => $sell->id,
+                        'carrier' => $sell->carrier ?: 'Own delivery',
+                        'status' => 'in_transit',
+                        'shippedAt' => now(),
+                        'codAmount' => $isCod ? (float) $sell->due_amount : 0,
+                    ]);
+                }
+                $update = ['fulfillment_status' => 'shipped', 'shipped_at' => $sell->shipped_at ?: now()];
+                // Shipping an order means it has been confirmed
+                if ($sell->status === 'Pending') {
+                    $update['status'] = 'Processing';
+                }
+                $this->repository->update($id, $update);
+            });
+        } else {
+            $update = ['fulfillment_status' => $value];
+            // Packing an order means it has been confirmed
+            if ($value === 'packed' && $sell->status === 'Pending') {
+                $update['status'] = 'Processing';
+            }
+            $this->repository->update($id, $update);
+        }
+
+        return $this->mapper->toDTO($this->repository->findByIdAndCompany($id, $companyId));
+    }
+
+    /**
      * Delete a sell and restore stock
      */
     public function delete(int $id, int $companyId): void
@@ -285,6 +694,16 @@ class SellService
         $sell = $this->repository->findByIdAndCompany($id, $companyId);
         if (!$sell) {
             throw new HttpException(404, 'Sell not found');
+        }
+
+        if ($sell->status !== 'Cancelled') {
+            throw new HttpException(422, 'Only cancelled orders can be deleted. Cancel the order first.');
+        }
+        if ($sell->payments()->exists() || (float) $sell->paid_amount > 0) {
+            throw new HttpException(422, 'This order has recorded payments and cannot be deleted.');
+        }
+        if (\App\Models\CustomerReturn::where('company_id', $companyId)->where('order_id', $id)->exists()) {
+            throw new HttpException(422, 'This order has customer returns and cannot be deleted.');
         }
 
         // Restore stock if it was deducted
@@ -298,9 +717,9 @@ class SellService
     /**
      * Get statistics
      */
-    public function getStats(int $companyId): array
+    public function getStats(int $companyId, ?string $source = null): array
     {
-        return $this->repository->getStats($companyId);
+        return $this->repository->getStats($companyId, $source);
     }
 
     public function getWeeklyOrders(int $companyId): array
@@ -354,12 +773,45 @@ class SellService
      */
     private function deductStock(Sell $sell, array $items): void
     {
+        $locStock = app(\App\Services\Inventory\LocationStockService::class);
+        $locationId = $this->resolveStockLocation($sell, $locStock);
+
+        // Per-location stock: check every line (repeated lines add up) before touching anything
+        if ($locationId) {
+            $need = [];
+            foreach ($items as $item) {
+                $p = isset($item['productId']) ? Product::find($item['productId']) : null;
+                if (!$p || $item['quantity'] <= 0 || !$this->usesLocationStock($p, $item['variantId'] ?? null)) {
+                    continue;
+                }
+                $k = $p->id . '|' . ($item['variantId'] ?? '');
+                $need[$k] = [$p, $item['variantId'] ?? null, ($need[$k][2] ?? 0) + (int) $item['quantity']];
+            }
+            foreach ($need as [$p, $vid, $qty]) {
+                $locStock->assertAvailableAt($p, $vid ? (int) $vid : null, $locationId, $qty);
+            }
+        }
+
         foreach ($items as $item) {
             if (!isset($item['productId']) || $item['quantity'] <= 0) {
                 continue;
             }
 
             $product = Product::find($item['productId']);
+
+            if ($locationId && $product && $this->usesLocationStock($product, $item['variantId'] ?? null)) {
+                $locStock->deduct($sell->company_id, $product, ($item['variantId'] ?? null) ? (int) $item['variantId'] : null, $locationId, (int) $item['quantity'], [
+                    'reference_type' => 'sell',
+                    'reference_id' => $sell->id,
+                    'reason' => 'Sale',
+                    'notes' => $sell->invoice_no,
+                ]);
+                $product->refresh();
+                if (!$product->is_bundle && $product->reorder_point > 0 && $product->stock <= $product->reorder_point) {
+                    $this->notificationService->notifyLowStock($sell->company_id, $product->name, $product->stock, $product->reorder_point);
+                }
+                continue;
+            }
 
             if ($product && $product->is_bundle) {
                 $this->deductBundleStock($sell->company_id, $product, (int) $item['quantity']);
@@ -369,6 +821,39 @@ class SellService
                 $this->deductSimpleProductStock($sell->company_id, $item);
             }
         }
+    }
+
+    /**
+     * Location to take a sale's stock from, or null while the company still uses flat (legacy) stock.
+     * Falls back to the default location and records it on the sale.
+     */
+    private function resolveStockLocation(Sell $sell, \App\Services\Inventory\LocationStockService $locStock): ?int
+    {
+        $companyId = (int) $sell->company_id;
+        if (!$locStock->hasLocationStock($companyId)) {
+            return null;
+        }
+        $locationId = $sell->location_id ? (int) $sell->location_id : $locStock->defaultLocationId($companyId);
+        if (!\App\Models\Location::where('company_id', $companyId)->whereKey($locationId)->exists()) {
+            throw new HttpException(422, 'Stock location not found');
+        }
+        if (!$sell->location_id) {
+            $sell->update(['location_id' => $locationId]);
+        }
+        return $locationId;
+    }
+
+    /** Serial/batch-tracked items keep their dedicated deduction; everything else is per location. */
+    private function usesLocationStock(Product $product, $variantId): bool
+    {
+        if (($product->tracking_type ?? 'none') !== 'none' && !$product->is_bundle) {
+            return false;
+        }
+        if ($variantId) {
+            $v = ProductVariant::find($variantId);
+            return $v && ($v->tracking_type ?? 'none') === 'none';
+        }
+        return true;
     }
 
     /**
@@ -585,8 +1070,14 @@ class SellService
      */
     private function restoreStock(Sell $sell): void
     {
+        // Sales that took stock from a location give it back to that same location
+        $reversed = app(\App\Services\Inventory\LocationStockService::class)->reverseSale((int) $sell->company_id, (int) $sell->id);
+
         foreach ($sell->items as $item) {
             $product = Product::find($item->product_id);
+            if ($reversed && $product && $this->usesLocationStock($product, $item->variant_id)) {
+                continue;
+            }
 
             if ($product && $product->is_bundle) {
                 $this->restoreBundleStock($product, (int) $item->quantity);
@@ -769,7 +1260,16 @@ class SellService
             'shippingCountry' => 'shipping_country',
             'shippingAddressType' => 'shipping_address_type',
             'shippingCost' => 'shipping_cost',
+            'locationId' => 'location_id',
+            'registerSessionId' => 'register_session_id',
             'shippingMethod' => 'shipping_method',
+            'paymentTransactionId' => 'payment_transaction_id',
+            'transactionId' => 'transaction_id',
+            'zoneName' => 'zone_name',
+            'deliveryNote' => 'delivery_note',
+            'taxRate' => 'tax_rate',
+            'taxAmount' => 'tax_amount',
+            'courier' => 'carrier',
             'couponId' => 'coupon_id',
             'couponCode' => 'coupon_code',
             'paymentStatus' => 'payment_status',

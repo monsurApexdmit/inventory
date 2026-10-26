@@ -27,6 +27,28 @@ class StaffController extends Controller
         return $this->success($this->staffService->list($companyId, $filters));
     }
 
+    public function overview(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $result = $this->staffService->overview($companyId, $request->query());
+
+        return $this->success($result['data'], 'Success', 200, $result['meta']);
+    }
+
+    public function resendInvite(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->staffService->resendInvite($id, $companyId), 'Invite resent');
+    }
+
+    public function salarySummary(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->staffService->salarySummary($id, $companyId));
+    }
+
     public function show(Request $request, int $id): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');

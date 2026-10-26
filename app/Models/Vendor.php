@@ -25,11 +25,23 @@ class Vendor extends Model
         'description',
         'total_paid',
         'amount_payable',
+        'lead_time_days',
+        'safety_days',
+        'contact_person',
+        'district',
+        'country',
+        'payment_terms',
+        'opening_balance',
+        'tin',
+        'pay_to',
+        'account_number',
+        'notes',
     ];
 
     protected $casts = [
         'total_paid' => 'float',
         'amount_payable' => 'float',
+        'opening_balance' => 'float',
     ];
 
     public function company(): BelongsTo

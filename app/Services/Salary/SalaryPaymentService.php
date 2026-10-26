@@ -7,14 +7,17 @@ use App\DTOs\Salary\SalaryPaymentMapper;
 use App\Models\SalaryPayment;
 use App\Models\Staff;
 use App\Repositories\Contracts\ISalaryPaymentRepository;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class SalaryPaymentService
 {
     private readonly SalaryPaymentMapper $mapper;
 
-    public function __construct(private readonly ISalaryPaymentRepository $repository)
-    {
+    public function __construct(
+        private readonly ISalaryPaymentRepository $repository,
+        private readonly PayrollService $payroll,
+    ) {
         $this->mapper = new SalaryPaymentMapper();
     }
 
@@ -39,7 +42,7 @@ class SalaryPaymentService
         return $this->mapper->toDTO($payment->load('staff'));
     }
 
-    public function create(int $companyId, array $data): SalaryPaymentDTO
+    public function create(int $companyId, array $data, ?int $userId = null): SalaryPaymentDTO
     {
         $dbData = $this->mapInputToDb($data);
 
@@ -58,12 +61,18 @@ class SalaryPaymentService
             throw new HttpException(409, 'Salary payment for this staff and month already exists');
         }
 
-        $payment = $this->repository->create($dbData);
+        $dbData['base_amount'] ??= $dbData['amount'];
+
+        $payment = DB::transaction(function () use ($dbData, $userId) {
+            $payment = $this->repository->create($dbData);
+            $this->payroll->syncExpense($payment, $userId);
+            return $payment;
+        });
 
         return $this->mapper->toDTO($payment->load('staff'));
     }
 
-    public function update(int $id, int $companyId, array $data): SalaryPaymentDTO
+    public function update(int $id, int $companyId, array $data, ?int $userId = null): SalaryPaymentDTO
     {
         $payment = $this->repository->findByIdAndCompany($id, $companyId);
 
@@ -80,7 +89,16 @@ class SalaryPaymentService
             $dbData['status'] = $this->calculateStatus($amount, $paidAmount);
         }
 
-        $updated = $this->repository->update($id, $dbData);
+        if (isset($dbData['amount'])) {
+            // keep base consistent with the new net: base = net - bonus + deduction
+            $dbData['base_amount'] = max(0, round((float) $dbData['amount'] - (float) $payment->bonus + (float) $payment->deduction, 2));
+        }
+
+        $updated = DB::transaction(function () use ($id, $dbData, $userId) {
+            $updated = $this->repository->update($id, $dbData);
+            $this->payroll->syncExpense($updated, $userId);
+            return $updated;
+        });
 
         return $this->mapper->toDTO($updated->load('staff'));
     }
@@ -93,7 +111,10 @@ class SalaryPaymentService
             throw new HttpException(404, 'Salary payment not found');
         }
 
-        $this->repository->delete($id);
+        DB::transaction(function () use ($id, $payment) {
+            $this->payroll->removeExpense($payment);
+            $this->repository->delete($id);
+        });
     }
 
     private function calculateStatus(float $amount, float $paidAmount): string

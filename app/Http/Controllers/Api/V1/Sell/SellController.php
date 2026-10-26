@@ -44,6 +44,9 @@ class SellController extends Controller
                         'total' => $result['total'],
                         'last_page' => $result['last_page'],
                     ],
+                    'summary' => $this->sellService->summarize($companyId, $filters),
+                    'tabCounts' => $this->sellService->tabCounts($companyId, $filters),
+                    'kpis' => $this->sellService->kpis($companyId),
                 ]);
             }
 
@@ -67,11 +70,65 @@ class SellController extends Controller
         }
 
         try {
-            $stats = $this->sellService->getStats($companyId);
+            $stats = $this->sellService->getStats($companyId, $request->query('source'));
             return $this->success($stats, 'Statistics retrieved successfully');
         } catch (\Exception $e) {
             \Log::error('Sell stats failed', ['message' => $e->getMessage()]);
             return $this->error('Failed to retrieve statistics', 500);
+        }
+    }
+
+    /**
+     * PATCH /sells/{id}/fulfillment
+     * Body: { fulfillment: "packed" | "shipped" | "unfulfilled" }
+     */
+    public function updateFulfillment(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        if (!$companyId) {
+            return $this->error('Company ID not found in context', 401);
+        }
+        $data = $request->validate(['fulfillment' => 'required|string|in:packed,shipped,unfulfilled']);
+
+        try {
+            $dto = $this->sellService->updateFulfillment($id, $companyId, $data['fulfillment']);
+            return $this->success($dto->toArray(), 'Fulfillment updated successfully');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return $this->error($e->getMessage(), $e->getStatusCode());
+        } catch (\Exception $e) {
+            \Log::error('Sell fulfillment update failed', ['message' => $e->getMessage()]);
+            return $this->error('Failed to update fulfillment', 500);
+        }
+    }
+
+    /**
+     * PATCH /sells/{id}/delivery
+     */
+    public function updateDelivery(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        if (!$companyId) {
+            return $this->error('Company ID not found in context', 401);
+        }
+        $data = $request->validate([
+            'shippingFullName' => 'required|string|min:1|max:255',
+            'shippingPhone' => ['required', 'string', 'regex:/^[0-9+()\-\s]{6,20}$/'],
+            'shippingAddressLine1' => 'required|string|min:1|max:500',
+            'note' => 'sometimes|nullable|string|max:500',
+            'deliveryNote' => 'sometimes|nullable|string|max:1000',
+            'zoneName' => 'sometimes|nullable|string|max:150',
+            'courier' => 'sometimes|nullable|string|max:100',
+            'transactionId' => 'sometimes|nullable|string|max:100',
+        ]);
+
+        try {
+            $dto = $this->sellService->updateDelivery($id, $companyId, $data);
+            return $this->success($dto->toArray(), 'Delivery details updated successfully');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return $this->error($e->getMessage(), $e->getStatusCode());
+        } catch (\Exception $e) {
+            \Log::error('Sell delivery update failed', ['message' => $e->getMessage()]);
+            return $this->error('Failed to update delivery details', 500);
         }
     }
 

@@ -24,12 +24,26 @@ class VendorReturn extends Model
         'credit_type',
         'notes',
         'created_by',
+        'location_id',
+        'purchase_order_id',
+        'tracking_no',
+        'shipped_at',
+        'received_at',
+        'credited_at',
+        'credit_applied',
+        'reason',
+        'transport_fee',
     ];
 
     protected $casts = [
         'total_amount' => 'float',
         'return_date' => 'datetime',
         'completed_date' => 'datetime',
+        'shipped_at' => 'datetime',
+        'received_at' => 'datetime',
+        'credited_at' => 'datetime',
+        'credit_applied' => 'boolean',
+        'transport_fee' => 'float',
     ];
 
     public function company(): BelongsTo
@@ -45,5 +59,10 @@ class VendorReturn extends Model
     public function items(): HasMany
     {
         return $this->hasMany(VendorReturnItem::class, 'return_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(VendorReturnAttachment::class, 'vendor_return_id');
     }
 }

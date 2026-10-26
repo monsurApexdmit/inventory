@@ -29,7 +29,15 @@ class OrderShipmentMapper extends BaseMapper
                     'invoiceNo' => $model->sell->invoice_no,
                     'customerName' => $model->sell->customer_name,
                     'customerEmail' => $model->sell->customer_email,
-                    'customerPhone' => $model->sell->customer_phone,
+                    'customerPhone' => $model->sell->shipping_phone,
+                    'customerAddress' => implode(', ', array_filter([
+                        $model->sell->shipping_address_line1, $model->sell->shipping_address_line2,
+                        $model->sell->shipping_city, $model->sell->shipping_state, $model->sell->shipping_postal_code,
+                    ])),
+                    'area' => implode(', ', array_filter([$model->sell->shipping_city, $model->sell->shipping_state])),
+                    'source' => $model->sell->source,
+                    'paymentStatus' => $model->sell->payment_status,
+                    'dueAmount' => (float) $model->sell->due_amount,
                     'method' => $model->sell->method,
                     'amount' => (float) $model->sell->amount,
                     'status' => $model->sell->status,
@@ -53,6 +61,16 @@ class OrderShipmentMapper extends BaseMapper
             estimatedDelivery: $model->estimated_delivery ? $this->formatTimestamp($model->estimated_delivery) : null,
             deliveredAt: $model->delivered_at ? $this->formatTimestamp($model->delivered_at) : null,
             shippingCost: (float) $model->shipping_cost,
+            codAmount: (float) $model->cod_amount,
+            codCollected: $this->isCodCollected($model),
+            codCollectedAmount: $model->cod_collected_amount !== null ? (float) $model->cod_collected_amount : null,
+            codCollectedAt: $model->cod_collected_at ? $this->formatTimestamp($model->cod_collected_at) : null,
+            codState: self::codState($model),
+            rider: $model->rider,
+            package: $model->package,
+            deliveryPayer: $model->delivery_payer ?: 'customer',
+            deliverySpeed: $model->delivery_speed,
+            pickupDate: $model->pickup_date ? $model->pickup_date->format('Y-m-d') : null,
             weight: $model->weight ? (float) $model->weight : null,
             dimensions: $model->dimensions,
             notes: $model->notes,
@@ -61,6 +79,35 @@ class OrderShipmentMapper extends BaseMapper
             trackingHistory: $model->relationLoaded('trackingHistory') ? $this->formatTrackingHistory($model->trackingHistory) : null,
             sell: $sell,
         );
+    }
+
+    private function isCodCollected(OrderShipment $s): bool
+    {
+        if ($s->cod_collected) {
+            return true;
+        }
+        // Legacy delivered COD rows whose order balance was already settled
+        return $s->status === 'delivered' && self::isCod($s) && $s->sell && (float) $s->sell->due_amount <= 0;
+    }
+
+    public static function isCod(OrderShipment $s): bool
+    {
+        return (float) $s->cod_amount > 0 || ($s->sell && strcasecmp((string) $s->sell->method, 'COD') === 0);
+    }
+
+    /** prepaid | to_collect | collected | delivered_record_payment | returning */
+    public static function codState(OrderShipment $s): string
+    {
+        if (!self::isCod($s)) {
+            return 'prepaid';
+        }
+        if (in_array($s->status, ['failed', 'returned'], true)) {
+            return 'returning';
+        }
+        if ($s->cod_collected || ($s->status === 'delivered' && $s->sell && (float) $s->sell->due_amount <= 0)) {
+            return 'collected';
+        }
+        return $s->status === 'delivered' ? 'delivered_record_payment' : 'to_collect';
     }
 
     /**

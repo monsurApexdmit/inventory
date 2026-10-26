@@ -225,6 +225,7 @@ class SaasAuthService
             }
 
             $this->saasUserRepository->updateLastLogin($saasUser->id);
+            \App\Support\StaffActivity::touchSaasUser($saasUser, true);
 
             $issued = $this->jwtService->issueSaasToken($saasUser);
 
@@ -277,6 +278,7 @@ class SaasAuthService
         }
 
         $issued  = $this->jwtService->issueLegacyToken($legacyUser);
+        \App\Support\StaffActivity::touchLegacyUser($legacyUser->id, true);
         $company = $this->companyRepository->findById($staff->company_id);
 
         return [
@@ -290,6 +292,80 @@ class SaasAuthService
             'licenseKey'    => 'trial-' . $staff->company_id,
             'licenseType'   => $company->status,
             'email'         => $legacyUser->email,
+            'company'       => [
+                'id'        => $company->id,
+                'name'      => $company->name,
+                'status'    => $company->status,
+                'createdAt' => $company->created_at->toIso8601String(),
+                'updatedAt' => $company->updated_at->toIso8601String(),
+            ],
+        ];
+    }
+
+    // -------------------------------------------------------------------------
+    // PIN login (POS staff)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sign in a PIN staff member by company + identifier (phone, email or staff id) + 4-digit PIN.
+     * Returns the same payload shape as the legacy-staff email login.
+     */
+    public function pinLogin(int $companyId, string $identifier, string $pin): array
+    {
+        $identifier = trim($identifier);
+        $key = 'pin_login:' . $companyId . ':' . sha1(strtolower($identifier));
+        if (\Illuminate\Support\Facades\Cache::get($key, 0) >= 5) {
+            throw new HttpException(429, 'Too many failed attempts. Try again in 15 minutes.');
+        }
+
+        $digits = preg_replace('/\D+/', '', $identifier);
+        $candidates = Staff::where('company_id', $companyId)->where('login_method', 'pin')->whereNotNull('pin_hash')->get()
+            ->filter(function (Staff $s) use ($identifier, $digits) {
+                return (ctype_digit($identifier) && (int) $identifier === (int) $s->id && strlen($identifier) < 8)
+                    || ($s->email && strcasecmp($s->email, $identifier) === 0)
+                    || ($digits !== '' && preg_replace('/\D+/', '', (string) $s->contact) === $digits);
+            })->values();
+
+        $staff = $candidates->count() === 1 ? $candidates->first() : null;
+        // Always run a hash check so timing does not reveal whether the account exists.
+        $ok = Hash::check($pin, $staff?->pin_hash ?? Hash::make('timing-pad'));
+
+        if (!$staff || !$ok || $staff->status !== 'Active' || !$staff->published) {
+            \Illuminate\Support\Facades\Cache::put($key, \Illuminate\Support\Facades\Cache::get($key, 0) + 1, now()->addMinutes(15));
+            throw new HttpException(401, 'Invalid staff identifier or PIN.');
+        }
+        \Illuminate\Support\Facades\Cache::forget($key);
+
+        // PIN-only staff have no login account yet: create a non-guessable one so a legacy token can be issued.
+        if (!$staff->user_id || !User::find($staff->user_id)) {
+            $staffRole = \App\Models\Role::firstOrCreate(['title' => 'Staff'], ['status' => true]);
+            $user = $this->userRepository->create([
+                'username' => 'pin-staff-' . $staff->id,
+                'email'    => 'pin-staff-' . $staff->id . '@pin.local',
+                'password' => \Illuminate\Support\Str::random(40),
+                'role_id'  => $staffRole->id,
+            ]);
+            $staff->forceFill(['user_id' => $user->id])->save();
+        } else {
+            $user = User::find($staff->user_id);
+        }
+
+        $issued = $this->jwtService->issueLegacyToken($user);
+        \App\Support\StaffActivity::touchLegacyUser($user->id, true);
+        $company = $this->companyRepository->findById($staff->company_id);
+
+        return [
+            'userId'        => $user->id,
+            'userEmail'     => $user->email,
+            'staffId'       => $staff->id,
+            'companyId'     => $staff->company_id,
+            'companyName'   => $company->name,
+            'companyStatus' => $company->status,
+            'userRole'      => $staff->role ?? 'staff',
+            'token'         => $issued['token'],
+            'licenseKey'    => 'trial-' . $staff->company_id,
+            'licenseType'   => $company->status,
+            'email'         => $user->email,
             'company'       => [
                 'id'        => $company->id,
                 'name'      => $company->name,
@@ -445,6 +521,7 @@ class SaasAuthService
                 'joinedDate'  => $user->joined_date?->toIso8601String(),
                 'lastLogin'   => $user->last_login?->toIso8601String(),
                 'permissions' => null, // null = full access (owner/admin bypass)
+                'sensitive'   => \App\Support\Sensitive::forSaasUser($user), // {cost,discount,refund,export,void}
                 'roleId'      => $user->role_id,
             ],
             'company' => [
@@ -520,6 +597,8 @@ class SaasAuthService
                     $permissions[$rp->permission->name] = [
                         'read'   => (bool) $rp->read,
                         'write'  => (bool) $rp->write,
+                        'create' => (bool) $rp->create,
+                        'edit'   => (bool) $rp->edit,
                         'delete' => (bool) $rp->delete,
                     ];
                 }
@@ -537,6 +616,7 @@ class SaasAuthService
                 'joinedDate'  => $staff->joining_date ?? null,
                 'lastLogin'   => null,
                 'permissions' => $permissions, // keyed by module name
+                'sensitive'   => \App\Support\Sensitive::forStaff($staff), // {cost,discount,refund,export,void}
                 'roleId'      => $staff->staff_role_id,
             ],
             'company' => [

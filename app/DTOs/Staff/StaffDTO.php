@@ -15,7 +15,7 @@ class StaffDTO extends BaseDTO
         public readonly int $companyId,
         public readonly ?int $userId,
         public readonly string $name,
-        public readonly string $email,
+        public readonly ?string $email,
         public readonly ?string $contact,
         public readonly ?string $joiningDate,
         public readonly ?string $role,
@@ -28,6 +28,14 @@ class StaffDTO extends BaseDTO
         public readonly string $createdAt,
         public readonly string $updatedAt,
         public readonly ?array $user = null,
+        public readonly ?int $staffRoleId = null,
+        public readonly ?string $nid = null,
+        public readonly ?string $emergencyContact = null,
+        public readonly string $loginMethod = 'email',
+        public readonly bool $hasPin = false,
+        public readonly array $locationIds = [],
+        public readonly ?string $lastActiveAt = null,
+        public readonly ?string $invitedAt = null,
     ) {}
 
     /**
@@ -53,6 +61,17 @@ class StaffDTO extends BaseDTO
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
             'user' => $this->user,
+            'phone' => $this->contact,
+            'account' => $this->bankAccount,
+            'staffRoleId' => $this->staffRoleId,
+            'roleId' => $this->staffRoleId,
+            'nid' => $this->nid,
+            'emergencyContact' => $this->emergencyContact,
+            'loginMethod' => $this->loginMethod,
+            'hasPin' => $this->hasPin,
+            'locationIds' => $this->locationIds,
+            'lastActiveAt' => $this->lastActiveAt,
+            'invitedAt' => $this->invitedAt,
         ];
     }
 }

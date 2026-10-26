@@ -25,6 +25,7 @@ class BatchDTO extends BaseDTO
         public readonly ?string $notes,
         public readonly bool $isExpired,
         public readonly bool $isExpiringSoon,
+        public readonly string $status,
         public readonly string $createdAt,
         public readonly string $updatedAt,
     ) {}
@@ -50,6 +51,7 @@ class BatchDTO extends BaseDTO
             'notes'               => $this->notes,
             'isExpired'           => $this->isExpired,
             'isExpiringSoon'      => $this->isExpiringSoon,
+            'status'              => $this->status,
             'createdAt'           => $this->createdAt,
             'updatedAt'           => $this->updatedAt,
         ];

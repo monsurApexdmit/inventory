@@ -91,11 +91,17 @@ class CategoryController extends Controller
     public function bulkDelete(BulkDeleteCategoryRequest $request): JsonResponse
     {
         $companyId = (int) $request->attributes->get('auth_company_id');
-        $deleted = $this->categoryService->bulkDelete($request->validated()['ids'], $companyId);
+        $result = $this->categoryService->bulkDelete($request->validated()['ids'], $companyId);
 
-        return $this->success([
-            'message' => 'Categories deleted successfully',
-            'deleted' => $deleted,
-        ]);
+        return $this->success($result + ['message' => "{$result['deleted']} deleted, {$result['kept']} kept"]);
+    }
+
+    public function reorder(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->validate(['ids' => 'required|array|min:1', 'ids.*' => 'integer|min:1']);
+        $this->categoryService->reorder($data['ids'], $companyId);
+
+        return $this->success(null, 'Order saved');
     }
 }

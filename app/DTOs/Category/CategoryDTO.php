@@ -18,6 +18,11 @@ class CategoryDTO extends BaseDTO
         public readonly string $createdAt,
         public readonly string $updatedAt,
         public readonly ?array $parent = null,
+        public readonly ?int $productsCount = null,
+        public readonly ?string $description = null,
+        public readonly ?string $image = null,
+        public readonly ?string $color = null,
+        public readonly int $sortOrder = 0,
     ) {}
 
     public function toArray(): array
@@ -31,6 +36,11 @@ class CategoryDTO extends BaseDTO
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
             'parent' => $this->parent,
+            'productsCount' => $this->productsCount,
+            'description' => $this->description,
+            'image' => $this->image,
+            'color' => $this->color,
+            'sortOrder' => $this->sortOrder,
         ];
     }
 }

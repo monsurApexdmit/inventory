@@ -15,8 +15,9 @@ class InviteTeamMemberRequest extends FormRequest
     {
         return [
             'email' => 'required|email',
-            'fullName' => 'nullable|string|max:255',
-            'roleId' => 'nullable|integer|exists:staff_roles,id',
+            'fullName' => 'required|string|max:255',
+            'phone' => 'nullable|string|max:50',
+            'roleId' => 'required|integer|exists:staff_roles,id',
         ];
     }
 }

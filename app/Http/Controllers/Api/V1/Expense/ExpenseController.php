@@ -25,7 +25,25 @@ class ExpenseController extends Controller
 
         $expenses = $this->expenseService->list($companyId, $filters);
 
-        return $this->success($expenses);
+        // data keeps its original shape; pagination, stats, byCategory, trend and counts are mirrored in meta.
+        $s = $expenses['stats'];
+        return $this->success($expenses, 'Success', 200, [
+            'total' => $expenses['total'],
+            'per_page' => $expenses['per_page'],
+            'current_page' => $expenses['current_page'],
+            'last_page' => $expenses['last_page'],
+            'stats' => $s['stats'],
+            'byCategory' => $s['byCategory'],
+            'trend' => $s['trend'],
+            'counts' => $s['counts'],
+        ]);
+    }
+
+    public function templates(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+
+        return $this->success($this->expenseService->templates($companyId));
     }
 
     public function show(Request $request, int $id): JsonResponse

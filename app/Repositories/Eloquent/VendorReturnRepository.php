@@ -82,7 +82,7 @@ class VendorReturnRepository implements IVendorReturnRepository
                 COUNT(CASE WHEN status = ? THEN 1 END) as received_by_vendor,
                 COUNT(CASE WHEN status = ? THEN 1 END) as completed,
                 SUM(total_amount) as total_credit_amount
-            ', ['pending', 'shipped', 'received_by_vendor', 'completed'])
+            ', ['pending', 'shipped', 'received', 'credited'])
             ->first();
 
         return [

@@ -17,4 +17,8 @@ interface ICustomerRepository
     public function update(int $id, array $data): Customer;
 
     public function delete(int $id): bool;
+
+    public function applyFilters($query, array $filters): void;
+
+    public function getCounts(int $companyId): array;
 }

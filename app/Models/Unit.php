@@ -15,16 +15,25 @@ class Unit extends Model
         'company_id',
         'unit_name',
         'symbol',
+        'type',
+        'conversion_qty',
+        'conversion_unit_id',
         'status',
     ];
 
     protected $casts = [
         'status' => 'boolean',
+        'conversion_qty' => 'float',
     ];
 
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'company_id');
+    }
+
+    public function conversionUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'conversion_unit_id');
     }
 
     public function products(): HasMany

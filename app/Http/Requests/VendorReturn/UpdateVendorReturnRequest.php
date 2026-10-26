@@ -17,8 +17,8 @@ class UpdateVendorReturnRequest extends FormRequest
             'vendorId' => 'sometimes|nullable|integer|min:1',
             'vendorName' => 'sometimes|nullable|string|max:255',
             'totalAmount' => 'sometimes|nullable|numeric|min:0',
-            'creditType' => 'sometimes|nullable|string|in:refund,credit_note,replacement',
-            'status' => 'sometimes|nullable|string|in:pending,shipped,received_by_vendor,completed',
+            'creditType' => 'sometimes|nullable|string|in:note,refund,credit_note,replacement',
+            'status' => 'sometimes|nullable|string|in:pending,shipped,received,credited,received_by_vendor,completed',
             'returnDate' => 'sometimes|nullable|date',
             'notes' => 'sometimes|nullable|string',
         ];

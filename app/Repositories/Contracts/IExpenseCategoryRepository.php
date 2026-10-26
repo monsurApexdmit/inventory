@@ -17,4 +17,8 @@ interface IExpenseCategoryRepository
     public function update(int $id, array $data): ExpenseCategory;
 
     public function delete(int $id): bool;
+
+    public function getStats(int $companyId): array;
+
+    public function countExpenses(int $id): int;
 }

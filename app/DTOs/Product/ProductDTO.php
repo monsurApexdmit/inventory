@@ -54,6 +54,16 @@ class ProductDTO extends BaseDTO
         public readonly ?float $bundlePriceOverride = null,
         public readonly ?array $bundleItems = null,
         public readonly string $trackingType = 'none',
+        public readonly ?string $offerEndsAt = null,
+        public readonly bool $offerActive = false,
+        public readonly ?float $wholesalePrice = null,
+        public readonly ?int $minWholesaleQty = null,
+        public readonly bool $availableInPos = true,
+        public readonly bool $visibleOnline = true,
+        public readonly ?string $tag = null,
+        public readonly ?array $stockByLocation = null,
+        public readonly ?string $stockState = null,
+        public readonly ?float $currentPrice = null,
     ) {}
 
     public function toArray(): array
@@ -77,6 +87,11 @@ class ProductDTO extends BaseDTO
             'salePrice'     => $this->salePrice,
             'offerPrice'    => $this->offerPrice,
             'offerType'     => $this->offerType,
+            'offerEndsAt'   => $this->offerEndsAt,
+            'offerActive'   => $this->offerActive,
+            'currentPrice'  => $this->currentPrice,
+            'wholesalePrice' => $this->wholesalePrice,
+            'minWholesaleQty' => $this->minWholesaleQty,
             'costPrice'     => $this->costPrice,
             'profitMargin'  => $this->profitMargin,
             'marginType'    => $this->marginType,
@@ -104,6 +119,11 @@ class ProductDTO extends BaseDTO
             'bundlePriceOverride' => $this->bundlePriceOverride,
             'bundleItems'         => $this->bundleItems ?? [],
             'trackingType'        => $this->trackingType,
+            'availableInPos'      => $this->availableInPos,
+            'visibleOnline'       => $this->visibleOnline,
+            'tag'                 => $this->tag,
+            'stockByLocation'     => $this->stockByLocation ?? [],
+            'stockState'          => $this->stockState,
         ];
     }
 }

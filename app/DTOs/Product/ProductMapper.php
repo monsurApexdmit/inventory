@@ -14,7 +14,8 @@ class ProductMapper extends BaseMapper
     /**
      * Convert Product model to DTO
      */
-    public function toDTO(Model $model): ProductDTO
+    /** @param array{stock?:int,stockByLocation?:array,stockState?:string}|null $computed */
+    public function toDTO(Model $model, ?array $computed = null): ProductDTO
     {
         if (!$model instanceof Product) {
             throw new \InvalidArgumentException('Model must be instance of Product');
@@ -73,7 +74,7 @@ class ProductMapper extends BaseMapper
             costPrice: (float) $model->cost_price,
             profitMargin: $model->profit_margin ? (float) $model->profit_margin : null,
             marginType: $model->margin_type,
-            stock: (int) $model->stock,
+            stock: (int) ($computed['stock'] ?? $model->stock),
             reorderPoint: (int) ($model->reorder_point ?? 0),
             sku: $model->sku,
             barcode: $model->barcode,
@@ -90,7 +91,7 @@ class ProductMapper extends BaseMapper
             receiptNumber: $model->receipt_number,
             location: $location,
             inventory: !empty($inventory) ? $inventory : null,
-            variants: $model->relationLoaded('variants') ? $this->formatVariants($model->variants) : null,
+            variants: $model->relationLoaded('variants') ? $this->formatVariants($model->variants, $model) : null,
             images: $model->relationLoaded('images') ? $this->formatImages($model->images) : null,
             offerPrice: $model->offer_price ? (float) $model->offer_price : null,
             offerType: $model->offer_type,
@@ -99,6 +100,16 @@ class ProductMapper extends BaseMapper
             bundlePriceOverride: $model->bundle_price_override ? (float) $model->bundle_price_override : null,
             bundleItems: $model->relationLoaded('bundleItems') ? $this->formatBundleItems($model->bundleItems) : null,
             trackingType: $model->tracking_type ?? 'none',
+            offerEndsAt: $model->offer_ends_at?->format('Y-m-d'),
+            offerActive: $model->isOfferActive(),
+            wholesalePrice: $model->wholesale_price !== null ? (float) $model->wholesale_price : null,
+            minWholesaleQty: $model->min_wholesale_qty !== null ? (int) $model->min_wholesale_qty : null,
+            availableInPos: (bool) ($model->available_in_pos ?? true),
+            visibleOnline: (bool) ($model->visible_online ?? true),
+            tag: $model->tag,
+            stockByLocation: $computed['stockByLocation'] ?? null,
+            stockState: $computed['stockState'] ?? null,
+            currentPrice: \App\Services\Pricing\PriceService::resolve($model)['unit'],
         );
     }
 
@@ -114,6 +125,8 @@ class ProductMapper extends BaseMapper
                 'productId'   => $item->product_id,
                 'productName' => $item->relationLoaded('product') ? $item->product->name : null,
                 'productSku'  => $item->relationLoaded('product') ? $item->product->sku : null,
+                'name'        => $item->relationLoaded('product') && $item->product ? $item->product->name : null,
+                'stock'       => $this->bundleItemStock($item),
                 'variantId'   => $item->variant_id,
                 'variantName' => $item->relationLoaded('variant') && $item->variant ? $item->variant->name : null,
                 'quantity'    => $item->quantity,
@@ -121,17 +134,41 @@ class ProductMapper extends BaseMapper
         })->values()->all();
     }
 
+    private function bundleItemStock($item): ?int
+    {
+        if ($item->variant_id && $item->relationLoaded('variant') && $item->variant) {
+            return (int) $item->variant->stock;
+        }
+
+        return $item->relationLoaded('product') && $item->product ? (int) $item->product->stock : null;
+    }
+
     /**
      * Format product variants
      */
-    private function formatVariants($variants): ?array
+    private function formatVariants($variants, $parent = null): ?array
     {
         if ($variants === null || $variants->isEmpty()) {
             return null;
         }
 
         $variantMapper = new ProductVariantMapper();
-        return $variantMapper->toArrayCollection($variants);
+        $rows = $variantMapper->toArrayCollection($variants);
+
+        // Live offer + current price per variant; an expired offer prices at normal
+        foreach ($variants->values() as $i => $variant) {
+            if (!isset($rows[$i]) || !is_array($rows[$i])) {
+                continue;
+            }
+            $product = $parent;
+            if ($product) {
+                $priced = \App\Services\Pricing\PriceService::resolve($product, $variant);
+                $rows[$i]['offerActive'] = $priced['offerActive'];
+                $rows[$i]['currentPrice'] = $priced['unit'];
+            }
+        }
+
+        return $rows;
     }
 
     /**

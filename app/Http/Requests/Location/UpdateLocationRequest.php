@@ -17,6 +17,13 @@ class UpdateLocationRequest extends FormRequest
             'name' => 'sometimes|nullable|string|max:255',
             'address' => 'sometimes|nullable|string|max:255',
             'contactPerson' => 'sometimes|nullable|string|max:255',
+            'type' => 'sometimes|nullable|string|in:Warehouse,Shop,Pickup point',
+            'district' => 'sometimes|nullable|string|max:100',
+            'phone' => 'sometimes|nullable|string|max:50',
+            'manager' => 'sometimes|nullable|string|max:150',
+            'sellsInPos' => 'sometimes|nullable|boolean',
+            'shipsOnline' => 'sometimes|nullable|boolean',
+            'isPickupPoint' => 'sometimes|nullable|boolean',
             'isDefault' => 'sometimes|nullable|boolean',
         ];
     }

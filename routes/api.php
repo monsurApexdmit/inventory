@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\ShippingMethodController;
 use App\Http\Controllers\Api\V1\PaymentMethodController;
 use App\Http\Controllers\Api\V1\Shipping\OrderShipmentController;
 use App\Http\Controllers\Api\V1\StockTransfer\StockTransferController;
+use App\Http\Controllers\Api\V1\StockTransfer\TransferDocumentController;
 use App\Http\Controllers\Api\V1\StockAdjustment\StockAdjustmentController;
 use App\Http\Controllers\Api\Unit\UnitController;
 use App\Http\Controllers\Api\Brand\BrandController;
@@ -36,6 +37,8 @@ use App\Http\Controllers\Api\V1\Coupon\CouponController;
 use App\Http\Controllers\Api\V1\Inventory\InventoryController;
 use App\Http\Controllers\Api\V1\Sell\SellController;
 use App\Http\Controllers\Api\V1\Payment\DuePaymentController;
+use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
+use App\Http\Controllers\Api\V1\Pos\PosController;
 use App\Http\Controllers\Api\Notification\NotificationController;
 use App\Http\Controllers\Api\Realtime\BroadcastAuthController;
 use App\Http\Controllers\Api\Support\SupportTicketController;
@@ -96,7 +99,11 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     Route::get('/coupons/active',     [StorefrontController::class, 'activeCoupons']);
     Route::get('/shipping-methods',   [StorefrontController::class, 'shippingMethods']);
     Route::get('/payment-methods',    [StorefrontController::class, 'paymentMethods']);
+    Route::get('/pickup-points',      [StorefrontController::class, 'pickupPoints']);
+    Route::get('/settings/hours',     [StorefrontController::class, 'storeHours']);
+    Route::get('/pages',              [StorefrontController::class, 'pages']);
     Route::get('/pages/{slug}',       [StorefrontController::class, 'page']);
+    Route::get('/settings/online-store', [StorefrontController::class, 'onlineStore']);
     Route::get('/settings/company',   [StorefrontController::class, 'companySettings']);
     Route::get('/settings/homepage-hero', [StorefrontController::class, 'homepageHero']);
     Route::get('/settings/promo-banner',  [StorefrontController::class, 'promoBanner']);
@@ -211,6 +218,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/verify-email',         [SaasAuthController::class, 'verifyEmail']);
     Route::post('/resend-verification',  [SaasAuthController::class, 'resendVerification']);
     Route::post('/login',                [SaasAuthController::class, 'login']);
+    Route::post('/pin-login',            [SaasAuthController::class, 'pinLogin'])->middleware('throttle:10,1');
     Route::post('/forgot-password',      [SaasAuthController::class, 'forgotPassword']);
     Route::post('/reset-password',       [SaasAuthController::class, 'resetPassword']);
 });
@@ -238,6 +246,11 @@ Route::prefix('staff-roles')->middleware(JwtAuthMiddleware::class)->group(functi
     Route::get('/',                 [StaffRoleController::class, 'index'])->middleware('check_permission:Role & Permission.read');
     Route::post('/',                [StaffRoleController::class, 'store'])->middleware('check_permission:Role & Permission.write');
     Route::get('/permissions',      [StaffRoleController::class, 'permissions']); // open — needed for role form
+    Route::get('/matrix-modules',   [StaffRoleController::class, 'matrixModules'])->middleware('check_permission:Role & Permission.read');
+    Route::post('/matrix',          [StaffRoleController::class, 'storeMatrix'])->middleware('check_permission:Role & Permission.create');
+    Route::get('/{id}/matrix',      [StaffRoleController::class, 'matrix'])->middleware('check_permission:Role & Permission.read');
+    Route::put('/{id}/matrix',      [StaffRoleController::class, 'updateMatrix'])->middleware('check_permission:Role & Permission.write');
+    Route::post('/{id}/duplicate',  [StaffRoleController::class, 'duplicate'])->middleware('check_permission:Role & Permission.create');
     Route::get('/{id}',             [StaffRoleController::class, 'show'])->middleware('check_permission:Role & Permission.read');
     Route::put('/{id}',             [StaffRoleController::class, 'update'])->middleware('check_permission:Role & Permission.write');
     Route::delete('/{id}',          [StaffRoleController::class, 'destroy'])->middleware('check_permission:Role & Permission.delete');
@@ -265,6 +278,10 @@ Route::prefix('billing')->middleware(JwtAuthMiddleware::class)->group(function (
     Route::put('/plans/{id}',           [BillingController::class, 'updatePlan'])->middleware('check_permission:Billing Plans.write');
     Route::get('/subscription',         [BillingController::class, 'subscription'])->middleware('check_permission:Subscriptions.read');
     Route::get('/payments',             [BillingController::class, 'payments'])->middleware('check_permission:Subscriptions.read');
+    Route::get('/usage',                [BillingController::class, 'usage'])->middleware('check_permission:Subscriptions.read');
+    Route::get('/payments/{id}/invoice', [BillingController::class, 'invoice'])->middleware('check_permission:Subscriptions.read');
+    Route::put('/auto-renew',           [BillingController::class, 'autoRenew'])->middleware('check_permission:Subscriptions.write');
+    Route::put('/billing-period',       [BillingController::class, 'billingPeriod'])->middleware('check_permission:Subscriptions.write');
     Route::post('/renew',               [BillingController::class, 'renew'])->middleware('check_permission:Subscriptions.write');
     Route::post('/cancel',              [BillingController::class, 'cancel'])->middleware('check_permission:Subscriptions.write');
     Route::post('/upgrade',             [BillingController::class, 'upgrade'])->middleware('check_permission:Subscriptions.write');
@@ -281,6 +298,10 @@ Route::prefix('auth/team')->middleware(JwtAuthMiddleware::class)->group(function
     Route::get('/',                          [TeamController::class, 'index'])->middleware('check_permission:Team Members.read');
     Route::post('/invite',                   [TeamController::class, 'invite'])->middleware('check_permission:Team Members.write');
     Route::put('/{userId}/role',             [TeamController::class, 'updateRole'])->middleware('check_permission:Team Members.write');
+    Route::put('/{userId}',                  [TeamController::class, 'update'])->whereNumber('userId')->middleware('check_permission:Team Members.write');
+    Route::patch('/{userId}/status',         [TeamController::class, 'setStatus'])->middleware('check_permission:Team Members.write');
+    Route::put('/invitations/{invitationId}', [TeamController::class, 'updateInvitation'])->middleware('check_permission:Team Members.write');
+    Route::delete('/invitations/{invitationId}', [TeamController::class, 'revokeInvitation'])->middleware('check_permission:Team Members.delete');
     Route::delete('/{userId}',               [TeamController::class, 'remove'])->middleware('check_permission:Team Members.delete');
     Route::post('/{invitationId}/resend-invitation', [TeamController::class, 'resendInvitation'])->middleware('check_permission:Team Members.write');
 });
@@ -305,6 +326,9 @@ Route::prefix('staff')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::get('/',        [StaffController::class, 'index'])->middleware('check_permission:Staff.read');
     Route::post('/',       [StaffController::class, 'store'])->middleware('check_permission:Staff.write');
     Route::get('/stats',   [StaffController::class, 'stats'])->middleware('check_permission:Staff.read');
+    Route::get('/overview', [StaffController::class, 'overview'])->middleware('check_permission:Staff.read');
+    Route::post('/{id}/resend-invite', [StaffController::class, 'resendInvite'])->middleware('check_permission:Staff.edit');
+    Route::get('/{id}/salary-summary', [StaffController::class, 'salarySummary'])->middleware('check_permission:Staff.read');
     Route::get('/{id}',    [StaffController::class, 'show'])->middleware('check_permission:Staff.read');
     Route::put('/{id}',    [StaffController::class, 'update'])->middleware('check_permission:Staff.write');
     Route::delete('/{id}', [StaffController::class, 'destroy'])->middleware('check_permission:Staff.delete');
@@ -319,9 +343,13 @@ Route::prefix('categories')->middleware(JwtAuthMiddleware::class)->group(functio
     Route::get('/simple',                [CategoryController::class, 'simple'])->middleware('check_permission:Categories.read');
     Route::get('/stats',                 [CategoryController::class, 'stats'])->middleware('check_permission:Categories.read');
     Route::post('/',                     [CategoryController::class, 'store'])->middleware('check_permission:Categories.write');
+    Route::post('/with-image',           [CategoryController::class, 'store'])->middleware('check_permission:Categories.write');
     Route::post('/bulk-delete',          [CategoryController::class, 'bulkDelete'])->middleware('check_permission:Categories.delete');
+    Route::post('/reorder',              [CategoryController::class, 'reorder'])->middleware('check_permission:Categories.write');
     Route::get('/{id}',                  [CategoryController::class, 'show'])->middleware('check_permission:Categories.read');
     Route::put('/{id}',                  [CategoryController::class, 'update'])->middleware('check_permission:Categories.write');
+    Route::put('/{id}/with-image',       [CategoryController::class, 'update'])->middleware('check_permission:Categories.write');
+    Route::post('/{id}/with-image',      [CategoryController::class, 'update'])->middleware('check_permission:Categories.write');
     Route::patch('/{id}/toggle-status',  [CategoryController::class, 'toggleStatus'])->middleware('check_permission:Categories.write');
     Route::delete('/{id}',               [CategoryController::class, 'destroy'])->middleware('check_permission:Categories.delete');
 });
@@ -370,16 +398,22 @@ Route::prefix('settings')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::patch('/general',             [SettingController::class, 'updateGeneral'])->middleware('check_permission:Settings.write');
     Route::patch('/tax',                 [SettingController::class, 'updateTax'])->middleware('check_permission:Settings.write');
     Route::patch('/shipping',            [SettingController::class, 'updateShipping'])->middleware('check_permission:Settings.write');
+    Route::get('/payment',               [SettingController::class, 'getPayment']); // POS: enabled methods + channels (no account fields)
     Route::patch('/payment',             [SettingController::class, 'updatePayment'])->middleware('check_permission:Settings.write');
     Route::patch('/business',            [SettingController::class, 'updateBusiness'])->middleware('check_permission:Settings.write');
     Route::patch('/regional',            [SettingController::class, 'updateRegional'])->middleware('check_permission:International.write');
     Route::patch('/notifications',       [SettingController::class, 'updateNotifications'])->middleware('check_permission:Settings.write');
+    Route::get('/notification-preferences', [SettingController::class, 'getNotificationPreferences'])->middleware('check_permission:Settings.read');
+    Route::put('/notification-preferences', [SettingController::class, 'updateNotificationPreferences'])->middleware('check_permission:Settings.write');
     Route::get('/store-hours',           [SettingController::class, 'getStoreHours'])->middleware('check_permission:Settings.read');
     Route::patch('/store-hours',         [SettingController::class, 'updateStoreHours'])->middleware('check_permission:Settings.write');
     Route::post('/change-password',      [SettingController::class, 'changePassword']); // own profile — no permission gate
     Route::post('/upload-logo',          [SettingController::class, 'uploadLogo'])->middleware('check_permission:Settings.write');
     Route::post('/upload-banner',        [SettingController::class, 'uploadBanner'])->middleware('check_permission:Settings.write');
-    Route::post('/upload-storefront-image', [SettingController::class, 'uploadStorefrontImage'])->middleware('check_permission:Aura Shop.write');
+    Route::put('/branding',              [SettingController::class, 'updateBranding'])->middleware('check_permission:Settings.write');
+    Route::delete('/logo',               [SettingController::class, 'removeLogo'])->middleware('check_permission:Settings.write');
+    Route::delete('/banner',             [SettingController::class, 'removeBanner'])->middleware('check_permission:Settings.write');
+    Route::post('/upload-storefront-image', [SettingController::class, 'uploadStorefrontImage'])->middleware('check_permission:Settings.write');
     Route::put('/{section}',             [SettingController::class, 'updateSection'])->middleware('check_permission:Settings.write');
 });
 
@@ -391,6 +425,9 @@ Route::prefix('products')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::get('/',      [ProductController::class, 'index'])->middleware('check_permission:Products.read');
     Route::post('/',     [ProductController::class, 'store'])->middleware('check_permission:Products.write');
     Route::get('/stats', [ProductController::class, 'stats'])->middleware('check_permission:Products.read');
+    Route::post('/bulk-price',        [ProductController::class, 'bulkPrice'])->middleware('check_permission:Products.write');
+    Route::post('/bulk-adjust-stock', [ProductController::class, 'bulkAdjustStock'])->middleware('check_permission:Products.write');
+    Route::post('/import',            [ProductController::class, 'import'])->middleware('check_permission:Products.write');
 
     // Barcode endpoints (Display)
     Route::post('/barcode/search',          [ProductController::class, 'findByBarcode'])->middleware('check_permission:Products.read');
@@ -418,6 +455,9 @@ Route::prefix('vendors')->middleware(JwtAuthMiddleware::class)->group(function (
     Route::get('/',        [VendorController::class, 'index'])->middleware('check_permission:Vendors.read');
     Route::post('/',       [VendorController::class, 'store'])->middleware('check_permission:Vendors.write');
     Route::get('/stats',   [VendorController::class, 'stats'])->middleware('check_permission:Vendors.read');
+    Route::get('/overview', [VendorController::class, 'overview'])->middleware('check_permission:Vendors.read');
+    Route::get('/{id}/profile',  [VendorController::class, 'profile'])->middleware('check_permission:Vendors.read');
+    Route::post('/{id}/payments', [VendorController::class, 'pay'])->middleware('check_permission:Vendors.write');
     Route::get('/{id}',    [VendorController::class, 'show'])->middleware('check_permission:Vendors.read');
     Route::put('/{id}',    [VendorController::class, 'update'])->middleware('check_permission:Vendors.write');
     Route::delete('/{id}', [VendorController::class, 'destroy'])->middleware('check_permission:Vendors.delete');
@@ -435,6 +475,7 @@ Route::prefix('expenses')->middleware(JwtAuthMiddleware::class)->group(function 
     Route::get('/',        [ExpenseController::class, 'index'])->middleware('check_permission:Expenses.read');
     Route::post('/',       [ExpenseController::class, 'store'])->middleware('check_permission:Expenses.write');
     Route::get('/stats',   [ExpenseController::class, 'stats'])->middleware('check_permission:Expenses.read');
+    Route::get('/templates', [ExpenseController::class, 'templates'])->middleware('check_permission:Expenses.read');
     Route::get('/{id}',    [ExpenseController::class, 'show'])->middleware('check_permission:Expenses.read');
     Route::put('/{id}',    [ExpenseController::class, 'update'])->middleware('check_permission:Expenses.write');
     Route::delete('/{id}', [ExpenseController::class, 'destroy'])->middleware('check_permission:Expenses.delete');
@@ -444,9 +485,21 @@ Route::prefix('expenses')->middleware(JwtAuthMiddleware::class)->group(function 
 // Phase 14: Customer Dues (Due Management Phase 1)
 // ─────────────────────────────────────────────────────────────────────────────
 
+Route::prefix('dashboard')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/{section}', [DashboardController::class, 'section'])->middleware('check_permission:Dashboard.read');
+});
+
 Route::prefix('dues')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/customers', [SellController::class, 'dues'])->middleware('check_permission:Dues.read');
     Route::get('/vendors', [PurchaseOrderController::class, 'dues'])->middleware('check_permission:Dues.read');
+    Route::get('/customers/summary', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'customerSummary'])->middleware('check_permission:Dues.read');
+    Route::get('/vendors/summary', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'vendorSummary'])->middleware('check_permission:Dues.read');
+    Route::get('/history', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'history'])->middleware('check_permission:Dues.read');
+    Route::get('/customers/{id}/documents', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'customerDocuments'])->middleware('check_permission:Dues.read');
+    Route::get('/vendors/{id}/documents', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'vendorDocuments'])->middleware('check_permission:Dues.read');
+    Route::post('/customers/{id}/collect', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'collect'])->middleware('check_permission:Dues.write');
+    Route::post('/vendors/{id}/pay', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'payVendor'])->middleware('check_permission:Dues.write');
+    Route::post('/customers/{id}/remind', [\App\Http\Controllers\Api\V1\Payment\DueGroupController::class, 'remind'])->middleware('check_permission:Dues.write');
 });
 Route::prefix('payments')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::post('/{payableType}/{id}', [DuePaymentController::class, 'store'])->middleware('check_permission:Dues.write');
@@ -466,10 +519,13 @@ Route::prefix('purchase-orders')->middleware(JwtAuthMiddleware::class)->group(fu
 Route::prefix('vendor-returns')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',                  [VendorReturnController::class, 'index'])->middleware('check_permission:Vendor Returns.read');
     Route::post('/',                 [VendorReturnController::class, 'store'])->middleware('check_permission:Vendor Returns.write');
+    Route::get('/returnable-items',  [VendorReturnController::class, 'returnableItems'])->middleware('check_permission:Vendor Returns.read');
     Route::get('/stats',             [VendorReturnController::class, 'stats'])->middleware('check_permission:Vendor Returns.read');
     Route::get('/{id}',              [VendorReturnController::class, 'show'])->middleware('check_permission:Vendor Returns.read');
     Route::put('/{id}',              [VendorReturnController::class, 'update'])->middleware('check_permission:Vendor Returns.write');
     Route::patch('/{id}/status',     [VendorReturnController::class, 'updateStatus'])->middleware('check_permission:Vendor Returns.write');
+    Route::post('/{id}/attachments', [VendorReturnController::class, 'addAttachments'])->middleware('check_permission:Vendor Returns.write');
+    Route::delete('/{id}/attachments/{attachmentId}', [VendorReturnController::class, 'removeAttachment'])->middleware('check_permission:Vendor Returns.write');
     Route::delete('/{id}',           [VendorReturnController::class, 'destroy'])->middleware('check_permission:Vendor Returns.delete');
     Route::get('/vendor/{vendorId}', [VendorReturnController::class, 'getByVendor'])->middleware('check_permission:Vendor Returns.read');
 });
@@ -482,6 +538,12 @@ Route::prefix('customers')->middleware(JwtAuthMiddleware::class)->group(function
     Route::get('/',        [CustomerController::class, 'index'])->middleware('check_permission:Customers.read');
     Route::post('/',       [CustomerController::class, 'store'])->middleware('check_permission:Customers.write');
     Route::get('/stats',   [CustomerController::class, 'stats'])->middleware('check_permission:Customers.read');
+    Route::get('/duplicates',  [CustomerController::class, 'duplicates'])->middleware('check_permission:Customers.read');
+    Route::get('/sms-numbers', [CustomerController::class, 'smsNumbers'])->middleware('check_permission:Customers.read');
+    Route::post('/merge',      [CustomerController::class, 'merge'])->middleware('check_permission:Customers.write');
+    Route::post('/bulk-tag',   [CustomerController::class, 'bulkTag'])->middleware('check_permission:Customers.write');
+    Route::post('/import',     [CustomerController::class, 'import'])->middleware('check_permission:Customers.write');
+    Route::patch('/{id}/status', [CustomerController::class, 'setStatus'])->middleware('check_permission:Customers.write');
     Route::get('/{id}',    [CustomerController::class, 'show'])->middleware('check_permission:Customers.read');
     Route::put('/{id}',    [CustomerController::class, 'update'])->middleware('check_permission:Customers.write');
     Route::delete('/{id}', [CustomerController::class, 'destroy'])->middleware('check_permission:Customers.delete');
@@ -497,12 +559,17 @@ Route::prefix('sells')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::get('/{id}',                [SellController::class, 'show'])->middleware('check_permission:Orders.read');
     Route::put('/{id}',                [SellController::class, 'update'])->middleware('check_permission:Orders.write');
     Route::patch('/{id}/status',       [SellController::class, 'updateStatus'])->middleware('check_permission:Orders.write');
+    Route::patch('/{id}/fulfillment',  [SellController::class, 'updateFulfillment'])->middleware('check_permission:Orders.write');
+    Route::patch('/{id}/delivery',     [SellController::class, 'updateDelivery'])->middleware('check_permission:Orders.write');
+    Route::get('/{id}/follow-ups',     [\App\Http\Controllers\Api\V1\Sell\OrderFollowUpController::class, 'index'])->middleware('check_permission:Orders.read');
+    Route::post('/{id}/follow-ups',    [\App\Http\Controllers\Api\V1\Sell\OrderFollowUpController::class, 'store'])->middleware('check_permission:Orders.write');
     Route::delete('/{id}',             [SellController::class, 'destroy'])->middleware('check_permission:Orders.delete');
 });
 
 Route::prefix('customer-returns')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',                      [CustomerReturnController::class, 'index'])->middleware('check_permission:Customer Returns.read');
     Route::post('/',                     [CustomerReturnController::class, 'store'])->middleware('check_permission:Customer Returns.write');
+    Route::get('/returnable-orders',     [CustomerReturnController::class, 'returnableOrders'])->middleware('check_permission:Customer Returns.read');
     Route::get('/stats',                 [CustomerReturnController::class, 'stats'])->middleware('check_permission:Customer Returns.read');
     Route::get('/{id}',                  [CustomerReturnController::class, 'show'])->middleware('check_permission:Customer Returns.read');
     Route::put('/{id}',                  [CustomerReturnController::class, 'update'])->middleware('check_permission:Customer Returns.write');
@@ -532,6 +599,13 @@ Route::prefix('shipping-methods')->middleware(JwtAuthMiddleware::class)->group(f
     Route::patch('/{id}/toggle',  [ShippingMethodController::class, 'toggle'])->middleware('check_permission:Shipping Methods.write');
 });
 
+Route::prefix('courier-accounts')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',        [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'index'])->middleware('check_permission:Shipping Methods.read');
+    Route::post('/',       [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'store'])->middleware('check_permission:Shipping Methods.write');
+    Route::put('/{id}',    [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'update'])->middleware('check_permission:Shipping Methods.write');
+    Route::delete('/{id}', [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'destroy'])->middleware('check_permission:Shipping Methods.delete');
+});
+
 Route::prefix('pages')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',        [ContentPageController::class, 'index'])->middleware('check_permission:Pages.read');
     Route::post('/',       [ContentPageController::class, 'store'])->middleware('check_permission:Pages.write');
@@ -552,6 +626,8 @@ Route::prefix('shipments')->middleware(JwtAuthMiddleware::class)->group(function
     Route::get('/',               [OrderShipmentController::class, 'index'])->middleware('check_permission:Shipments.read');
     Route::post('/',              [OrderShipmentController::class, 'store'])->middleware('check_permission:Shipments.write');
     Route::get('/stats',          [OrderShipmentController::class, 'stats'])->middleware('check_permission:Shipments.read');
+    Route::get('/ready-to-ship',  [OrderShipmentController::class, 'readyToShip'])->middleware('check_permission:Shipments.read');
+    Route::post('/{id}/cod-payment', [OrderShipmentController::class, 'recordCodPayment'])->middleware('check_permission:Shipments.write');
     Route::get('/{id}',           [OrderShipmentController::class, 'show'])->middleware('check_permission:Shipments.read');
     Route::patch('/{id}/status',  [OrderShipmentController::class, 'updateStatus'])->middleware('check_permission:Shipments.write');
     Route::post('/{id}/tracking', [OrderShipmentController::class, 'addTracking'])->middleware('check_permission:Shipments.write');
@@ -567,7 +643,16 @@ Route::get('/tailor/track/{token}', [\App\Http\Controllers\Api\Tailor\TailorCont
 // Phase 8: Staff & Payroll
 // ─────────────────────────────────────────────────────────────────────────────
 
+Route::prefix('salary')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/payroll',          [SalaryPaymentController::class, 'payroll'])->middleware('check_permission:Salary Management.read');
+    Route::post('/payroll/generate', [SalaryPaymentController::class, 'generate'])->middleware('check_permission:Salary Management.create');
+    Route::post('/payroll/pay-all', [SalaryPaymentController::class, 'payAll'])->middleware('check_permission:Salary Management.edit');
+});
+
 Route::prefix('salary-payments')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::patch('/{id}/adjust',  [SalaryPaymentController::class, 'adjust'])->middleware('check_permission:Salary Management.edit');
+    Route::post('/{id}/pay',      [SalaryPaymentController::class, 'pay'])->middleware('check_permission:Salary Management.edit');
+    Route::post('/{id}/reverse',  [SalaryPaymentController::class, 'reverse'])->middleware('check_permission:Salary Management.edit');
     Route::get('/',        [SalaryPaymentController::class, 'index'])->middleware('check_permission:Salary Management.read');
     Route::post('/',       [SalaryPaymentController::class, 'store'])->middleware('check_permission:Salary Management.write');
     Route::get('/{id}',    [SalaryPaymentController::class, 'show'])->middleware('check_permission:Salary Management.read');
@@ -581,6 +666,9 @@ Route::prefix('salary-payments')->middleware(JwtAuthMiddleware::class)->group(fu
 
 Route::prefix('transfers')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/products-by-location/{locationId}', [StockTransferController::class, 'getProductsByLocation'])->middleware('check_permission:Transfers.read');
+    Route::get('/documents',   [TransferDocumentController::class, 'index'])->middleware('check_permission:Transfers.read');
+    Route::post('/document',   [TransferDocumentController::class, 'store'])->middleware('check_permission:Transfers.write');
+    Route::put('/documents/{id}/cancel', [TransferDocumentController::class, 'cancel'])->middleware('check_permission:Transfers.write');
     Route::get('/',            [StockTransferController::class, 'index'])->middleware('check_permission:Transfers.read');
     Route::post('/',           [StockTransferController::class, 'store'])->middleware('check_permission:Transfers.write');
     Route::put('/{id}/cancel', [StockTransferController::class, 'cancelTransfer'])->middleware('check_permission:Transfers.write');
@@ -616,6 +704,7 @@ Route::prefix('coupons')->middleware(JwtAuthMiddleware::class)->group(function (
 // ─────────────────────────────────────────────────────────────────────────────
 
 Route::prefix('inventory')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/overview', [InventoryController::class, 'overview'])->middleware('check_permission:Inventory.read');
     Route::get('/', [InventoryController::class, 'index'])->middleware('check_permission:Inventory.read');
 });
 
@@ -625,6 +714,7 @@ Route::prefix('inventory')->middleware(JwtAuthMiddleware::class)->group(function
 
 Route::prefix('wishlists')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/analytics', [WishlistAnalyticsController::class, 'analytics'])->middleware('check_permission:Store Wishlist.read');
+    Route::delete('/clear', [SettingController::class, 'clearWishlist'])->middleware('check_permission:Store Wishlist.delete');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -633,6 +723,9 @@ Route::prefix('wishlists')->middleware(JwtAuthMiddleware::class)->group(function
 
 Route::prefix('notifications')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',              [NotificationController::class, 'index'])->middleware('check_permission:Notifications.read');
+    Route::get('/alerts',            [NotificationController::class, 'alerts'])->middleware('check_permission:Notifications.read');
+    Route::post('/alerts/dismiss',   [NotificationController::class, 'dismissAlert'])->middleware('check_permission:Notifications.write');
+    Route::post('/alerts/restore',   [NotificationController::class, 'restoreAlerts'])->middleware('check_permission:Notifications.write');
     Route::get('/unread-count',  [NotificationController::class, 'unreadCount'])->middleware('check_permission:Notifications.read');
     Route::patch('/read-all',    [NotificationController::class, 'markAllAsRead'])->middleware('check_permission:Notifications.write');
     Route::delete('/bulk',       [NotificationController::class, 'bulkDelete'])->middleware('check_permission:Notifications.delete');
@@ -647,6 +740,7 @@ Route::prefix('notifications')->middleware(JwtAuthMiddleware::class)->group(func
 
 Route::prefix('support/tickets')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',                [SupportTicketController::class, 'index'])->middleware('check_permission:Support.read');
+    Route::post('/',               [SupportTicketController::class, 'store'])->middleware('check_permission:Support.write');
     Route::get('/stats',           [SupportTicketController::class, 'stats'])->middleware('check_permission:Support.read');
     Route::get('/{id}',            [SupportTicketController::class, 'show'])->middleware('check_permission:Support.read');
     Route::post('/{id}/reply',     [SupportTicketController::class, 'reply'])->middleware('check_permission:Support.write');
@@ -662,13 +756,16 @@ Route::prefix('support/tickets')->middleware(JwtAuthMiddleware::class)->group(fu
 
 Route::prefix('tailor')->middleware(JwtAuthMiddleware::class)->group(function () {
     // Dashboard
-    Route::get('/dashboard',                    [TailorController::class, 'dashboard'])->middleware('check_permission:TailorShop.read');
+    Route::get('/dashboard',                    [\App\Http\Controllers\Api\Tailor\TailorInsightsController::class, 'dashboard'])->middleware('check_permission:TailorShop.read');
 
     // Fabrics
     Route::get('/fabrics',                      [TailorController::class, 'fabricIndex'])->middleware('check_permission:TailorFabric.read');
     Route::post('/fabrics',                     [TailorController::class, 'fabricStore'])->middleware('check_permission:TailorFabric.write');
     Route::put('/fabrics/{id}',                 [TailorController::class, 'fabricUpdate'])->middleware('check_permission:TailorFabric.write');
     Route::delete('/fabrics/{id}',              [TailorController::class, 'fabricDestroy'])->middleware('check_permission:TailorFabric.delete');
+    Route::get('/fabrics/overview',             [\App\Http\Controllers\Api\Tailor\TailorFabricOverviewController::class, 'overview'])->middleware('check_permission:TailorFabric.read');
+    Route::post('/fabrics/{id}/restock',        [\App\Http\Controllers\Api\Tailor\TailorFabricOverviewController::class, 'restock'])->middleware('check_permission:TailorFabric.write');
+    Route::get('/fabrics/{id}/movements',       [\App\Http\Controllers\Api\Tailor\TailorFabricOverviewController::class, 'movements'])->middleware('check_permission:TailorFabric.read');
 
     // Customers
     Route::get('/customers',                    [TailorController::class, 'customerIndex'])->middleware('check_permission:TailorOrders.read,TailorMeasurements.read');
@@ -680,16 +777,28 @@ Route::prefix('tailor')->middleware(JwtAuthMiddleware::class)->group(function ()
     Route::get('/customers/{id}/orders',        [TailorController::class, 'customerOrders'])->middleware('check_permission:TailorOrders.read');
 
     // Measurements
+    Route::get('/measurements/customers',        [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'measurementCustomers'])->middleware('check_permission:TailorMeasurements.read');
+    Route::get('/measurements/customer/{customerId}/sets', [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'measurementSets'])->middleware('check_permission:TailorMeasurements.read');
+    Route::delete('/measurements/{id}',          [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'measurementDestroy'])->middleware('check_permission:TailorMeasurements.write');
     Route::get('/measurements',                  [TailorController::class, 'measurementIndex'])->middleware('check_permission:TailorMeasurements.read');
     Route::get('/measurements/customer/{customerId}', [TailorController::class, 'measurementByCustomer'])->middleware('check_permission:TailorMeasurements.read');
-    Route::post('/measurements',                [TailorController::class, 'measurementStore'])->middleware('check_permission:TailorMeasurements.write');
-    Route::put('/measurements/{id}',            [TailorController::class, 'measurementUpdate'])->middleware('check_permission:TailorMeasurements.write');
+    Route::post('/measurements',                [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'measurementStore'])->middleware('check_permission:TailorMeasurements.write');
+    Route::put('/measurements/{id}',            [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'measurementUpdate'])->middleware('check_permission:TailorMeasurements.write');
 
     // Dorjis
+    Route::get('/dorjis/overview',              [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'dorjiOverview'])->middleware('check_permission:TailorDorji.read');
     Route::get('/dorjis',                       [TailorController::class, 'dorjiIndex'])->middleware('check_permission:TailorDorji.read');
-    Route::post('/dorjis',                      [TailorController::class, 'dorjiStore'])->middleware('check_permission:TailorDorji.write');
-    Route::put('/dorjis/{id}',                  [TailorController::class, 'dorjiUpdate'])->middleware('check_permission:TailorDorji.write');
-    Route::delete('/dorjis/{id}',               [TailorController::class, 'dorjiDestroy'])->middleware('check_permission:TailorDorji.delete');
+    Route::post('/dorjis',                      [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'dorjiStore'])->middleware('check_permission:TailorDorji.write');
+    Route::put('/dorjis/{id}',                  [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'dorjiUpdate'])->middleware('check_permission:TailorDorji.write');
+    Route::delete('/dorjis/{id}',               [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'dorjiDestroy'])->middleware('check_permission:TailorDorji.delete');
+
+    // Orders (board / new-order screens; static paths must precede /orders/{id})
+    Route::get('/orders/board',                 [\App\Http\Controllers\Api\Tailor\TailorOrderBoardController::class, 'index'])->middleware('check_permission:TailorOrders.read');
+    Route::get('/orders/form-options',          [\App\Http\Controllers\Api\Tailor\TailorOrderBoardController::class, 'formOptions'])->middleware('check_permission:TailorOrders.read');
+    Route::post('/orders/place',                [\App\Http\Controllers\Api\Tailor\TailorOrderBoardController::class, 'place'])->middleware('check_permission:TailorOrders.write');
+    Route::get('/orders/{id}/detail',           [\App\Http\Controllers\Api\Tailor\TailorOrderBoardController::class, 'show'])->middleware('check_permission:TailorOrders.read');
+    Route::patch('/orders/{id}/transition',     [\App\Http\Controllers\Api\Tailor\TailorOrderBoardController::class, 'transition'])->middleware('check_permission:TailorOrders.write');
+    Route::post('/orders/{id}/payments',        [\App\Http\Controllers\Api\Tailor\TailorOrderBoardController::class, 'recordPayment'])->middleware('check_permission:TailorOrders.write');
 
     // Orders
     Route::get('/orders',                       [TailorController::class, 'orderIndex'])->middleware('check_permission:TailorOrders.read');
@@ -699,15 +808,23 @@ Route::prefix('tailor')->middleware(JwtAuthMiddleware::class)->group(function ()
     Route::patch('/orders/{id}/status',         [TailorController::class, 'orderUpdateStatus'])->middleware('check_permission:TailorOrders.write');
 
     // Assignments
+    Route::get('/assignments/board',            [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'assignmentBoard'])->middleware('check_permission:TailorOrders.read');
+    Route::get('/assignments/options',          [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'assignmentOptions'])->middleware('check_permission:TailorOrders.read');
+    Route::delete('/assignments/{id}',          [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'assignmentDestroy'])->middleware('check_permission:TailorOrders.write');
     Route::get('/assignments',                  [TailorController::class, 'assignmentIndex'])->middleware('check_permission:TailorOrders.read');
-    Route::post('/assignments',                 [TailorController::class, 'assignmentStore'])->middleware('check_permission:TailorOrders.write');
-    Route::put('/assignments/{id}',             [TailorController::class, 'assignmentUpdate'])->middleware('check_permission:TailorOrders.write');
+    Route::post('/assignments',                 [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'assignmentStore'])->middleware('check_permission:TailorOrders.write');
+    Route::put('/assignments/{id}',             [\App\Http\Controllers\Api\Tailor\TailorWorkshopController::class, 'assignmentUpdate'])->middleware('check_permission:TailorOrders.write');
 
     // Payments
     Route::get('/payments',                     [TailorController::class, 'paymentIndex'])->middleware('check_permission:TailorPayments.read');
     Route::post('/payments',                    [TailorController::class, 'paymentStore'])->middleware('check_permission:TailorPayments.write');
+    Route::get('/payments/ledger',              [\App\Http\Controllers\Api\Tailor\TailorPaymentLedgerController::class, 'ledger'])->middleware('check_permission:TailorPayments.read');
+    Route::get('/payments/options',             [\App\Http\Controllers\Api\Tailor\TailorPaymentLedgerController::class, 'options'])->middleware('check_permission:TailorPayments.read');
+    Route::delete('/payments/{id}',             [\App\Http\Controllers\Api\Tailor\TailorPaymentLedgerController::class, 'destroy'])->middleware('check_permission:TailorPayments.delete');
+    Route::post('/payments/record',             [\App\Http\Controllers\Api\Tailor\TailorPaymentLedgerController::class, 'record'])->middleware('check_permission:TailorPayments.write');
 
     // Reports
+    Route::get('/reports',                      [\App\Http\Controllers\Api\Tailor\TailorInsightsController::class, 'report'])->middleware('check_permission:TailorReports.read');
     Route::get('/reports/orders',               [TailorController::class, 'reportOrders'])->middleware('check_permission:TailorReports.read');
     Route::get('/reports/fabrics',              [TailorController::class, 'reportFabrics'])->middleware('check_permission:TailorReports.read');
     Route::get('/reports/dorjis',               [TailorController::class, 'reportDorjis'])->middleware('check_permission:TailorReports.read');
@@ -735,3 +852,20 @@ Route::prefix('batches')->middleware(JwtAuthMiddleware::class)->group(function (
 // Inventory movements
 Route::get('/inventory-movements', [SerialBatchController::class, 'indexMovements'])
     ->middleware([JwtAuthMiddleware::class, 'check_permission:Inventory.read']);
+
+// POS register shifts, held sales, best sellers
+Route::prefix('pos')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/shift',                [PosController::class, 'shift'])->middleware('check_permission:POS.read');
+    Route::post('/shift/open',          [PosController::class, 'openShift'])->middleware('check_permission:POS.write');
+    Route::post('/shift/{id}/movement', [PosController::class, 'movement'])->middleware('check_permission:POS.write');
+    Route::post('/shift/{id}/close',    [PosController::class, 'closeShift'])->middleware('check_permission:POS.write');
+    Route::get('/held',                 [PosController::class, 'held'])->middleware('check_permission:POS.read');
+    Route::post('/held',                [PosController::class, 'storeHeld'])->middleware('check_permission:POS.write');
+    Route::delete('/held/{id}',         [PosController::class, 'destroyHeld'])->middleware('check_permission:POS.write');
+    Route::get('/best-sellers',         [PosController::class, 'bestSellers'])->middleware('check_permission:POS.read');
+});
+
+// Business reports (sales | purchases | stock | dues | pnl)
+Route::prefix('reports')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/{type}', [\App\Http\Controllers\Api\V1\Report\ReportController::class, 'show'])->middleware('check_permission:Reports.read');
+});

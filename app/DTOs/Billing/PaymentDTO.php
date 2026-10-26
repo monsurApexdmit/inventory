@@ -21,6 +21,11 @@ class PaymentDTO extends BaseDTO
         public readonly ?string $invoiceUrl,
         public readonly ?string $stripePaymentId,
         public readonly ?string $description,
+        public readonly ?string $planName,
+        public readonly ?string $billingPeriod,
+        public readonly ?int $subtotal,
+        public readonly ?int $taxAmount,
+        public readonly ?string $billingEmail,
         public readonly string $createdAt,
         public readonly string $updatedAt,
     ) {}
@@ -39,6 +44,11 @@ class PaymentDTO extends BaseDTO
             'invoiceUrl' => $this->invoiceUrl,
             'stripePaymentId' => $this->stripePaymentId,
             'description' => $this->description,
+            'planName' => $this->planName,
+            'billingPeriod' => $this->billingPeriod,
+            'subtotal' => $this->subtotal,
+            'taxAmount' => $this->taxAmount,
+            'billingEmail' => $this->billingEmail,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
         ];

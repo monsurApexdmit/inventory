@@ -14,7 +14,7 @@ class CouponDTO extends BaseDTO
         public readonly float $discount,
         public readonly string $type,
         public readonly string $startDate,
-        public readonly string $endDate,
+        public readonly ?string $endDate,
         public readonly bool $status,
         public readonly ?string $image,
         public readonly ?int $uploadedBy,
@@ -31,6 +31,15 @@ class CouponDTO extends BaseDTO
         public readonly int $priority,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly string $appliesTo = 'all',
+        public readonly array $categoryIds = [],
+        public readonly array $productIds = [],
+        public readonly bool $channelPos = true,
+        public readonly bool $channelOnline = true,
+        public readonly bool $oncePerCustomer = false,
+        public readonly int $used = 0,
+        public readonly float $revenue = 0.0,
+        public readonly string $phase = 'active',
     ) {}
 
     public function toArray(): array
@@ -60,6 +69,15 @@ class CouponDTO extends BaseDTO
             'priority' => $this->priority,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'appliesTo' => $this->appliesTo,
+            'categoryIds' => $this->categoryIds,
+            'productIds' => $this->productIds,
+            'channelPos' => $this->channelPos,
+            'channelOnline' => $this->channelOnline,
+            'oncePerCustomer' => $this->oncePerCustomer,
+            'used' => $this->used,
+            'revenue' => $this->revenue,
+            'phase' => $this->phase,
         ];
     }
 }

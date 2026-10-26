@@ -24,7 +24,14 @@ class CreateExpenseRequest extends FormRequest
             'notes' => 'nullable|string',
             'receipt' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
             'isRecurring' => 'nullable|boolean',
-            'recurringFrequency' => 'nullable|string|in:weekly,monthly,yearly',
+            'recurringFrequency' => ['nullable', 'string', function ($attr, $value, $fail) {
+                if ($value !== null && \App\Models\Expense::normalizeFrequency($value) === null) {
+                    $fail('The recurring frequency must be one of Week, Month, Quarter, Year.');
+                }
+            }],
+            'nextDueDate' => 'nullable|date',
+            'locationId' => 'nullable|integer|exists:locations,id',
+            'paidTo' => 'nullable|string|max:255',
             'recurringEndDate' => 'nullable|date',
         ];
     }

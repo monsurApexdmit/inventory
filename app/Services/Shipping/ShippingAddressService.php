@@ -35,8 +35,17 @@ class ShippingAddressService
     public function create(int $companyId, array $data): ShippingAddressDTO
     {
         $dbData = $this->mapInputToDb($data);
+        $this->assertCustomerBelongs($dbData['customer_id'] ?? null, $companyId);
         $dbData['company_id'] = $companyId;
+        $wantsDefault = !empty($dbData['is_default']);
+        $dbData['is_default'] = false;
+        if (empty($dbData['country'])) {
+            $dbData['country'] = 'Bangladesh';
+        }
         $address = $this->repository->create($dbData);
+        if ($wantsDefault) {
+            $this->repository->setDefault($address->id, $address->customer_id);
+        }
         return $this->mapper->toDTO($address->fresh('customer'));
     }
 
@@ -47,7 +56,20 @@ class ShippingAddressService
             throw new HttpException(404, 'Shipping address not found');
         }
         $dbData = $this->mapInputToDb($data);
+        if (array_key_exists('customer_id', $dbData)) {
+            $this->assertCustomerBelongs($dbData['customer_id'], $companyId);
+        }
+        $wantsDefault = !empty($dbData['is_default']);
+        unset($dbData['is_default']);
         $this->repository->update($id, $dbData);
+        $fresh = $this->repository->findByIdAndCompany($id, $companyId);
+        if (array_key_exists('is_default', $data) && $data['is_default'] !== null) {
+            if ($wantsDefault) {
+                $this->repository->setDefault($id, $fresh->customer_id);
+            } else {
+                $fresh->update(['is_default' => $wantsDefault]);
+            }
+        }
         return $this->get($id, $companyId);
     }
 
@@ -66,11 +88,19 @@ class ShippingAddressService
         if (!$address) {
             throw new HttpException(404, 'Shipping address not found');
         }
-        if (!$address->customer_id) {
-            throw new HttpException(400, 'Address must be associated with a customer');
-        }
         $this->repository->setDefault($id, $address->customer_id);
         return $this->get($id, $companyId);
+    }
+
+    private function assertCustomerBelongs(?int $customerId, int $companyId): void
+    {
+        if ($customerId === null) {
+            return;
+        }
+        $exists = \App\Models\Customer::where('company_id', $companyId)->where('id', $customerId)->exists();
+        if (!$exists) {
+            throw new HttpException(422, 'Selected customer was not found');
+        }
     }
 
     private function mapInputToDb(array $data): array
@@ -91,8 +121,19 @@ class ShippingAddressService
             'addressType' => 'address_type',
         ];
         foreach ($map as $camel => $snake) {
-            if (isset($data[$camel])) {
-                $dbData[$snake] = $data[$camel];
+            if (array_key_exists($camel, $data)) {
+                $value = $data[$camel];
+                if (is_string($value)) {
+                    $value = trim($value);
+                }
+                // Required (NOT NULL) columns keep their old value when blank; optional ones can be cleared.
+                if ($value === null || $value === '') {
+                    if (in_array($snake, ['full_name', 'phone', 'address_line1', 'city', 'state', 'postal_code', 'country', 'is_default'], true)) {
+                        continue;
+                    }
+                    $value = null;
+                }
+                $dbData[$snake] = $value;
             }
         }
         return $dbData;

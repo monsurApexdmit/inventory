@@ -19,7 +19,19 @@ class InventoryMovement extends Model
         'batch_id',
         'quantity',
         'notes',
+        'adjustment_type',
+        'reason',
+        'quantity_before',
+        'quantity_after',
+        'unit_cost',
+        'flagged',
         'created_by',
+        'created_by_name',
+    ];
+
+    protected $casts = [
+        'flagged'    => 'boolean',
+        'unit_cost'  => 'float',
     ];
 
     public function product(): BelongsTo

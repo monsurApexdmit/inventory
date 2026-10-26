@@ -77,4 +77,64 @@ class CustomerController extends Controller
             return $this->error('Failed to retrieve statistics', 500);
         }
     }
+
+    public function duplicates(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        return $this->success($this->customerService->findDuplicates($companyId));
+    }
+
+    public function merge(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->validate([
+            'primaryId' => 'required|integer',
+            'duplicateIds' => 'required|array|min:1',
+            'duplicateIds.*' => 'integer',
+        ]);
+
+        return $this->success(
+            $this->customerService->merge($companyId, (int) $data['primaryId'], $data['duplicateIds']),
+            'Customers merged successfully'
+        );
+    }
+
+    public function bulkTag(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer',
+            'tag' => 'required|string|max:50',
+        ]);
+
+        return $this->success(['updated' => $this->customerService->bulkTag($companyId, $data['ids'], $data['tag'])], 'Tag added');
+    }
+
+    public function smsNumbers(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        return $this->success($this->customerService->smsNumbers($companyId, $request->query()));
+    }
+
+    public function setStatus(Request $request, int $id): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->validate(['status' => 'required|in:active,inactive']);
+
+        return $this->success($this->customerService->setStatus($id, $companyId, $data['status'])->toArray(), 'Customer status updated');
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        $companyId = (int) $request->attributes->get('auth_company_id');
+        $data = $request->validate([
+            'rows' => 'required|array|min:1|max:5000',
+            'rows.*' => 'array',
+        ]);
+
+        $result = $this->customerService->import($companyId, $data['rows']);
+
+        return $this->success($result, "Imported {$result['imported']}, skipped {$result['skipped']}");
+    }
 }

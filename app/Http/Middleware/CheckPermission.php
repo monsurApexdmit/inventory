@@ -55,7 +55,7 @@ class CheckPermission
 
             foreach ($permissions as $perm) {
                 [$module, $action] = array_pad(explode('.', $perm, 2), 2, 'read');
-                if ($this->checkRolePermission($saasUser->role_id, $module, $action)) {
+                if ($this->checkRolePermission($saasUser->role_id, $module, $action, $request)) {
                     return $next($request);
                 }
             }
@@ -84,7 +84,7 @@ class CheckPermission
 
         foreach ($permissions as $perm) {
             [$module, $action] = array_pad(explode('.', $perm, 2), 2, 'read');
-            if ($this->checkRolePermission($staff->staff_role_id, $module, $action)) {
+            if ($this->checkRolePermission($staff->staff_role_id, $module, $action, $request)) {
                 return $next($request);
             }
         }
@@ -92,10 +92,22 @@ class CheckPermission
         return response()->json(['success' => false, 'message' => 'Access denied.'], 403);
     }
 
-    private function checkRolePermission(int|null $roleId, string $module, string $action): bool
+    /**
+     * Actions: read | write | create | edit | delete.
+     *  - "write" is method-aware: POST needs `create` (or `edit` when the route targets an existing
+     *    record, e.g. POST /x/{id}/approve), PUT/PATCH need `edit`, anything else needs create||edit.
+     *    Legacy rows that only carry the old `write` flag (create=edit=false) keep working.
+     *  - "create" / "edit" check those flags explicitly (for action-style routes).
+     */
+    private function checkRolePermission(int|null $roleId, string $module, string $action, ?Request $request = null): bool
     {
         if (!$roleId) {
             return false;
+        }
+
+        // The locked Owner role always has full access.
+        if (\App\Models\StaffRole::find($roleId)?->isLocked()) {
+            return true;
         }
 
         $permission = Permission::where('name', $module)->first();
@@ -111,10 +123,30 @@ class CheckPermission
             return false;
         }
 
+        $legacyWrite = (bool) $rp->write && !$rp->create && !$rp->edit;
+
         return match ($action) {
-            'write'  => (bool) $rp->write,
+            'write'  => $legacyWrite || $this->writeAllowed($rp, $request),
+            'create' => $legacyWrite || (bool) $rp->create,
+            'edit'   => $legacyWrite || (bool) $rp->edit,
             'delete' => (bool) $rp->delete,
             default  => (bool) $rp->read,
         };
+    }
+
+    private function writeAllowed(RolePermission $rp, ?Request $request): bool
+    {
+        $method = strtoupper($request?->method() ?? 'POST');
+
+        if ($method === 'POST') {
+            $targetsRecord = $request && $request->route() && !empty($request->route()->parameters());
+            return (bool) $rp->create || ($targetsRecord && (bool) $rp->edit);
+        }
+
+        if (in_array($method, ['PUT', 'PATCH'], true)) {
+            return (bool) $rp->edit;
+        }
+
+        return (bool) $rp->create || (bool) $rp->edit;
     }
 }

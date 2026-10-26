@@ -134,12 +134,6 @@ class CouponController extends Controller
             // Filter out null values and the image file itself
             $data = array_filter($allData, fn($value) => !is_null($value) && !($value instanceof \Illuminate\Http\UploadedFile));
 
-            file_put_contents('/tmp/coupon_debug.txt', json_encode([
-                'data' => $data,
-                'has_image' => !is_null($imageFile),
-                'content_type' => $request->header('Content-Type'),
-            ]));
-
             // If image is provided, update with image
             if ($imageFile !== null) {
                 $dto = $this->couponService->updateWithImage($id, $companyId, $data, $imageFile);

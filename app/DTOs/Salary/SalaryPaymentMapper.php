@@ -33,6 +33,12 @@ class SalaryPaymentMapper extends BaseMapper
             createdAt: $this->formatTimestamp($model->created_at),
             updatedAt: $this->formatTimestamp($model->updated_at),
             staff: $model->relationLoaded('staff') && $model->staff ? $this->formatStaffRelation($model->staff) : null,
+            baseAmount: (float) ($model->base_amount ?? $model->amount),
+            bonus: (float) $model->bonus,
+            deduction: (float) $model->deduction,
+            bonusNote: $model->bonus_note,
+            deductionNote: $model->deduction_note,
+            paymentMethod: $model->payment_method,
         );
     }
 

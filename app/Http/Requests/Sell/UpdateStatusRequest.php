@@ -14,7 +14,7 @@ class UpdateStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => 'required|string|in:Pending,Processing,Delivered',
+            'status' => 'required|string|in:Pending,Processing,Delivered,Cancelled',
         ];
     }
 
@@ -22,7 +22,7 @@ class UpdateStatusRequest extends FormRequest
     {
         return [
             'status.required' => 'Status is required',
-            'status.in' => 'Status must be one of: Pending, Processing, Delivered',
+            'status.in' => 'Status must be one of: Pending, Processing, Delivered, Cancelled',
         ];
     }
 }

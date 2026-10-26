@@ -51,6 +51,15 @@ class SupportTicketService
         return $this->mapper->toDTO($ticket)->toArray();
     }
 
+    /** Staff opened the ticket: clear the unread marker, then return it. */
+    public function open(int $id, int $companyId): array
+    {
+        $this->show($id, $companyId);
+        $this->repository->markRead($id, $companyId);
+
+        return $this->show($id, $companyId);
+    }
+
     public function create(int $companyId, array $data, ?int $customerId = null): array
     {
         $ticketNumber = $this->generateTicketNumber($companyId);
@@ -91,6 +100,23 @@ class SupportTicketService
         );
 
         return $result;
+    }
+
+    public function createByStaff(int $companyId, array $data): array
+    {
+        $customerId = null;
+        if (!empty($data['customer_id'])) {
+            $customer = \App\Models\Customer::where('company_id', $companyId)->find($data['customer_id']);
+            if (!$customer) {
+                throw new HttpException(422, 'Customer not found');
+            }
+            $customerId = $customer->id;
+            $data['customer_email'] = $data['customer_email'] ?? $customer->email;
+        }
+
+        $data['message'] = $data['description'] ?? null;
+
+        return $this->create($companyId, $data, $customerId);
     }
 
     public function createGuestContact(int $companyId, array $data): array

@@ -28,21 +28,43 @@ class TailorService
         return $q->with('vendor')->orderBy('name')->paginate($limit, ['*'], 'page', $page)->toArray();
     }
 
+    /** Same name + colour (case-insensitive) may exist only once per company. */
+    private function assertFabricUnique(int $companyId, string $name, ?string $color, ?int $ignoreId): void
+    {
+        $q = TailorFabric::where('company_id', $companyId)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($name))])
+            ->whereRaw("LOWER(TRIM(COALESCE(color, ''))) = ?", [mb_strtolower(trim((string) $color))]);
+        if ($ignoreId) $q->where('id', '!=', $ignoreId);
+        if ($q->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'name' => ['A fabric named "' . trim($name) . '"' . (trim((string) $color) !== '' ? ' in ' . trim((string) $color) : '') . ' already exists.'],
+            ]);
+        }
+    }
+
     public function createFabric(int $companyId, array $data): TailorFabric
     {
+        $this->assertFabricUnique($companyId, $data['name'] ?? '', $data['color'] ?? null, null);
         return TailorFabric::create(array_merge($data, ['company_id' => $companyId]));
     }
 
     public function updateFabric(int $companyId, int $id, array $data): TailorFabric
     {
         $fabric = TailorFabric::where('company_id', $companyId)->findOrFail($id);
+        $this->assertFabricUnique($companyId, $data['name'] ?? $fabric->name,
+            array_key_exists('color', $data) ? $data['color'] : $fabric->color, $fabric->id);
         $fabric->update($data);
         return $fabric->fresh();
     }
 
     public function deleteFabric(int $companyId, int $id): void
     {
-        TailorFabric::where('company_id', $companyId)->findOrFail($id)->delete();
+        $fabric = TailorFabric::where('company_id', $companyId)->findOrFail($id);
+        $count = TailorOrderItem::where('fabric_id', $id)->count();
+        if ($count > 0) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(422, "Cannot delete fabric '{$fabric->name}': it is used on {$count} tailor order item(s). Deactivate it instead.");
+        }
+        $fabric->delete();
     }
 
     // ─── Customers ───────────────────────────────────────────────────────────
@@ -210,6 +232,7 @@ class TailorService
             $order = TailorOrder::create(array_merge($data, [
                 'company_id'  => $companyId,
                 'customer_id' => $customer->id,
+                'fabric_deducted' => true, // this legacy path deducts stock at creation
             ]));
 
             foreach ($items as $item) {
@@ -218,6 +241,7 @@ class TailorService
                 if (!empty($item['fabric_id']) && !empty($item['fabric_quantity'])) {
                     TailorFabric::where('id', $item['fabric_id'])
                         ->decrement('stock_quantity', (float)$item['fabric_quantity']);
+                    app(TailorFabricOverviewService::class)->logOrderUse((int) $item['fabric_id'], (float) $item['fabric_quantity'], $order->id, $order->order_number);
                 }
             }
 
@@ -263,9 +287,15 @@ class TailorService
 
     public function updateOrderStatus(int $companyId, int $id, string $status, ?string $note, int $userId): TailorOrder
     {
-        $order = TailorOrder::where('company_id', $companyId)->findOrFail($id);
+        return DB::transaction(function () use ($companyId, $id, $status, $note, $userId) {
+        $order = TailorOrder::with('items')->where('company_id', $companyId)->lockForUpdate()->findOrFail($id);
         $from  = $order->order_status;
-        $order->update(['order_status' => $status]);
+        if ($status === 'cancelled' && $from !== 'cancelled') {
+            // Same side-effects as the new transition flow (fabric back to stock, fabric_deducted cleared).
+            app(TailorOrderWriteService::class)->applyCancellation($order);
+        }
+        $order->order_status = $status;
+        $order->save();
 
         TailorStatusLog::create([
             'order_id'    => $order->id,
@@ -276,6 +306,7 @@ class TailorService
         ]);
 
         return $order->fresh(['customer', 'items.fabric', 'assignments.dorji', 'payments', 'statusLogs']);
+        });
     }
 
     public function getOrder(int $companyId, int $id): TailorOrder
