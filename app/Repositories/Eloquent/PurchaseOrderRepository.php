@@ -12,7 +12,7 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
 
     public function findByCompany(int $companyId, array $filters): LengthAwarePaginator
     {
-        $query = $this->model->with(['vendor', 'location', 'items.product', 'items.variant'])
+        $query = $this->model->with(['vendor', 'location', 'items.product', 'items.variant', 'payments'])
             ->where('company_id', $companyId);
 
         if (!empty($filters['search'])) {
@@ -27,6 +27,10 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
             $query->where('status', $filters['status']);
         }
 
+        if (!empty($filters['payment_status'])) {
+            $query->where('payment_status', $filters['payment_status']);
+        }
+
         if (!empty($filters['vendor_id'])) {
             $query->where('vendor_id', (int) $filters['vendor_id']);
         }
@@ -37,7 +41,7 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
 
     public function findById(int $id, int $companyId): ?PurchaseOrder
     {
-        return $this->model->with(['vendor', 'location', 'items.product', 'items.variant'])
+        return $this->model->with(['vendor', 'location', 'items.product', 'items.variant', 'payments'])
             ->where('id', $id)
             ->where('company_id', $companyId)
             ->first();
@@ -51,7 +55,7 @@ class PurchaseOrderRepository implements IPurchaseOrderRepository
     public function update(PurchaseOrder $po, array $data): PurchaseOrder
     {
         $po->update($data);
-        return $po->fresh(['vendor', 'location', 'items.product', 'items.variant']);
+        return $po->fresh(['vendor', 'location', 'items.product', 'items.variant', 'payments']);
     }
 
     public function delete(int $id, int $companyId): void

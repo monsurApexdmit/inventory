@@ -55,7 +55,7 @@ class PurchaseOrder extends Model
 
     public function payments(): MorphMany
     {
-        return $this->morphMany(DuePayment::class, 'payable');
+        return $this->morphMany(DuePayment::class, 'payable')->orderByDesc('payment_date')->orderByDesc('id');
     }
 
     public function recalculate(): void
