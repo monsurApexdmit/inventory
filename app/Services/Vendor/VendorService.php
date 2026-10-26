@@ -14,6 +14,7 @@ use App\Models\Vendor;
 use App\Repositories\Contracts\IVendorRepository;
 use App\Repositories\Eloquent\PurchaseOrderRepository;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class VendorService
@@ -60,10 +61,10 @@ class VendorService
     public function create(int $companyId, array $data): VendorDTO
     {
         $email = $data['email'] ?? null;
-        $user = null;
 
         $this->assertUniqueName($companyId, (string) ($data['name'] ?? ''));
 
+        // Check for email uniqueness per company
         if ($email) {
             $existing = $this->repository->findByEmailAndCompany($email, $companyId);
             if ($existing) {
@@ -71,18 +72,21 @@ class VendorService
             }
         }
 
-        return DB::transaction(function () use ($companyId, $data, $email) {
+        return DB::transaction(function () use ($companyId, $data, $email): VendorDTO {
             $dbData = $this->mapInputToDb($data);
             $dbData['company_id'] = $companyId;
 
-            // A linked login user is only created when the vendor has an email.
+            // Only vendors with an email receive a linked login identity.
             if ($email) {
-                $user = User::create([
+                $userData = [
                     'username' => $data['name'],
                     'email' => $email,
                     'password' => Hash::make('changeme'),
-                ]);
-                $dbData['user_id'] = $user->id;
+                ];
+                if (Schema::hasColumn('users', 'name')) {
+                    $userData['name'] = $data['name'];
+                }
+                $dbData['user_id'] = User::create($userData)->id;
             }
 
             $vendor = $this->repository->create($dbData);
