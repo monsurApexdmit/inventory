@@ -166,6 +166,7 @@ class StorefrontController extends Controller
                 'id'       => $c->id,
                 'name'     => $c->category_name,
                 'slug'     => str($c->category_name)->slug()->value(),
+                'image'    => $c->image ?: null,
                 'children' => $c->children->map(fn($sub) => [
                     'id'   => $sub->id,
                     'name' => $sub->category_name,
@@ -647,6 +648,83 @@ class StorefrontController extends Controller
                 'subtitle' => $promo['subtitle'] ?? 'Limited time offer on thousands of products. Don\'t miss out!',
                 'cta'      => $promo['cta']      ?? 'Shop the Sale',
                 'link'     => $promo['link']     ?? '/shop',
+            ],
+        ]);
+    }
+
+    // GET /api/store/settings/homepage-sections?company_id=11
+    // Each section is null until it is saved once in admin (Online store > Homepage sections);
+    // the storefront then shows its automatic content for that section.
+    public function homepageSections(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $setting = Setting::where('company_id', $companyId)->first();
+        $sections = data_get($setting?->business_settings, 'homepageSections', []);
+        $sections = is_array($sections) ? $sections : [];
+        $str = fn ($v) => is_string($v) ? trim($v) : '';
+        $list = fn ($v) => collect(is_array($v) ? $v : [])->filter(fn ($x) => is_array($x))->values();
+
+        $aisles = is_array($sections['aisles'] ?? null) ? $sections['aisles'] : null;
+        $products = is_array($sections['products'] ?? null) ? $sections['products'] : null;
+        $lookbook = is_array($sections['lookbook'] ?? null) ? $sections['lookbook'] : null;
+        $perks = is_array($sections['perks'] ?? null) ? $sections['perks'] : null;
+        $footer = is_array($sections['footer'] ?? null) ? $sections['footer'] : null;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'aisles' => $aisles === null ? null : [
+                    'enabled' => (bool) ($aisles['enabled'] ?? true),
+                    'title' => $str($aisles['title'] ?? ''),
+                    'subtitle' => $str($aisles['subtitle'] ?? ''),
+                    'items' => $list($aisles['items'] ?? [])
+                        ->filter(fn ($i) => ($i['enabled'] ?? true) !== false && $str($i['label'] ?? '') !== '')
+                        ->map(fn ($i) => [
+                            'id' => $str($i['id'] ?? ''),
+                            'label' => $str($i['label'] ?? ''),
+                            'tagline' => $str($i['tagline'] ?? ''),
+                            'emoji' => $str($i['emoji'] ?? ''),
+                            'imagePath' => $str($i['imagePath'] ?? '') ?: null,
+                            'link' => $str($i['link'] ?? '') ?: '/shop',
+                        ])->values()->all(),
+                ],
+                'products' => $products === null ? null : [
+                    'enabled' => (bool) ($products['enabled'] ?? true),
+                    'title' => $str($products['title'] ?? ''),
+                    'subtitle' => $str($products['subtitle'] ?? ''),
+                    'source' => in_array($products['source'] ?? '', ['latest', 'featured', 'best_seller', 'hot_deal', 'on_sale'], true) ? $products['source'] : 'latest',
+                    'categoryId' => isset($products['categoryId']) && is_numeric($products['categoryId']) ? (int) $products['categoryId'] : null,
+                    'limit' => max(4, min(12, (int) ($products['limit'] ?? 8))),
+                ],
+                'lookbook' => $lookbook === null ? null : [
+                    'enabled' => (bool) ($lookbook['enabled'] ?? true),
+                    'tag' => $str($lookbook['tag'] ?? ''),
+                    'title' => $str($lookbook['title'] ?? ''),
+                    'text' => $str($lookbook['text'] ?? ''),
+                    'cta' => $str($lookbook['cta'] ?? ''),
+                    'link' => $str($lookbook['link'] ?? '') ?: '/shop',
+                    'images' => collect(is_array($lookbook['images'] ?? null) ? $lookbook['images'] : [])
+                        ->map($str)->filter()->take(2)->values()->all(),
+                ],
+                'perks' => $perks === null ? null : [
+                    'enabled' => (bool) ($perks['enabled'] ?? true),
+                    'items' => $list($perks['items'] ?? [])
+                        ->filter(fn ($i) => $str($i['title'] ?? '') !== '')
+                        ->map(fn ($i) => [
+                            'icon' => $str($i['icon'] ?? '') ?: 'sparkles',
+                            'title' => $str($i['title'] ?? ''),
+                            'text' => $str($i['text'] ?? ''),
+                            'link' => $str($i['link'] ?? '') ?: null,
+                        ])->take(4)->values()->all(),
+                ],
+                'footer' => $footer === null ? null : [
+                    'tagline' => $str($footer['tagline'] ?? ''),
+                ],
             ],
         ]);
     }
