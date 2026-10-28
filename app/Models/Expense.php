@@ -31,6 +31,10 @@ class Expense extends Model
         'recurring_frequency',
         'recurring_end_date',
         'uploaded_by',
+        'voided_at',
+        'void_reason',
+        'voided_by',
+        'voided_by_name',
     ];
 
     protected $casts = [

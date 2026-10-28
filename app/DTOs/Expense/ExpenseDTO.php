@@ -38,6 +38,12 @@ class ExpenseDTO extends BaseDTO
         public readonly ?string $categoryName = null,
         public readonly ?string $categoryColor = null,
         public readonly ?string $vendorName = null,
+        public readonly bool $voided = false,
+        public readonly ?string $voidedAt = null,
+        public readonly ?string $voidReason = null,
+        public readonly ?string $voidedByName = null,
+        public readonly bool $periodClosed = false,
+        public readonly bool $editable = true,
     ) {}
 
     public function toArray(): array
@@ -71,6 +77,12 @@ class ExpenseDTO extends BaseDTO
             'categoryName' => $this->categoryName,
             'categoryColor' => $this->categoryColor,
             'vendorName' => $this->vendorName,
+            'voided' => $this->voided,
+            'voidedAt' => $this->voidedAt,
+            'voidReason' => $this->voidReason,
+            'voidedByName' => $this->voidedByName,
+            'periodClosed' => $this->periodClosed,
+            'editable' => $this->editable,
         ];
     }
 }

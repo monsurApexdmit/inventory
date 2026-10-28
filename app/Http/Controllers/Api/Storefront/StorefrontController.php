@@ -749,7 +749,8 @@ class StorefrontController extends Controller
         ]);
     }
 
-    private function formatProduct(Product $product): array
+    /** Public so other storefront controllers (e.g. collections) emit the exact same product shape. */
+    public function formatProduct(Product $product): array
     {
         // Online availability = stock at ships-online locations once location stock is set up, else the flat total
         $locStock = app(\App\Services\Inventory\LocationStockService::class);

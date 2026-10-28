@@ -27,6 +27,7 @@ class RoleMatrixService
         'Catalog' => [
             'Products' => ['Products, variants, bundles and pricing', ['Products']],
             'Categories & brands' => ['Categories, brands, units and attributes', ['Categories', 'Brands', 'Units', 'Attributes']],
+            'Collections' => ['Storefront collections: hand-picked and rule-based product groups', ['Collections']],
             'Coupons' => ['Discount coupons and campaigns', ['Coupons']],
             'Print barcode' => ['Barcode and label printing', ['Print Barcode']],
         ],
@@ -37,6 +38,7 @@ class RoleMatrixService
             'Tailor shop' => ['Tailor orders, measurements, fabrics, dorji and payments', ['TailorDorji', 'TailorFabric', 'TailorMeasurements', 'TailorOrders', 'TailorPayments', 'TailorReports', 'TailorShop']],
         ],
         'Finance' => [
+            'Accounts & ledger' => ['Finance overview, accounts, transactions, payouts, receivables, payments and finance reports', ['Finance']],
             'Expenses' => ['Expense entries and categories', ['Expenses']],
             'Dues' => ['Customer and supplier dues, collections and reminders', ['Dues']],
             'Reports' => ['Sales, profit, stock and finance reports', ['Reports']],

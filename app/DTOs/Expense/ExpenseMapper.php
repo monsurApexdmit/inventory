@@ -56,6 +56,12 @@ class ExpenseMapper extends BaseMapper
             categoryName: $model->relationLoaded('category') ? $model->category?->name : null,
             categoryColor: $model->relationLoaded('category') ? $model->category?->color : null,
             vendorName: $model->relationLoaded('vendor') ? $model->vendor?->name : null,
+            voided: $model->voided_at !== null,
+            voidedAt: $model->voided_at ? substr((string) $model->voided_at, 0, 10) : null,
+            voidReason: $model->void_reason,
+            voidedByName: $model->voided_by_name,
+            periodClosed: $closed = \App\Services\Finance\FinancePeriodLock::isClosedDate((int) $model->company_id, $model->expense_date?->toDateString()),
+            editable: $model->voided_at === null && !$closed && !in_array($model->source ?? 'manual', ['salary', 'dorji_payout'], true),
         );
     }
 }

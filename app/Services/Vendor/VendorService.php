@@ -401,6 +401,13 @@ class VendorService
             throw new HttpException(404, 'Vendor not found');
         }
 
+        // A supplier with a balance (opening balance owed or unused credit) cannot be deleted: its finance rows would lose their name.
+        $credit = (float) (app(\App\Services\Finance\FinancePartyService::class)->supplierCredits($companyId)[$id] ?? 0);
+        $balance = round((float) $vendor->opening_balance + $credit, 2);
+        if ($balance > 0) {
+            throw new HttpException(422, "Cannot delete supplier '{$vendor->name}': it still has a balance of " . \App\Support\Money::format($companyId, $balance) . '. Settle it or deactivate the supplier instead.');
+        }
+
         $poCount = \App\Models\PurchaseOrder::where('company_id', $companyId)->where('vendor_id', $id)->count();
         if ($poCount > 0) {
             throw new HttpException(422, "Cannot delete supplier '{$vendor->name}': it has {$poCount} purchase order(s). Deactivate the supplier instead.");

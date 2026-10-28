@@ -382,7 +382,7 @@ class ReportService
      * variant_inventory; legacy stock (variant/product .stock) sits at products.location_id when there are none.
      * Bundles are excluded (virtual stock), like the dashboard.
      */
-    private function stockRowsSql(int $cid): string
+    public function stockRowsSql(int $cid): string
     {
         $base = "products p WHERE p.company_id = {$cid} AND p.deleted_at IS NULL AND p.is_bundle = 0";
         $hasReal = "EXISTS (SELECT 1 FROM product_variants rv WHERE rv.product_id = p.id AND rv.deleted_at IS NULL AND rv.name <> 'Default')";

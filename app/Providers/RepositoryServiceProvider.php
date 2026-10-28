@@ -5,6 +5,11 @@ namespace App\Providers;
 use App\Repositories\Contracts\IAttributeRepository;
 use App\Repositories\Contracts\IBillingContactRepository;
 use App\Repositories\Contracts\ICategoryRepository;
+use App\Repositories\Contracts\ICollectionRepository;
+use App\Repositories\Contracts\IFinanceAccountRepository;
+use App\Repositories\Contracts\IFinanceEntryRepository;
+use App\Repositories\Contracts\IFinanceLedgerRepository;
+use App\Repositories\Contracts\IFinanceTransferRepository;
 use App\Repositories\Contracts\ICompanyRepository;
 use App\Repositories\Contracts\ICompanySettingsRepository;
 use App\Repositories\Contracts\IEmailVerificationRepository;
@@ -44,6 +49,11 @@ use App\Repositories\Contracts\IDuePaymentRepository;
 use App\Repositories\Eloquent\AttributeRepository;
 use App\Repositories\Eloquent\BillingContactRepository;
 use App\Repositories\Eloquent\CategoryRepository;
+use App\Repositories\Eloquent\CollectionRepository;
+use App\Repositories\Eloquent\FinanceAccountRepository;
+use App\Repositories\Eloquent\FinanceEntryRepository;
+use App\Repositories\Eloquent\FinanceLedgerRepository;
+use App\Repositories\Eloquent\FinanceTransferRepository;
 use App\Repositories\Eloquent\CompanyRepository;
 use App\Repositories\Eloquent\CompanySettingsRepository;
 use App\Repositories\Eloquent\EmailVerificationRepository;
@@ -107,6 +117,11 @@ class RepositoryServiceProvider extends ServiceProvider
 
         // Phase 3 bindings
         $this->app->bind(ICategoryRepository::class, CategoryRepository::class);
+        $this->app->bind(ICollectionRepository::class, CollectionRepository::class);
+        $this->app->bind(IFinanceAccountRepository::class, FinanceAccountRepository::class);
+        $this->app->bind(IFinanceEntryRepository::class, FinanceEntryRepository::class);
+        $this->app->bind(IFinanceTransferRepository::class, FinanceTransferRepository::class);
+        $this->app->bind(IFinanceLedgerRepository::class, FinanceLedgerRepository::class);
         $this->app->bind(IAttributeRepository::class, AttributeRepository::class);
         $this->app->bind(ILocationRepository::class, LocationRepository::class);
         $this->app->bind(ISettingRepository::class, SettingRepository::class);

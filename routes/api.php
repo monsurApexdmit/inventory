@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Attribute\AttributeController;
 use App\Http\Controllers\Api\Billing\BillingController;
 use App\Http\Controllers\Api\Category\CategoryController;
+use App\Http\Controllers\Api\Collection\CollectionController;
 use App\Http\Controllers\Api\Company\CompanyController;
 use App\Http\Controllers\Api\Location\LocationController;
 use App\Http\Controllers\Api\Setting\SettingController;
@@ -44,6 +45,7 @@ use App\Http\Controllers\Api\Realtime\BroadcastAuthController;
 use App\Http\Controllers\Api\Support\SupportTicketController;
 use App\Http\Controllers\Api\Storefront\CustomerAuthController;
 use App\Http\Controllers\Api\Storefront\StorefrontController;
+use App\Http\Controllers\Api\Storefront\StorefrontCollectionController;
 use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
 use App\Http\Controllers\Api\Storefront\StorefrontProductReviewController;
@@ -95,6 +97,8 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     Route::get('/products/{id}',      [StorefrontController::class, 'product']);
     Route::get('/products/{id}/reviews', [StorefrontProductReviewController::class, 'index']);
     Route::get('/categories',         [StorefrontController::class, 'categories']);
+    Route::get('/collections',        [StorefrontCollectionController::class, 'index']);
+    Route::get('/collections/{slugOrId}', [StorefrontCollectionController::class, 'show']);
     Route::get('/coupons/validate',   [StorefrontController::class, 'validateCoupon']);
     Route::get('/coupons/active',     [StorefrontController::class, 'activeCoupons']);
     Route::get('/shipping-methods',   [StorefrontController::class, 'shippingMethods']);
@@ -362,6 +366,22 @@ Route::prefix('units')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::get('/{id}',    [UnitController::class, 'show'])->middleware('check_permission:Units.read');
     Route::put('/{id}',    [UnitController::class, 'update'])->middleware('check_permission:Units.write');
     Route::delete('/{id}', [UnitController::class, 'destroy'])->middleware('check_permission:Units.delete');
+});
+
+// Collections (curated / rule-based product groups for the storefront)
+Route::prefix('collections')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',                       [CollectionController::class, 'index'])->middleware('check_permission:Collections.read');
+    Route::get('/simple',                 [CollectionController::class, 'simple'])->middleware('check_permission:Collections.read');
+    Route::post('/',                      [CollectionController::class, 'store'])->middleware('check_permission:Collections.write');
+    Route::post('/preview',               [CollectionController::class, 'preview'])->middleware('check_permission:Collections.read');
+    Route::post('/reorder',               [CollectionController::class, 'reorder'])->middleware('check_permission:Collections.write');
+    Route::get('/{id}',                   [CollectionController::class, 'show'])->whereNumber('id')->middleware('check_permission:Collections.read');
+    Route::put('/{id}',                   [CollectionController::class, 'update'])->whereNumber('id')->middleware('check_permission:Collections.write');
+    Route::post('/{id}',                  [CollectionController::class, 'update'])->whereNumber('id')->middleware('check_permission:Collections.write');
+    Route::delete('/{id}',                [CollectionController::class, 'destroy'])->whereNumber('id')->middleware('check_permission:Collections.delete');
+    Route::patch('/{id}/status',          [CollectionController::class, 'status'])->whereNumber('id')->middleware('check_permission:Collections.write');
+    Route::put('/{id}/products',          [CollectionController::class, 'setProducts'])->whereNumber('id')->middleware('check_permission:Collections.write');
+    Route::get('/{id}/preview-products',  [CollectionController::class, 'previewProducts'])->whereNumber('id')->middleware('check_permission:Collections.read');
 });
 
 Route::prefix('brands')->middleware(JwtAuthMiddleware::class)->group(function () {
@@ -869,4 +889,76 @@ Route::prefix('pos')->middleware(JwtAuthMiddleware::class)->group(function () {
 // Business reports (sales | purchases | stock | dues | pnl)
 Route::prefix('reports')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/{type}', [\App\Http\Controllers\Api\V1\Report\ReportController::class, 'show'])->middleware('check_permission:Reports.read');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Finance: accounts, ledger (transactions/entries/transfers), overview, inventory valuation,
+// payouts, receivables, payments received and finance reports. Contract: FINANCE_API_CONTRACT.md
+// ─────────────────────────────────────────────────────────────────────────────
+Route::prefix('finance')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/overview', [\App\Http\Controllers\Api\Finance\FinanceController::class, 'overview'])->middleware('check_permission:Finance.read');
+
+    // Accounts
+    Route::get('/accounts',               [\App\Http\Controllers\Api\Finance\FinanceAccountController::class, 'index'])->middleware('check_permission:Finance.read');
+    Route::post('/accounts',              [\App\Http\Controllers\Api\Finance\FinanceAccountController::class, 'store'])->middleware('check_permission:Finance.write');
+    Route::get('/accounts/{id}',          [\App\Http\Controllers\Api\Finance\FinanceAccountController::class, 'show'])->whereNumber('id')->middleware('check_permission:Finance.read');
+    Route::put('/accounts/{id}',          [\App\Http\Controllers\Api\Finance\FinanceAccountController::class, 'update'])->whereNumber('id')->middleware('check_permission:Finance.write');
+    Route::post('/accounts/{id}/default', [\App\Http\Controllers\Api\Finance\FinanceAccountController::class, 'setDefault'])->whereNumber('id')->middleware('check_permission:Finance.write');
+    Route::delete('/accounts/{id}',       [\App\Http\Controllers\Api\Finance\FinanceAccountController::class, 'destroy'])->whereNumber('id')->middleware('check_permission:Finance.delete');
+
+    // Ledger, manual entries, transfers
+    Route::get('/transactions',        [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'transactions'])->middleware('check_permission:Finance.read');
+    Route::post('/entries',            [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'storeEntry'])->middleware('check_permission:Finance.write');
+    Route::get('/entries/{id}',        [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'showEntry'])->whereNumber('id')->middleware('check_permission:Finance.read');
+    Route::put('/entries/{id}',        [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'updateEntry'])->whereNumber('id')->middleware('check_permission:Finance.write');
+    Route::delete('/entries/{id}',     [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'destroyEntry'])->whereNumber('id')->middleware('check_permission:Finance.delete');
+    Route::get('/transfers',           [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'transfers'])->middleware('check_permission:Finance.read');
+    Route::post('/transfers',          [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'storeTransfer'])->middleware('check_permission:Finance.write');
+    Route::get('/transfers/{id}',      [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'showTransfer'])->whereNumber('id')->middleware('check_permission:Finance.read');
+    Route::put('/transfers/{id}',      [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'updateTransfer'])->whereNumber('id')->middleware('check_permission:Finance.write');
+    Route::delete('/transfers/{id}',   [\App\Http\Controllers\Api\Finance\FinanceLedgerController::class, 'destroyTransfer'])->whereNumber('id')->middleware('check_permission:Finance.delete');
+
+    // Inventory and ledger
+    Route::get('/inventory/valuation', [\App\Http\Controllers\Api\Finance\FinanceController::class, 'valuation'])->middleware('check_permission:Finance.read');
+    Route::get('/inventory/ledger',    [\App\Http\Controllers\Api\Finance\FinanceController::class, 'inventoryLedger'])->middleware('check_permission:Finance.read');
+    Route::get('/inventory/cogs',      [\App\Http\Controllers\Api\Finance\FinanceController::class, 'cogs'])->middleware('check_permission:Finance.read');
+
+    // Payouts / receivables / payments received
+    Route::get('/payouts',               [\App\Http\Controllers\Api\Finance\FinanceController::class, 'payouts'])->middleware('check_permission:Finance.read');
+    Route::get('/payouts/summary',       [\App\Http\Controllers\Api\Finance\FinanceController::class, 'payoutsSummary'])->middleware('check_permission:Finance.read');
+    Route::get('/receivables',           [\App\Http\Controllers\Api\Finance\FinanceController::class, 'receivables'])->middleware('check_permission:Finance.read');
+    Route::get('/receivables/summary',   [\App\Http\Controllers\Api\Finance\FinanceController::class, 'receivablesSummary'])->middleware('check_permission:Finance.read');
+    Route::get('/payments',              [\App\Http\Controllers\Api\Finance\FinanceController::class, 'payments'])->middleware('check_permission:Finance.read');
+    Route::get('/payments/unpaid-sales', [\App\Http\Controllers\Api\Finance\FinanceController::class, 'unpaidSales'])->middleware('check_permission:Finance.read');
+
+    // Reports
+    Route::get('/reports/pnl',       [\App\Http\Controllers\Api\Finance\FinanceReportController::class, 'pnl'])->middleware('check_permission:Finance.read');
+    Route::get('/reports/cashflow',  [\App\Http\Controllers\Api\Finance\FinanceReportController::class, 'cashflow'])->middleware('check_permission:Finance.read');
+    Route::get('/reports/statement', [\App\Http\Controllers\Api\Finance\FinanceReportController::class, 'statement'])->middleware('check_permission:Finance.read');
+    Route::get('/reports/tax',       [\App\Http\Controllers\Api\Finance\FinanceReportController::class, 'tax'])->middleware('check_permission:Finance.read');
+    Route::get('/reports/aging',     [\App\Http\Controllers\Api\Finance\FinanceReportController::class, 'aging'])->middleware('check_permission:Finance.read');
+
+    // Finance v2 (contract: "v2 additions")
+    Route::get('/metrics',                              [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'metrics'])->middleware('check_permission:Finance.read');
+    Route::get('/products/without-cost',                [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'productsWithoutCost'])->middleware('check_permission:Finance.read');
+    Route::get('/fees',                                 [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'fees'])->middleware('check_permission:Finance.read');
+    Route::put('/fees',                                 [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'updateFees'])->middleware('check_permission:Finance.write');
+    Route::get('/close',                                [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'closes'])->middleware('check_permission:Finance.read');
+    Route::post('/close',                               [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'close'])->middleware('check_permission:Finance.write');
+    Route::get('/close/{month}',                        [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'closeMonth'])->where('month', '\d{4}-\d{2}')->middleware('check_permission:Finance.read');
+    Route::post('/close/{month}/reopen',                [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'reopen'])->where('month', '\d{4}-\d{2}')->middleware('check_permission:Finance.write');
+    Route::post('/expenses/{id}/void',                  [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'voidExpense'])->whereNumber('id')->middleware('check_permission:Finance.write');
+    Route::get('/expenses/{id}/activity',               [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'expenseActivity'])->whereNumber('id')->middleware('check_permission:Finance.read');
+    Route::get('/inventory/opening-stock',              [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'openingStock'])->middleware('check_permission:Finance.read');
+    Route::post('/inventory/opening-stock',             [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'postOpeningStock'])->middleware('check_permission:Finance.write');
+    Route::get('/inventory/sale-movements/missing',     [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'missingSaleMovements'])->middleware('check_permission:Finance.read');
+    Route::post('/inventory/sale-movements/backfill',   [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'backfillSaleMovements'])->middleware('check_permission:Finance.write');
+    Route::get('/inventory/reconciliation',             [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'stockReconciliation'])->middleware('check_permission:Finance.read');
+    Route::get('/payouts/payable',                      [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'payable'])->middleware('check_permission:Finance.read');
+    Route::get('/payouts/payable/{type}/{id}',          [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'payableOne'])->whereIn('type', ['supplier', 'dorji', 'staff'])->whereNumber('id')->middleware('check_permission:Finance.read');
+    Route::get('/receivables/suppliers',                [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'supplierReceivables'])->middleware('check_permission:Finance.read');
+    Route::post('/receivables/suppliers/{vendorId}/receive', [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'receiveFromSupplier'])->whereNumber('vendorId')->middleware('check_permission:Finance.write');
+    Route::get('/receivables/customers',                [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'customerReceivables'])->middleware('check_permission:Finance.read');
+    Route::get('/payments/summary',                     [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'paymentsSummary'])->middleware('check_permission:Finance.read');
+    Route::get('/health',                               [\App\Http\Controllers\Api\Finance\FinanceV2Controller::class, 'health'])->middleware('check_permission:Finance.read');
 });
