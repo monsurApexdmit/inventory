@@ -14,10 +14,11 @@ class PlanSeeder extends Seeder
     private const STARTER_MODULES = [
         // Core always-on
         'Dashboard',
+        'Finance',
         // Catalog
-        'Products', 'Categories', 'Units', 'Brands', 'Attributes', 'Print Barcode',
+        'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Print Barcode',
         // Sales
-        'Orders', 'Customers', 'POS',
+        'Orders', 'Marketing', 'Customers', 'POS',
         // Inventory (single warehouse only — max_branches=1 enforces this)
         'Inventory',
         // Settings
@@ -38,8 +39,9 @@ class PlanSeeder extends Seeder
     // (no POS, no Support) and no Salary/Tailor. 10-day taste of the product.
     private const TRIAL_MODULES = [
         'Dashboard',
-        'Products', 'Categories', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers',
+        'Finance',
+        'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
+        'Orders', 'Marketing', 'Shipments', 'Customers',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',
@@ -57,8 +59,9 @@ class PlanSeeder extends Seeder
     private const GROWTH_MODULES = [
         // Everything in Starter
         'Dashboard',
-        'Products', 'Categories', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers', 'POS',
+        'Finance',
+        'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
+        'Orders', 'Marketing', 'Shipments', 'Customers', 'POS',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',
@@ -77,8 +80,9 @@ class PlanSeeder extends Seeder
     private const PROFESSIONAL_MODULES = [
         // Everything in Growth
         'Dashboard',
-        'Products', 'Categories', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers', 'POS',
+        'Finance',
+        'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
+        'Orders', 'Marketing', 'Shipments', 'Customers', 'POS',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',
@@ -100,8 +104,9 @@ class PlanSeeder extends Seeder
     private const ENTERPRISE_MODULES = [
         // All modules — no restrictions
         'Dashboard',
-        'Products', 'Categories', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers', 'POS',
+        'Finance',
+        'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
+        'Orders', 'Marketing', 'Shipments', 'Customers', 'POS',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',

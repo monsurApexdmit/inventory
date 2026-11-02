@@ -494,6 +494,9 @@ class StorefrontController extends Controller
                 'slug' => $str($o['slug'] ?? ''),
                 'theme' => $str($o['theme'] ?? ''),
                 'published' => (bool) ($o['published'] ?? true),
+                'facebookPixelId' => $str($o['facebookPixelId'] ?? ''),
+                'tiktokPixelId' => $str($o['tiktokPixelId'] ?? ''),
+                'whatsappNumber' => $str($o['whatsappNumber'] ?? ''),
                 'policies' => [
                     'returns' => $str($policies['returns'] ?? ''),
                     'shipping' => $str($policies['shipping'] ?? ''),
@@ -749,7 +752,8 @@ class StorefrontController extends Controller
         ]);
     }
 
-    private function formatProduct(Product $product): array
+    /** Public so other storefront controllers (e.g. collections) emit the exact same product shape. */
+    public function formatProduct(Product $product): array
     {
         // Online availability = stock at ships-online locations once location stock is set up, else the flat total
         $locStock = app(\App\Services\Inventory\LocationStockService::class);

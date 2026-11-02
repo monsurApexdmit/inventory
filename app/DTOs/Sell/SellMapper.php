@@ -84,6 +84,15 @@ class SellMapper extends BaseMapper
         $locationId = $model->location_id !== null ? (int) $model->location_id : null;
         $locationName = $locationId ? \App\Models\Location::where('id', $locationId)->value('name') : null;
 
+        // Campaign (ad order) link the order came through, if any (deleted links still show their name)
+        $campaignLink = null;
+        if ($model->campaign_link_id) {
+            $link = $model->relationLoaded('campaignLink') ? $model->campaignLink : $model->campaignLink()->first();
+            if ($link) {
+                $campaignLink = ['id' => (int) $link->id, 'name' => $link->name, 'code' => $link->code, 'channel' => $link->channel];
+            }
+        }
+
         return new SellDTO(
             id: $model->id,
             companyId: $model->company_id,
@@ -146,6 +155,19 @@ class SellMapper extends BaseMapper
             lastFollowUpAt: $this->formatTimestamp($model->last_follow_up_at),
             lastFollowUpOutcome: $model->last_follow_up_outcome,
             nextFollowUpAt: $this->formatTimestamp($model->next_follow_up_at),
+            adSource: $model->ad_source,
+            utmSource: $model->utm_source,
+            utmMedium: $model->utm_medium,
+            utmCampaign: $model->utm_campaign,
+            utmContent: $model->utm_content,
+            utmTerm: $model->utm_term,
+            clickId: $model->click_id,
+            campaignLinkId: $model->campaign_link_id !== null ? (int) $model->campaign_link_id : null,
+            campaignLink: $campaignLink,
+            landingUrl: $model->landing_url,
+            referrer: $model->referrer,
+            isQuickOrder: (bool) $model->is_quick_order,
+            possibleDuplicate: (bool) $model->possible_duplicate,
         );
     }
 

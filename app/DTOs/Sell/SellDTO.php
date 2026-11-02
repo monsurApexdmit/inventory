@@ -71,6 +71,19 @@ class SellDTO extends BaseDTO
         public ?string $lastFollowUpAt = null,
         public ?string $lastFollowUpOutcome = null,
         public ?string $nextFollowUpAt = null,
+        public ?string $adSource = null,
+        public ?string $utmSource = null,
+        public ?string $utmMedium = null,
+        public ?string $utmCampaign = null,
+        public ?string $utmContent = null,
+        public ?string $utmTerm = null,
+        public ?string $clickId = null,
+        public ?int $campaignLinkId = null,
+        public ?array $campaignLink = null,
+        public ?string $landingUrl = null,
+        public ?string $referrer = null,
+        public bool $isQuickOrder = false,
+        public bool $possibleDuplicate = false,
     ) {}
 
     public function toArray(): array
@@ -137,6 +150,20 @@ class SellDTO extends BaseDTO
             'lastFollowUpAt' => $this->lastFollowUpAt,
             'lastFollowUpOutcome' => $this->lastFollowUpOutcome,
             'nextFollowUpAt' => $this->nextFollowUpAt,
+            'adSource' => $this->adSource,
+            'adSourceLabel' => \App\Services\Marketing\AttributionService::label($this->adSource),
+            'utmSource' => $this->utmSource,
+            'utmMedium' => $this->utmMedium,
+            'utmCampaign' => $this->utmCampaign,
+            'utmContent' => $this->utmContent,
+            'utmTerm' => $this->utmTerm,
+            'clickId' => $this->clickId,
+            'campaignLinkId' => $this->campaignLinkId,
+            'campaignLink' => $this->campaignLink,
+            'landingUrl' => $this->landingUrl,
+            'referrer' => $this->referrer,
+            'isQuickOrder' => $this->isQuickOrder,
+            'possibleDuplicate' => $this->possibleDuplicate,
         ];
     }
 }

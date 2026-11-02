@@ -46,6 +46,7 @@ class SellController extends Controller
                     ],
                     'summary' => $this->sellService->summarize($companyId, $filters),
                     'tabCounts' => $this->sellService->tabCounts($companyId, $filters),
+                    'adSourceCounts' => $this->sellService->adSourceCounts($companyId, $filters),
                     'kpis' => $this->sellService->kpis($companyId),
                 ]);
             }

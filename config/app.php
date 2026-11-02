@@ -18,6 +18,9 @@ return [
     'jwt_secret'   => env('JWT_SECRET'),
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
 
+    // Public storefront URL per tenant ({subdomain} is replaced); used for shareable ad order links
+    'storefront_url_pattern' => env('STOREFRONT_URL_PATTERN', 'http://{subdomain}.localhost:8081'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

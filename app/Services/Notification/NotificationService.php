@@ -176,14 +176,35 @@ class NotificationService
 
     // ─── Creation helpers called by other services ───────────────────────────
 
-    public function notifyOrderPlaced(int $companyId, string $invoiceNo, string $customerName, float $amount): void
+    /**
+     * @param array{adSource?: ?string, isQuickOrder?: bool, campaignLinkId?: ?int, campaignLinkName?: ?string} $context
+     *        Order attribution: the title names the source ("New order from Facebook") when there is one.
+     */
+    public function notifyOrderPlaced(int $companyId, string $invoiceNo, string $customerName, float $amount, array $context = []): void
     {
+        $adSource = $context['adSource'] ?? null;
+        $label = \App\Services\Marketing\AttributionService::label($adSource);
+        $message = "Order {$invoiceNo} placed by {$customerName} for " . \App\Support\Money::format($companyId, $amount);
+        if (!empty($context['isQuickOrder'])) {
+            $message .= ' · Quick order';
+        }
+        if (!empty($context['campaignLinkName'])) {
+            $message .= ' · Campaign: ' . $context['campaignLinkName'];
+        }
+        $data = ['invoiceNo' => $invoiceNo, 'customerName' => $customerName, 'amount' => $amount];
+        if ($context) {
+            $data += [
+                'adSource' => $adSource,
+                'isQuickOrder' => (bool) ($context['isQuickOrder'] ?? false),
+                'campaignLinkId' => $context['campaignLinkId'] ?? null,
+            ];
+        }
         $notification = $this->createGated(
             $companyId,
             self::TYPE_ORDER_PLACED,
-            'New Order Received',
-            "Order {$invoiceNo} placed by {$customerName} for " . \App\Support\Money::format($companyId, $amount),
-            ['invoiceNo' => $invoiceNo, 'customerName' => $customerName, 'amount' => $amount]
+            $label ? "New order from {$label}" : 'New Order Received',
+            $message,
+            $data
         );
 
         $this->broadcastCreatedNotification($notification);

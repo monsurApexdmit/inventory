@@ -32,6 +32,7 @@ class CreateSellRequest extends FormRequest
             'method' => 'nullable|string|in:Cash,Card,Online,COD,bKash,Nagad,Bank',
             'registerSessionId' => 'nullable|integer|min:1',
             'source' => 'nullable|string|in:pos,storefront,manual',
+            'adSource' => 'nullable|string|in:direct,walk-in,walkin,walk_in,none,facebook,instagram,whatsapp,messenger,tiktok,google,youtube,phone,other',
             'locationId' => 'nullable|integer|min:1',
             'amount' => 'nullable|numeric|min:0',
             'shippingCost' => 'nullable|numeric|min:0',
@@ -71,6 +72,7 @@ class CreateSellRequest extends FormRequest
             'items.*.unitPrice.required' => 'Item unit price is required',
             'method.in' => 'Payment method must be one of: Cash, Card, Online, COD, bKash, Nagad, Bank',
             'status.in' => 'Status must be one of: Pending, Processing, Packed, Shipped, Delivered',
+            'adSource.in' => 'Source must be one of: direct, facebook, instagram, whatsapp, messenger, tiktok, google, youtube, phone, other',
         ];
     }
 }

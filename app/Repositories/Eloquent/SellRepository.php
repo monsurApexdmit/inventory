@@ -18,7 +18,7 @@ class SellRepository implements ISellRepository
     public function findByCompany(int $companyId, array $filters): mixed
     {
         $query = $this->buildListQuery($companyId, $filters)
-            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel']);
+            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel', 'campaignLink']);
 
         // Sorting
         $sortBy = $filters['sort_by'] ?? 'order_time';
@@ -110,6 +110,20 @@ class SellRepository implements ISellRepository
             $query->where('source', $source);
         }
 
+        // Attribution: adSource = one source | any (= from ads / social) | none
+        if (!empty($filters['adSource']) && is_string($filters['adSource']) && $filters['adSource'] !== 'all') {
+            $this->applyAdSource($query, $filters['adSource']);
+        }
+        if (!empty($filters['campaignLinkId']) && is_numeric($filters['campaignLinkId'])) {
+            $query->where('campaign_link_id', (int) $filters['campaignLinkId']);
+        }
+        if (!empty($filters['quickOrder']) && filter_var($filters['quickOrder'], FILTER_VALIDATE_BOOLEAN)) {
+            $query->where('is_quick_order', true);
+        }
+        if (!empty($filters['possibleDuplicate']) && filter_var($filters['possibleDuplicate'], FILTER_VALIDATE_BOOLEAN)) {
+            $query->where('possible_duplicate', true);
+        }
+
         // Filter by customer ID
         if (!empty($filters['customer_id'])) {
             $query->where('customer_id', $filters['customer_id']);
@@ -126,6 +140,45 @@ class SellRepository implements ISellRepository
         }
 
         return $query;
+    }
+
+    private function applyAdSource($query, string $value): void
+    {
+        $value = strtolower(trim($value));
+        if ($value === 'any') {
+            $query->whereIn('ad_source', \App\Services\Marketing\AttributionService::SOCIAL_SOURCES);
+        } elseif ($value === 'none') {
+            $query->whereNull('ad_source');
+        } else {
+            $query->where('ad_source', $value);
+        }
+    }
+
+    /**
+     * Order counts per ad source (any / none / each source), respecting every list filter except adSource.
+     */
+    public function adSourceCounts(int $companyId, array $filters): array
+    {
+        $base = $filters;
+        unset($base['adSource']);
+        $rows = $this->buildListQuery($companyId, $base)->reorder()
+            ->groupBy('ad_source')->selectRaw('ad_source, COUNT(*) as c')->pluck('c', 'ad_source');
+        $counts = ['any' => 0, 'none' => 0];
+        foreach (\App\Services\Marketing\AttributionService::AD_SOURCES as $src) {
+            $counts[$src] = 0;
+        }
+        foreach ($rows as $src => $c) {
+            if ($src === '' || $src === null) {
+                $counts['none'] += (int) $c;
+                continue;
+            }
+            $counts[$src] = ($counts[$src] ?? 0) + (int) $c;
+            if (in_array($src, \App\Services\Marketing\AttributionService::SOCIAL_SOURCES, true)) {
+                $counts['any'] += (int) $c;
+            }
+        }
+
+        return $counts;
     }
 
     /**
@@ -246,7 +299,7 @@ class SellRepository implements ISellRepository
     {
         return $this->model
             ->where('company_id', $companyId)
-            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel'])
+            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel', 'campaignLink'])
             ->find($id);
     }
 
@@ -258,7 +311,7 @@ class SellRepository implements ISellRepository
         return $this->model
             ->where('company_id', $companyId)
             ->where('invoice_no', $invoiceNo)
-            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel'])
+            ->with(['customer', 'shippingAddress', 'coupon', 'items', 'shipments', 'shippingMethodModel', 'campaignLink'])
             ->first();
     }
 

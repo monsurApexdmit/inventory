@@ -88,6 +88,9 @@ class ExpenseService
         }
 
         $this->assertNotLocked($expense);
+        if ($expense->voided_at !== null) {
+            throw new HttpException(422, 'A voided expense cannot be edited.');
+        }
         $this->assertRelations($data, $companyId);
 
         $dbData = $this->mapInputToDb($data);
@@ -134,6 +137,9 @@ class ExpenseService
         }
 
         $this->assertNotLocked($expense);
+        if ($expense->voided_at !== null) {
+            throw new HttpException(422, 'A voided expense cannot be deleted.');
+        }
 
         $this->repository->delete($id);
     }
@@ -181,6 +187,11 @@ class ExpenseService
                 while ($next->lte($today) && $guard++ < 1000) {
                     if ($template->recurring_end_date !== null && $next->gt($template->recurring_end_date)) {
                         break;
+                    }
+                    // a closed finance month is never written into: skip that occurrence
+                    if (\App\Services\Finance\FinancePeriodLock::isClosedDate((int) $template->company_id, $next->toDateString())) {
+                        $next = Expense::advanceDate($next, $template->recurring_frequency);
+                        continue;
                     }
                     Expense::create([
                         'company_id' => $template->company_id,

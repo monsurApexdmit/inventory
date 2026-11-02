@@ -20,6 +20,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Finance month-end close locks + expense activity log (model events).
+        \App\Services\Finance\FinancePeriodLock::register();
+
         if (!$this->shouldBootBroadcastChannels()) {
             return;
         }

@@ -619,9 +619,18 @@ class DashboardService
             ->limit(6)
             ->get();
 
+        // Orders from social ads / chats (sells.ad_source), same period + location
+        $ad = $this->inRange($this->sells($cid, $loc), $from, $to)
+            ->whereNotNull('ad_source')
+            ->groupBy('ad_source')
+            ->selectRaw('ad_source, COUNT(*) as orders, COALESCE(SUM(amount), 0) as revenue')
+            ->orderByDesc('revenue')
+            ->get();
+
         return [
-            'channels' => $ch->map(fn($r) => ['key' => $r->channel, 'orders' => (int) $r->orders, 'revenue' => (float) $r->revenue])->all(),
-            'paymentMethods' => $pm->map(fn($r) => ['method' => ucwords(str_replace('_', ' ', (string) $r->method)), 'orders' => (int) $r->orders, 'revenue' => (float) $r->revenue])->all(),
+            'channels' => $ch->map(fn($r) => ['key' => $r->channel, 'orders' => (int) $r->orders, 'revenue' => round((float) $r->revenue, 2)])->all(),
+            'adSources' => $ad->map(fn($r) => ['key' => $r->ad_source, 'orders' => (int) $r->orders, 'revenue' => round((float) $r->revenue, 2)])->all(),
+            'paymentMethods' => $pm->map(fn($r) => ['method' => ucwords(str_replace('_', ' ', (string) $r->method)), 'orders' => (int) $r->orders, 'revenue' => round((float) $r->revenue, 2)])->all(),
         ];
     }
 
