@@ -29,6 +29,9 @@
         <env name="DB_DATABASE" value="inventory_laravel_test" force="true"/>
         <env name="DB_USERNAME" value="admin" force="true"/>
         <env name="DB_PASSWORD" value="admin123" force="true"/>
+        <!-- Docker sets DB_* as real env vars, which Laravel reads from $_SERVER before $_ENV -->
+        <server name="DB_CONNECTION" value="mysql" force="true"/>
+        <server name="DB_DATABASE" value="inventory_laravel_test" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
