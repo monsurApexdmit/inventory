@@ -18,7 +18,7 @@ class PlanSeeder extends Seeder
         // Catalog
         'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Print Barcode',
         // Sales
-        'Orders', 'Customers', 'POS',
+        'Orders', 'Marketing', 'Customers', 'POS',
         // Inventory (single warehouse only — max_branches=1 enforces this)
         'Inventory',
         // Settings
@@ -41,7 +41,7 @@ class PlanSeeder extends Seeder
         'Dashboard',
         'Finance',
         'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers',
+        'Orders', 'Marketing', 'Shipments', 'Customers',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',
@@ -61,7 +61,7 @@ class PlanSeeder extends Seeder
         'Dashboard',
         'Finance',
         'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers', 'POS',
+        'Orders', 'Marketing', 'Shipments', 'Customers', 'POS',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',
@@ -82,7 +82,7 @@ class PlanSeeder extends Seeder
         'Dashboard',
         'Finance',
         'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers', 'POS',
+        'Orders', 'Marketing', 'Shipments', 'Customers', 'POS',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',
@@ -106,7 +106,7 @@ class PlanSeeder extends Seeder
         'Dashboard',
         'Finance',
         'Products', 'Categories', 'Collections', 'Units', 'Brands', 'Attributes', 'Coupons', 'Print Barcode',
-        'Orders', 'Shipments', 'Customers', 'POS',
+        'Orders', 'Marketing', 'Shipments', 'Customers', 'POS',
         'Inventory', 'Transfers',
         'Customer Returns', 'Vendor Returns',
         'Vendors',

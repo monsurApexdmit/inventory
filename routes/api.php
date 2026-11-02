@@ -48,6 +48,8 @@ use App\Http\Controllers\Api\Storefront\StorefrontController;
 use App\Http\Controllers\Api\Storefront\StorefrontCollectionController;
 use App\Http\Controllers\Api\Storefront\StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\StorefrontOrderController;
+use App\Http\Controllers\Api\Storefront\StorefrontMarketingController;
+use App\Http\Controllers\Api\Marketing\CampaignLinkController;
 use App\Http\Controllers\Api\Storefront\StorefrontProductReviewController;
 use App\Http\Controllers\Api\Storefront\StorefrontSupportController;
 use App\Http\Controllers\Api\Platform\PlatformController;
@@ -121,6 +123,11 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     // resolves the logged-in customer from the token when one is present,
     // otherwise creates a guest order using the `guest` payload block.
     Route::post('/orders',             [StorefrontOrderController::class, 'store']);
+
+    // Orders from social ads (contract: AD_ORDERS_API_CONTRACT.md §4)
+    Route::get('/l/{code}',                    [StorefrontMarketingController::class, 'link'])->middleware('throttle:60,1');
+    Route::get('/quick-order/{slugOrId}',      [StorefrontMarketingController::class, 'quickOrderForm'])->middleware('throttle:120,1');
+    Route::post('/quick-order',                [StorefrontMarketingController::class, 'quickOrder'])->middleware(\App\Http\Middleware\ThrottleQuickOrders::class);
 
     // Customer auth (no auth)
     Route::post('/customer/register', [CustomerAuthController::class, 'register']);
@@ -382,6 +389,18 @@ Route::prefix('collections')->middleware(JwtAuthMiddleware::class)->group(functi
     Route::patch('/{id}/status',          [CollectionController::class, 'status'])->whereNumber('id')->middleware('check_permission:Collections.write');
     Route::put('/{id}/products',          [CollectionController::class, 'setProducts'])->whereNumber('id')->middleware('check_permission:Collections.write');
     Route::get('/{id}/preview-products',  [CollectionController::class, 'previewProducts'])->whereNumber('id')->middleware('check_permission:Collections.read');
+});
+
+// Marketing → Ad order links (contract: AD_ORDERS_API_CONTRACT.md §3)
+Route::prefix('campaign-links')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/',              [CampaignLinkController::class, 'index'])->middleware('check_permission:Marketing.read');
+    Route::get('/summary',       [CampaignLinkController::class, 'summary'])->middleware('check_permission:Marketing.read');
+    Route::post('/',             [CampaignLinkController::class, 'store'])->middleware('check_permission:Marketing.write');
+    Route::get('/{id}',          [CampaignLinkController::class, 'show'])->whereNumber('id')->middleware('check_permission:Marketing.read');
+    Route::put('/{id}',          [CampaignLinkController::class, 'update'])->whereNumber('id')->middleware('check_permission:Marketing.write');
+    Route::patch('/{id}/status', [CampaignLinkController::class, 'status'])->whereNumber('id')->middleware('check_permission:Marketing.write');
+    Route::delete('/{id}',       [CampaignLinkController::class, 'destroy'])->whereNumber('id')->middleware('check_permission:Marketing.delete');
+    Route::get('/{id}/stats',    [CampaignLinkController::class, 'stats'])->whereNumber('id')->middleware('check_permission:Marketing.read');
 });
 
 Route::prefix('brands')->middleware(JwtAuthMiddleware::class)->group(function () {

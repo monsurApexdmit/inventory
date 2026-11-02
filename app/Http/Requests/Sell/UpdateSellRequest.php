@@ -28,6 +28,14 @@ class UpdateSellRequest extends FormRequest
             'zoneName' => 'sometimes|nullable|string|max:150',
             'courier' => 'sometimes|nullable|string|max:100',
             'deliveryNote' => 'sometimes|nullable|string|max:1000',
+            'adSource' => 'sometimes|nullable|string|in:direct,walk-in,walkin,walk_in,none,facebook,instagram,whatsapp,messenger,tiktok,google,youtube,phone,other',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'adSource.in' => 'Source must be one of: direct, facebook, instagram, whatsapp, messenger, tiktok, google, youtube, phone, other',
         ];
     }
 }

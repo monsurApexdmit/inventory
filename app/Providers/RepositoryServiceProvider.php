@@ -6,6 +6,7 @@ use App\Repositories\Contracts\IAttributeRepository;
 use App\Repositories\Contracts\IBillingContactRepository;
 use App\Repositories\Contracts\ICategoryRepository;
 use App\Repositories\Contracts\ICollectionRepository;
+use App\Repositories\Contracts\ICampaignLinkRepository;
 use App\Repositories\Contracts\IFinanceAccountRepository;
 use App\Repositories\Contracts\IFinanceEntryRepository;
 use App\Repositories\Contracts\IFinanceLedgerRepository;
@@ -50,6 +51,7 @@ use App\Repositories\Eloquent\AttributeRepository;
 use App\Repositories\Eloquent\BillingContactRepository;
 use App\Repositories\Eloquent\CategoryRepository;
 use App\Repositories\Eloquent\CollectionRepository;
+use App\Repositories\Eloquent\CampaignLinkRepository;
 use App\Repositories\Eloquent\FinanceAccountRepository;
 use App\Repositories\Eloquent\FinanceEntryRepository;
 use App\Repositories\Eloquent\FinanceLedgerRepository;
@@ -118,6 +120,7 @@ class RepositoryServiceProvider extends ServiceProvider
         // Phase 3 bindings
         $this->app->bind(ICategoryRepository::class, CategoryRepository::class);
         $this->app->bind(ICollectionRepository::class, CollectionRepository::class);
+        $this->app->bind(ICampaignLinkRepository::class, CampaignLinkRepository::class);
         $this->app->bind(IFinanceAccountRepository::class, FinanceAccountRepository::class);
         $this->app->bind(IFinanceEntryRepository::class, FinanceEntryRepository::class);
         $this->app->bind(IFinanceTransferRepository::class, FinanceTransferRepository::class);

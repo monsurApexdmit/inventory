@@ -77,6 +77,11 @@ class SellService
         return $this->repository->tabCounts($companyId, $filters);
     }
 
+    public function adSourceCounts(int $companyId, array $filters): array
+    {
+        return $this->repository->adSourceCounts($companyId, $filters);
+    }
+
     public function kpis(int $companyId): array
     {
         return $this->repository->kpis($companyId);
@@ -210,6 +215,11 @@ class SellService
                 if (!$shiftOpen) {
                     throw new HttpException(422, 'The register shift is closed. Open a shift before taking a sale.');
                 }
+            }
+
+            // Order source from chats / calls (New sale "Source" select): direct / walk-in → null
+            if (array_key_exists('adSource', $data)) {
+                $data['adSource'] = \App\Services\Marketing\AttributionService::normalizeManual($data['adSource']);
             }
 
             // Auto-generate invoice number if not provided
@@ -410,7 +420,8 @@ class SellService
                 $companyId,
                 $sell->invoice_no,
                 $sell->customer_name,
-                $sell->amount
+                $sell->amount,
+                $sell->ad_source ? ['adSource' => $sell->ad_source] : []
             );
 
             return $this->mapper->toDTO($sell->fresh(['customer', 'shippingAddress', 'coupon', 'items', 'shipments']));
@@ -533,8 +544,11 @@ class SellService
         }
 
         // Only allow certain fields to be updated
-        $allowedFields = ['invoiceNo', 'orderTime', 'customerId', 'customerName', 'method', 'amount', 'shippingCost', 'discount', 'status', 'notes', 'transactionId', 'zoneName', 'courier', 'deliveryNote'];
+        $allowedFields = ['invoiceNo', 'orderTime', 'customerId', 'customerName', 'method', 'amount', 'shippingCost', 'discount', 'status', 'notes', 'transactionId', 'zoneName', 'courier', 'deliveryNote', 'adSource'];
         $updateData = array_intersect_key($data, array_flip($allowedFields));
+        if (array_key_exists('adSource', $updateData)) {
+            $updateData['adSource'] = \App\Services\Marketing\AttributionService::normalizeManual($updateData['adSource']);
+        }
 
         if (!empty($updateData)) {
             $dbData = $this->mapInputToDb($updateData);
@@ -1267,6 +1281,7 @@ class SellService
             'transactionId' => 'transaction_id',
             'zoneName' => 'zone_name',
             'deliveryNote' => 'delivery_note',
+            'adSource' => 'ad_source',
             'taxRate' => 'tax_rate',
             'taxAmount' => 'tax_amount',
             'courier' => 'carrier',

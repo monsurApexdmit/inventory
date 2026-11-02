@@ -494,6 +494,9 @@ class StorefrontController extends Controller
                 'slug' => $str($o['slug'] ?? ''),
                 'theme' => $str($o['theme'] ?? ''),
                 'published' => (bool) ($o['published'] ?? true),
+                'facebookPixelId' => $str($o['facebookPixelId'] ?? ''),
+                'tiktokPixelId' => $str($o['tiktokPixelId'] ?? ''),
+                'whatsappNumber' => $str($o['whatsappNumber'] ?? ''),
                 'policies' => [
                     'returns' => $str($policies['returns'] ?? ''),
                     'shipping' => $str($policies['shipping'] ?? ''),

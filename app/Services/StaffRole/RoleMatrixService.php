@@ -24,6 +24,9 @@ class RoleMatrixService
             'Shipments' => ['Shipments, tracking and delivery status', ['Shipments']],
             'Customers' => ['Customer records, history and balances', ['Customers']],
         ],
+        'Marketing' => [
+            'Ad order links' => ['Order links for Facebook / Instagram / WhatsApp posts and ads, clicks and orders per link', ['Marketing']],
+        ],
         'Catalog' => [
             'Products' => ['Products, variants, bundles and pricing', ['Products']],
             'Categories & brands' => ['Categories, brands, units and attributes', ['Categories', 'Brands', 'Units', 'Attributes']],

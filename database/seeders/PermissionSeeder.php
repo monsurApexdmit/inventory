@@ -19,6 +19,7 @@ class PermissionSeeder extends Seeder
         'Print Barcode',
         'Customers',
         'Orders',
+        'Marketing',
         'Dues',
         'Shipments',
         'Vendors',

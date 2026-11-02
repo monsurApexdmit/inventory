@@ -68,6 +68,18 @@ class Sell extends Model
         'last_follow_up_at',
         'last_follow_up_outcome',
         'next_follow_up_at',
+        'ad_source',
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_content',
+        'utm_term',
+        'click_id',
+        'campaign_link_id',
+        'landing_url',
+        'referrer',
+        'is_quick_order',
+        'possible_duplicate',
     ];
 
     protected $casts = [
@@ -87,6 +99,8 @@ class Sell extends Model
         'follow_up_count' => 'integer',
         'last_follow_up_at' => 'datetime',
         'next_follow_up_at' => 'datetime',
+        'is_quick_order' => 'boolean',
+        'possible_duplicate' => 'boolean',
     ];
 
     /**
@@ -126,6 +140,11 @@ class Sell extends Model
     public function shippingMethodModel(): BelongsTo
     {
         return $this->belongsTo(ShippingMethod::class, 'shipping_method');
+    }
+
+    public function campaignLink(): BelongsTo
+    {
+        return $this->belongsTo(CampaignLink::class, 'campaign_link_id')->withTrashed();
     }
 
     public function followUps(): HasMany

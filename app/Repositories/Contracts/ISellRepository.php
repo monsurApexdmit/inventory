@@ -12,6 +12,7 @@ interface ISellRepository
     public function findByCompany(int $companyId, array $filters): mixed;
     public function summarize(int $companyId, array $filters): array;
     public function tabCounts(int $companyId, array $filters): array;
+    public function adSourceCounts(int $companyId, array $filters): array;
     public function kpis(int $companyId): array;
 
     /**
