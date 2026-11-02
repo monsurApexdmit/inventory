@@ -334,6 +334,7 @@ class CollectionService
             'description' => $c->description,
             'image' => $c->image,
             'imageUrl' => CollectionMapper::imageUrl($c->image),
+            'coverImageUrl' => $c->image ? null : $this->coverImageUrl($c),
             'productCount' => $count ?? $this->engine->productQuery((int) $c->company_id, $this->engine->definitionFor($c), true)->count(),
             'showOnHomepage' => (bool) $c->show_on_homepage,
             'sortOrder' => (int) $c->sort_order,
@@ -341,6 +342,18 @@ class CollectionService
             'seoTitle' => $c->seo_title,
             'seoDescription' => $c->seo_description,
         ];
+    }
+
+    /** Photo of the first storefront product (in the collection's order) for collections without an image. */
+    private function coverImageUrl(Collection $c): ?string
+    {
+        [$query] = $this->storefrontProductsQuery($c, null);
+        $p = $query->with('images')->first();
+        if (!$p) {
+            return null;
+        }
+
+        return CollectionMapper::imageUrl($p->images->firstWhere('is_primary', true)?->path ?? $p->images->first()?->path ?? $p->image);
     }
 
     /**
