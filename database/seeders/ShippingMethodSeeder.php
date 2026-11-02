@@ -9,7 +9,7 @@ class ShippingMethodSeeder extends Seeder
 {
     public function run(): void
     {
-        $companyId = 11;
+        $companyId = (int) env('SEED_COMPANY_ID', 11);
 
         $methods = [
             [
