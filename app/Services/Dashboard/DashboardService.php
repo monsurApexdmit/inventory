@@ -628,9 +628,9 @@ class DashboardService
             ->get();
 
         return [
-            'channels' => $ch->map(fn($r) => ['key' => $r->channel, 'orders' => (int) $r->orders, 'revenue' => (float) $r->revenue])->all(),
-            'adSources' => $ad->map(fn($r) => ['key' => $r->ad_source, 'orders' => (int) $r->orders, 'revenue' => (float) $r->revenue])->all(),
-            'paymentMethods' => $pm->map(fn($r) => ['method' => ucwords(str_replace('_', ' ', (string) $r->method)), 'orders' => (int) $r->orders, 'revenue' => (float) $r->revenue])->all(),
+            'channels' => $ch->map(fn($r) => ['key' => $r->channel, 'orders' => (int) $r->orders, 'revenue' => round((float) $r->revenue, 2)])->all(),
+            'adSources' => $ad->map(fn($r) => ['key' => $r->ad_source, 'orders' => (int) $r->orders, 'revenue' => round((float) $r->revenue, 2)])->all(),
+            'paymentMethods' => $pm->map(fn($r) => ['method' => ucwords(str_replace('_', ' ', (string) $r->method)), 'orders' => (int) $r->orders, 'revenue' => round((float) $r->revenue, 2)])->all(),
         ];
     }
 
