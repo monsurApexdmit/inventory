@@ -10,6 +10,7 @@ use App\Services\Gateway\StripeService;
 use App\Services\Gateway\PayPalService;
 use App\Services\Gateway\BkashService;
 use App\Services\Gateway\NagadService;
+use App\Services\Sell\OrderLifecycleService;
 use Illuminate\Http\Request;
 
 class GatewayController extends Controller
@@ -38,11 +39,8 @@ class GatewayController extends Controller
             );
 
             if ($valid) {
-                $order->update([
-                    'payment_status'         => 'paid',
-                    'payment_transaction_id' => $request->input('tran_id'),
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}");
+                $ok = $this->paid($order, $request->input('tran_id'));
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}");
             }
         } catch (\Throwable $e) {}
 
@@ -54,7 +52,7 @@ class GatewayController extends Controller
     {
         $order = $this->findOrderByTranId($request->input('tran_id'));
         $invoice = $order?->invoice_no ?? '';
-        if ($order) $order->update(['payment_status' => 'failed']);
+        if ($order) $this->failed($order);
         return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$invoice}");
     }
 
@@ -63,7 +61,7 @@ class GatewayController extends Controller
     {
         $order   = $this->findOrderByTranId($request->input('tran_id'));
         $invoice = $order?->invoice_no ?? '';
-        if ($order) $order->update(['payment_status' => 'cancelled']);
+        if ($order) $this->cancelled($order);
         return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice={$invoice}");
     }
 
@@ -78,10 +76,7 @@ class GatewayController extends Controller
         try {
             $service = new SSLCommerzService($order->company_id);
             if ($service->validatePayment($request->input('val_id'), (float) $order->amount)) {
-                $order->update([
-                    'payment_status'         => 'paid',
-                    'payment_transaction_id' => $request->input('tran_id'),
-                ]);
+                $this->paid($order, $request->input('tran_id'));
             }
         } catch (\Throwable $e) {}
 
@@ -101,15 +96,12 @@ class GatewayController extends Controller
         try {
             $service = new PortWalletService($order->company_id);
             if ($service->verifyCallback($request->all()) && $request->input('status') === 'SUCCESSFUL') {
-                $order->update([
-                    'payment_status'         => 'paid',
-                    'payment_transaction_id' => $request->input('portwallet_txn_id'),
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}");
+                $ok = $this->paid($order, $request->input('portwallet_txn_id'));
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}");
             }
         } catch (\Throwable $e) {}
 
-        $order->update(['payment_status' => 'failed']);
+        $this->failed($order);
         return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
     }
 
@@ -128,11 +120,8 @@ class GatewayController extends Controller
             $session = $service->getSession($sessionId);
 
             if ($session->payment_status === 'paid') {
-                $order->update([
-                    'payment_status'         => 'paid',
-                    'payment_transaction_id' => $session->payment_intent,
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}");
+                $ok = $this->paid($order, $session->payment_intent);
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}");
             }
         } catch (\Throwable $e) {}
 
@@ -143,7 +132,7 @@ class GatewayController extends Controller
     public function stripeCancel(Request $request)
     {
         $order = $this->findOrderByTranId($request->input('tran_id', ''));
-        if ($order) $order->update(['payment_status' => 'cancelled']);
+        if ($order) $this->cancelled($order);
         return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice=" . ($order?->invoice_no ?? ''));
     }
 
@@ -167,10 +156,7 @@ class GatewayController extends Controller
                 $order    = $this->findOrderByTranId($tranId);
 
                 if ($order && $session->payment_status === 'paid') {
-                    $order->update([
-                        'payment_status'         => 'paid',
-                        'payment_transaction_id' => $session->payment_intent,
-                    ]);
+                    $this->paid($order, $session->payment_intent);
                 }
             }
         } catch (\Throwable $e) {
@@ -196,11 +182,8 @@ class GatewayController extends Controller
 
             if (($captured['status'] ?? '') === 'COMPLETED') {
                 $txnId = $captured['purchase_units'][0]['payments']['captures'][0]['id'] ?? $orderId;
-                $order->update([
-                    'payment_status'         => 'paid',
-                    'payment_transaction_id' => $txnId,
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}");
+                $ok = $this->paid($order, $txnId);
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}");
             }
         } catch (\Throwable $e) {}
 
@@ -211,7 +194,7 @@ class GatewayController extends Controller
     public function paypalCancel(Request $request)
     {
         $order = $this->findOrderByTranId($request->input('tran_id', ''));
-        if ($order) $order->update(['payment_status' => 'cancelled']);
+        if ($order) $this->cancelled($order);
         return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice=" . ($order?->invoice_no ?? ''));
     }
 
@@ -229,25 +212,22 @@ class GatewayController extends Controller
         }
 
         if ($status === 'cancel') {
-            $order->update(['payment_status' => 'cancelled']);
+            $this->cancelled($order);
             return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice={$order->invoice_no}");
         }
 
         if ($status !== 'success' || !$paymentId) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
 
         try {
             $service = new BkashService($order->company_id);
             $trxId   = $service->executePayment($paymentId);
-            $order->update([
-                'payment_status'         => 'paid',
-                'payment_transaction_id' => $trxId,
-            ]);
-            return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}");
+            $ok = $this->paid($order, $trxId);
+            return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}");
         } catch (\Throwable $e) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
     }
@@ -267,20 +247,17 @@ class GatewayController extends Controller
         }
 
         if ($status !== 'Success' || !$refId) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
 
         try {
             $service = new NagadService($order->company_id);
             $txnId   = $service->verifyPayment($refId);
-            $order->update([
-                'payment_status'         => 'paid',
-                'payment_transaction_id' => $txnId,
-            ]);
-            return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}");
+            $ok = $this->paid($order, $txnId);
+            return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}");
         } catch (\Throwable $e) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
     }
@@ -303,15 +280,12 @@ class GatewayController extends Controller
             );
 
             if ($valid) {
-                $order->update([
-                    'payment_status'                  => 'shipping_deposit_paid',
-                    'shipping_deposit_transaction_id' => $request->input('tran_id'),
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+                $ok = $this->depositPaid($order, $request->input('tran_id'));
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}&deposit=1");
             }
         } catch (\Throwable $e) {}
 
-        $order->update(['payment_status' => 'failed']);
+        $this->failed($order);
         return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
     }
 
@@ -319,7 +293,7 @@ class GatewayController extends Controller
     public function codDepositSslFail(Request $request)
     {
         $order = $this->findOrderByTranId($request->input('tran_id'));
-        if ($order) $order->update(['payment_status' => 'failed']);
+        if ($order) $this->failed($order);
         return redirect("{$this->frontendUrl}/order/result?status=fail&invoice=" . ($order?->invoice_no ?? ''));
     }
 
@@ -327,7 +301,7 @@ class GatewayController extends Controller
     public function codDepositSslCancel(Request $request)
     {
         $order = $this->findOrderByTranId($request->input('tran_id'));
-        if ($order) $order->update(['payment_status' => 'cancelled']);
+        if ($order) $this->cancelled($order);
         return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice=" . ($order?->invoice_no ?? ''));
     }
 
@@ -342,10 +316,7 @@ class GatewayController extends Controller
         try {
             $service = new SSLCommerzService($order->company_id);
             if ($service->validatePayment($request->input('val_id'), (float) $order->shipping_deposit_amount)) {
-                $order->update([
-                    'payment_status'                  => 'shipping_deposit_paid',
-                    'shipping_deposit_transaction_id' => $request->input('tran_id'),
-                ]);
+                $this->depositPaid($order, $request->input('tran_id'));
             }
         } catch (\Throwable $e) {}
 
@@ -365,15 +336,12 @@ class GatewayController extends Controller
         try {
             $service = new PortWalletService($order->company_id);
             if ($service->verifyCallback($request->all()) && $request->input('status') === 'SUCCESSFUL') {
-                $order->update([
-                    'payment_status'                  => 'shipping_deposit_paid',
-                    'shipping_deposit_transaction_id' => $request->input('portwallet_txn_id'),
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+                $ok = $this->depositPaid($order, $request->input('portwallet_txn_id'));
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}&deposit=1");
             }
         } catch (\Throwable $e) {}
 
-        $order->update(['payment_status' => 'failed']);
+        $this->failed($order);
         return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
     }
 
@@ -389,25 +357,22 @@ class GatewayController extends Controller
         }
 
         if ($status === 'cancel') {
-            $order->update(['payment_status' => 'cancelled']);
+            $this->cancelled($order);
             return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice={$order->invoice_no}");
         }
 
         if ($status !== 'success' || !$paymentId) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
 
         try {
             $service = new BkashService($order->company_id);
             $trxId   = $service->executePayment($paymentId);
-            $order->update([
-                'payment_status'                  => 'shipping_deposit_paid',
-                'shipping_deposit_transaction_id' => $trxId,
-            ]);
-            return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+            $ok = $this->depositPaid($order, $trxId);
+            return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}&deposit=1");
         } catch (\Throwable $e) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
     }
@@ -425,20 +390,17 @@ class GatewayController extends Controller
         }
 
         if ($status !== 'Success' || !$refId) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
 
         try {
             $service = new NagadService($order->company_id);
             $txnId   = $service->verifyPayment($refId);
-            $order->update([
-                'payment_status'                  => 'shipping_deposit_paid',
-                'shipping_deposit_transaction_id' => $txnId,
-            ]);
-            return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+            $ok = $this->depositPaid($order, $txnId);
+            return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}&deposit=1");
         } catch (\Throwable $e) {
-            $order->update(['payment_status' => 'failed']);
+            $this->failed($order);
             return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
         }
     }
@@ -458,15 +420,12 @@ class GatewayController extends Controller
             $session = $service->getSession($sessionId);
 
             if ($session->payment_status === 'paid') {
-                $order->update([
-                    'payment_status'                  => 'shipping_deposit_paid',
-                    'shipping_deposit_transaction_id' => $session->payment_intent,
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+                $ok = $this->depositPaid($order, $session->payment_intent);
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}&deposit=1");
             }
         } catch (\Throwable $e) {}
 
-        $order->update(['payment_status' => 'failed']);
+        $this->failed($order);
         return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
     }
 
@@ -474,7 +433,7 @@ class GatewayController extends Controller
     public function codDepositStripeCancel(Request $request)
     {
         $order = $this->findOrderByTranId($request->input('tran_id', ''));
-        if ($order) $order->update(['payment_status' => 'cancelled']);
+        if ($order) $this->cancelled($order);
         return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice=" . ($order?->invoice_no ?? ''));
     }
 
@@ -494,15 +453,12 @@ class GatewayController extends Controller
 
             if (($captured['status'] ?? '') === 'COMPLETED') {
                 $txnId = $captured['purchase_units'][0]['payments']['captures'][0]['id'] ?? $orderId;
-                $order->update([
-                    'payment_status'                  => 'shipping_deposit_paid',
-                    'shipping_deposit_transaction_id' => $txnId,
-                ]);
-                return redirect("{$this->frontendUrl}/order/result?status=success&invoice={$order->invoice_no}&deposit=1");
+                $ok = $this->depositPaid($order, $txnId);
+                return redirect("{$this->frontendUrl}/order/result?status={$this->outcome($ok)}&invoice={$order->invoice_no}&deposit=1");
             }
         } catch (\Throwable $e) {}
 
-        $order->update(['payment_status' => 'failed']);
+        $this->failed($order);
         return redirect("{$this->frontendUrl}/order/result?status=fail&invoice={$order->invoice_no}");
     }
 
@@ -510,8 +466,44 @@ class GatewayController extends Controller
     public function codDepositPaypalCancel(Request $request)
     {
         $order = $this->findOrderByTranId($request->input('tran_id', ''));
-        if ($order) $order->update(['payment_status' => 'cancelled']);
+        if ($order) $this->cancelled($order);
         return redirect("{$this->frontendUrl}/order/result?status=cancel&invoice=" . ($order?->invoice_no ?? ''));
+    }
+
+    // ─── Order state changes (order row locked, idempotent; see OrderLifecycleService) ─
+
+    /** Full payment confirmed. False when it arrived after the stock was released and sold (refund needed). */
+    private function paid(Sell $order, ?string $transactionId): bool
+    {
+        return $this->lifecycle()->markPaid((int) $order->id, $transactionId);
+    }
+
+    /** COD shipping deposit confirmed. */
+    private function depositPaid(Sell $order, ?string $transactionId): bool
+    {
+        return $this->lifecycle()->markPaid((int) $order->id, $transactionId, 'shipping_deposit_paid', 'shipping_deposit_transaction_id');
+    }
+
+    /** Payment failed: the unpaid order is cancelled and its stock released (never overrides a payment). */
+    private function failed(Sell $order): void
+    {
+        $this->lifecycle()->markPaymentFailed((int) $order->id, 'failed', OrderLifecycleService::REASON_PAYMENT_FAILED);
+    }
+
+    /** Buyer cancelled at the gateway: handled like a failure. */
+    private function cancelled(Sell $order): void
+    {
+        $this->lifecycle()->markPaymentFailed((int) $order->id, 'cancelled', OrderLifecycleService::REASON_PAYMENT_CANCELLED);
+    }
+
+    private function outcome(bool $ok): string
+    {
+        return $ok ? 'success' : 'fail&reason=stock_released';
+    }
+
+    private function lifecycle(): OrderLifecycleService
+    {
+        return app(OrderLifecycleService::class);
     }
 
     private function findOrderByTranId(string $tranId): ?Sell

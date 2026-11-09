@@ -11,7 +11,6 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Sell;
 use App\Models\Setting;
-use App\Models\VariantInventory;
 use App\Services\Coupon\CouponService;
 use App\Services\Gateway\BkashService;
 use App\Services\Gateway\NagadService;
@@ -19,22 +18,38 @@ use App\Services\Gateway\PayPalService;
 use App\Services\Gateway\PortWalletService;
 use App\Services\Gateway\SSLCommerzService;
 use App\Services\Gateway\StripeService;
+use App\Services\Inventory\InsufficientStockException;
 use App\Services\Inventory\LocationStockService;
+use App\Services\Inventory\StockReservationService;
 use App\Services\Notification\NotificationService;
 use App\Services\Pricing\PriceService;
+use App\Services\Sell\SellService;
 use App\Services\Shipping\ShippingMethodService;
+use Illuminate\Database\DetectsConcurrencyErrors;
+use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Places a storefront order. Shared by the normal checkout (POST /store/orders) and the
  * quick order form (POST /store/quick-order) so pricing (PriceService), coupons, server-side
  * delivery charge, payment-method rules, COD limit/fee, location stock and gateways stay identical.
+ *
+ * Stock is checked and taken inside one transaction under row locks (StockReservationService), so concurrent
+ * checkouts for the same stock are served one after another and the later one sees what is left.
  */
 class StorefrontCheckoutService
 {
+    use DetectsConcurrencyErrors;
+
+    /** Payment methods that redirect the buyer to an online gateway (stock is held until paid). */
+    private const GATEWAYS = ['sslcommerz', 'portwallet', 'stripe', 'paypal', 'bkash', 'nagad'];
+
     public function __construct(
         private readonly NotificationService $notificationService,
         private readonly CouponService $couponService,
+        private readonly StockReservationService $reservations,
     ) {
     }
 
@@ -44,7 +59,8 @@ class StorefrontCheckoutService
      *                      city?, state?, zip?, country?}, payment_method, shipping_method_id?, pickup_location_id?, coupon_code?,
      *                      transaction_id?, note?
      * @param array $ctx    customer_id?, customer_name, customer_email?, attribution? (sells columns from AttributionService),
-     *                      is_quick_order?, possible_duplicate?, require_variant? (bool), campaign_link_name?
+     *                      is_quick_order?, possible_duplicate?, require_variant? (bool), campaign_link_name?,
+     *                      idempotency_key? (one order per key; a repeat returns the first order, see replay())
      * @return array{sell: Sell, payment_url: ?string, deposit_only: bool, deposit_amount: ?float, subtotal: float,
      *               discount: float, shipping_cost: float, cod_fee: float, gateway_type: string}
      *
@@ -57,6 +73,13 @@ class StorefrontCheckoutService
         $customerName = $ctx['customer_name'];
         $customerEmail = $ctx['customer_email'] ?? null;
         $requireVariant = (bool) ($ctx['require_variant'] ?? false);
+        $idempotencyKey = isset($ctx['idempotency_key']) && trim((string) $ctx['idempotency_key']) !== ''
+            ? mb_substr(trim((string) $ctx['idempotency_key']), 0, 100) : null;
+
+        // Repeat of a checkout that already went through: return that order, take nothing again
+        if ($idempotencyKey !== null && ($existing = $this->findByIdempotencyKey($companyId, $idempotencyKey))) {
+            return $this->replay($existing);
+        }
 
         $orderItems = [];
         $subtotal = 0;
@@ -191,27 +214,12 @@ class StorefrontCheckoutService
             $pickupLocationId = (int) $pickupLocationId;
         }
 
-        // Stock check against the locations this order draws from
+        // Stock comes from the pickup point, else the ships-online locations (per-location stock). Companies without
+        // per-location stock keep flat product/variant stock. Both are checked and taken under row locks below.
         $onlineLocs = $locStock->storefrontLocationIds($companyId);
         $drawLocs = $pickupLocationId ? [$pickupLocationId] : $onlineLocs;
-        if ($drawLocs && $locStock->hasLocationStock($companyId)) {
-            $need = [];
-            foreach ($items as $item) {
-                $k = $item['product_id'] . '|' . ($item['variant_id'] ?? '');
-                $need[$k] = [$item['product_id'], $item['variant_id'] ?? null, ($need[$k][2] ?? 0) + (int) $item['quantity']];
-            }
-            foreach ($need as [$pid, $vid, $qty]) {
-                $p = Product::where('company_id', $companyId)->find($pid);
-                if (!$p) {
-                    continue;
-                }
-                $have = $locStock->availableAcross($p, $vid ? (int) $vid : null, $drawLocs);
-                if ($have < $qty) {
-                    $where = $pickupLocationId ? ' at ' . Location::whereKey($pickupLocationId)->value('name') : '';
-                    throw new StorefrontOrderException("Only {$have} {$p->name} in stock{$where}");
-                }
-            }
-        }
+        $stockLocations = $drawLocs && $locStock->hasLocationStock($companyId) ? array_map('intval', $drawLocs) : null;
+        $lines = StockReservationService::mergeLines($items);
 
         // Cash-on-delivery rules (Payments settings): order limit (default 5000) + extra COD fee.
         if ($gatewayType === 'cod') {
@@ -224,22 +232,31 @@ class StorefrontCheckoutService
 
         $total = max(0, $subtotal - $discount) + $shippingCost + $codFee;
 
+        // Orders paid through a gateway (full amount, or the COD shipping deposit) hold their stock until the payment
+        // succeeds, fails or the hold expires (payment_hold_minutes, default 15; `orders:release-expired`).
+        $paysByGateway = in_array($gatewayType, self::GATEWAYS, true);
+        $deposit = ($gatewayType === 'cod' && $shippingCost > 0) ? $this->depositPlan($paySettings, $shippingCost) : null;
+        $awaitsPayment = $paysByGateway || $deposit !== null;
+        $holdMinutes = max(5, (int) ($paySettings['payment_hold_minutes'] ?? 15));
+
         $addr = $input['shipping_address'];
         $attribution = is_array($ctx['attribution'] ?? null) ? $ctx['attribution'] : [];
         $txn = isset($input['transaction_id']) ? trim((string) $input['transaction_id']) : '';
         $note = isset($input['note']) ? trim((string) $input['note']) : '';
 
-        $sell = Sell::create(array_merge($attribution, [
+        $sellData = array_merge($attribution, [
             'company_id' => $companyId,
             'customer_id' => $customerId,
             'customer_name' => $customerName,
             'invoice_no' => 'ORD-' . strtoupper(uniqid()),
+            'idempotency_key' => $idempotencyKey,
             'order_time' => now(),
             'amount' => $total,
             'method' => $paymentMethod,
             'source' => 'storefront',
             'status' => 'Pending',
-            'payment_status' => 'pending',
+            'payment_status' => $awaitsPayment ? 'pending_payment' : 'pending',
+            'stock_hold_expires_at' => $awaitsPayment ? now()->addMinutes($holdMinutes) : null,
             'fulfillment_status' => 'unfulfilled',
             'shipping_full_name' => $addr['name'],
             'shipping_phone' => $addr['phone'] ?? null,
@@ -259,71 +276,70 @@ class StorefrontCheckoutService
             'notes' => $note !== '' ? $note : null,
             'is_quick_order' => (bool) ($ctx['is_quick_order'] ?? false),
             'possible_duplicate' => (bool) ($ctx['possible_duplicate'] ?? false),
-        ]));
+        ], $deposit ? ['shipping_deposit_amount' => $deposit['amount']] : []);
 
-        foreach ($orderItems as $item) {
-            $sell->items()->create($item);
+        // One short transaction: lock stock rows -> validate every line -> save order + lines -> take stock -> commit.
+        // A second checkout for the same stock waits on the row locks and then sees what is left. No external
+        // calls happen inside; deadlocks and lock-wait timeouts are retried (3 attempts) before answering 409.
+        try {
+            [$sell, $replayed] = DB::transaction(function () use ($companyId, $lines, $stockLocations, $idempotencyKey, $sellData, $orderItems, $pickupLocationId, $appliedCoupon, $customerId, $discount, $subtotal, $total): array {
+                $this->reservations->lockAndValidate($companyId, $lines, $stockLocations);
+
+                // Same checkout submitted twice: the first one committed while this one waited for the locks
+                if ($idempotencyKey !== null && ($existing = $this->findByIdempotencyKey($companyId, $idempotencyKey))) {
+                    return [$existing, true];
+                }
+
+                $sell = Sell::create($sellData);
+                foreach ($orderItems as $item) {
+                    $sell->items()->create($item);
+                }
+
+                $byLoc = $this->reservations->deduct($companyId, $sell, $lines, $stockLocations);
+                $updates = ['stock_deducted' => true];
+                if (!$pickupLocationId && $byLoc) {
+                    arsort($byLoc);
+                    $updates['location_id'] = array_key_first($byLoc);
+                }
+                $sell->update($updates);
+
+                if ($appliedCoupon) {
+                    CouponUsage::create([
+                        'coupon_id' => $appliedCoupon->id,
+                        'customer_id' => $customerId,
+                        'sell_id' => $sell->id,
+                        'coupon_code' => $appliedCoupon->code,
+                        'discount_applied' => $discount,
+                        'original_amount' => $subtotal,
+                        'final_amount' => $total,
+                        'used_at' => now(),
+                    ]);
+                    $appliedCoupon->increment('times_used');
+                }
+
+                return [$sell, false];
+            }, 3);
+        } catch (InsufficientStockException $e) {
+            throw new StorefrontOrderException($e->getMessage(), 422, $e->shortages);
+        } catch (HttpException $e) {
+            throw new StorefrontOrderException($e->getMessage(), $e->getStatusCode());
+        } catch (QueryException $e) {
+            if ($idempotencyKey !== null && $this->isUniqueViolation($e)) {
+                // Two identical submits raced past the check; the other one won
+                $existing = $this->findByIdempotencyKey($companyId, $idempotencyKey);
+                if ($existing) {
+                    return $this->replay($existing);
+                }
+                throw new StorefrontOrderException('This checkout was already submitted.', 409);
+            }
+            if ($this->causedByConcurrencyError($e)) {
+                throw new StorefrontOrderException('The store is busy right now. Please try placing your order again.', 409);
+            }
+            throw $e;
         }
 
-        // Deduct stock: per location when location stock is set up (pickup point, else ships-online
-        // locations biggest first), otherwise the flat/legacy way
-        if ($drawLocs && $locStock->hasLocationStock($companyId)) {
-            $byLoc = [];
-            $meta = ['reference_type' => 'sell', 'reference_id' => $sell->id, 'reason' => 'Online order', 'notes' => $sell->invoice_no];
-            foreach ($items as $item) {
-                $product = Product::where('company_id', $companyId)->find($item['product_id']);
-                $variantId = !empty($item['variant_id']) ? (int) $item['variant_id'] : null;
-                try {
-                    $taken = $locStock->deductGreedy($companyId, $product, $variantId, $pickupLocationId ? [$pickupLocationId] : $drawLocs, (int) $item['quantity'], $meta);
-                } catch (HttpException $e) {
-                    $this->discard($sell, $companyId, $locStock);
-                    throw new StorefrontOrderException($e->getMessage(), $e->getStatusCode());
-                }
-                foreach ($taken as $loc => $q) {
-                    $byLoc[$loc] = ($byLoc[$loc] ?? 0) + $q;
-                }
-            }
-            if (!$pickupLocationId && $byLoc) {
-                arsort($byLoc);
-                $sell->update(['location_id' => array_key_first($byLoc)]);
-            }
-        } else {
-            foreach ($items as $item) {
-                $qty = (int) $item['quantity'];
-                if (!empty($item['variant_id'])) {
-                    VariantInventory::where('variant_id', $item['variant_id'])
-                        ->orderByDesc('quantity')
-                        ->get()
-                        ->each(function (VariantInventory $inv) use (&$qty) {
-                            if ($qty <= 0) return false;
-                            $deduct = min($qty, $inv->quantity);
-                            $inv->decrement('quantity', $deduct);
-                            $qty -= $deduct;
-                        });
-                    ProductVariant::where('id', $item['variant_id'])
-                        ->decrement('stock', (int) $item['quantity']);
-                } else {
-                    Product::where('id', $item['product_id'])
-                        ->where('company_id', $companyId)
-                        ->decrement('stock', $qty);
-                }
-            }
-        }
-        $sell->update(['stock_deducted' => true]);
-
-        // Record coupon usage
-        if ($appliedCoupon) {
-            CouponUsage::create([
-                'coupon_id' => $appliedCoupon->id,
-                'customer_id' => $customerId,
-                'sell_id' => $sell->id,
-                'coupon_code' => $appliedCoupon->code,
-                'discount_applied' => $discount,
-                'original_amount' => $subtotal,
-                'final_amount' => $total,
-                'used_at' => now(),
-            ]);
-            $appliedCoupon->increment('times_used');
+        if ($replayed) {
+            return $this->replay($sell);
         }
 
         $this->notificationService->notifyOrderPlaced($companyId, $sell->invoice_no, $customerName, $total, [
@@ -345,7 +361,14 @@ class StorefrontCheckoutService
             'gateway_type' => $gatewayType,
         ];
 
-        $gatewayCustomer = [
+        if (!$awaitsPayment) {
+            return $result;
+        }
+
+        // Gateway HTTP calls happen after commit, with no stock locks held
+        $gatewayParams = [
+            'currency' => 'BDT',
+            'tran_id' => 'INV-' . $sell->invoice_no,
             'customer_name' => $customerName,
             'customer_email' => $customerEmail,
             'customer_phone' => $addr['phone'] ?? '',
@@ -353,81 +376,88 @@ class StorefrontCheckoutService
             'shipping_city' => $addr['city'] ?? 'Dhaka',
             'brand_name' => config('app.name', 'Shop'),
         ];
-
-        if (in_array($gatewayType, ['sslcommerz', 'portwallet', 'stripe', 'paypal', 'bkash', 'nagad'])) {
-            $sell->update(['payment_status' => 'pending_payment']);
-
-            $callbackBase = rtrim(config('app.url'), '/') . '/api/gateway';
-            $tranId = 'INV-' . $sell->invoice_no;
-
-            $gatewayParams = [
-                'amount' => $total,
-                'currency' => 'BDT',
-                'tran_id' => $tranId,
-                'product_name' => 'Order ' . $sell->invoice_no,
-            ] + $gatewayCustomer;
-
-            try {
-                $result['payment_url'] = $this->initGateway($gatewayType, $companyId, $gatewayParams, $callbackBase, $tranId);
-            } catch (\Throwable $e) {
-                $this->discard($sell, $companyId, $locStock);
-                throw new StorefrontOrderException($e->getMessage(), 502);
-            }
-
-            return $result;
-        }
-
-        // COD shipping deposit — charge only shipping cost via gateway before delivery
-        if ($gatewayType === 'cod' && $shippingCost > 0) {
-            $setting = Setting::where('company_id', $companyId)->first();
-            $codDeposit = $setting?->payment_settings['cod_shipping_deposit'] ?? [];
-            $depositEnabled = (bool) ($codDeposit['enabled'] ?? false);
-            $depositGateway = $codDeposit['gateway'] ?? 'sslcommerz';
-            $depositAmount = (float) ($codDeposit['custom_amount'] ?? 0) ?: $shippingCost;
-
-            // Guard: check that the selected deposit gateway has credentials before redirecting
-            $gatewayCredentials = ($setting?->payment_settings ?? [])[$depositGateway] ?? [];
-            $hasCredentials = match ($depositGateway) {
-                'sslcommerz' => !empty($gatewayCredentials['store_id']) && !empty($gatewayCredentials['store_passwd']),
-                'portwallet' => !empty($gatewayCredentials['app_key']) && !empty($gatewayCredentials['app_secret']),
-                'bkash' => !empty($gatewayCredentials['app_key']) && !empty($gatewayCredentials['app_secret'])
-                    && !empty($gatewayCredentials['username']) && !empty($gatewayCredentials['password']),
-                'nagad' => !empty($gatewayCredentials['merchant_id']) && !empty($gatewayCredentials['private_key']),
-                'stripe' => !empty($gatewayCredentials['secret_key']),
-                'paypal' => !empty($gatewayCredentials['client_id']) && !empty($gatewayCredentials['client_secret']),
-                default => false,
-            };
-
-            if ($depositEnabled && $hasCredentials) {
-                $sell->update([
-                    'payment_status' => 'pending_payment',
-                    'shipping_deposit_amount' => $depositAmount,
-                ]);
-
-                $callbackBase = rtrim(config('app.url'), '/') . '/api/gateway/cod-deposit';
-                $tranId = 'INV-' . $sell->invoice_no;
-
-                $depositParams = [
-                    'amount' => $depositAmount,
-                    'currency' => 'BDT',
-                    'tran_id' => $tranId,
+        $apiBase = rtrim(config('app.url'), '/') . '/api/gateway';
+        try {
+            if ($paysByGateway) {
+                $url = $this->initGateway($gatewayType, $companyId, $gatewayParams + [
+                    'amount' => $total,
+                    'product_name' => 'Order ' . $sell->invoice_no,
+                ], $apiBase, $gatewayParams['tran_id']);
+            } else {
+                // COD shipping deposit: charge only the shipping before delivery
+                $url = $this->initGateway($deposit['gateway'], $companyId, $gatewayParams + [
+                    'amount' => $deposit['amount'],
                     'product_name' => 'Shipping Deposit – Order ' . $sell->invoice_no,
-                ] + $gatewayCustomer;
-
-                try {
-                    $result['payment_url'] = $this->initGateway($depositGateway, $companyId, $depositParams, $callbackBase, $tranId);
-                } catch (\Throwable $e) {
-                    $this->discard($sell, $companyId, $locStock);
-                    throw new StorefrontOrderException($e->getMessage(), 502);
-                }
+                ], $apiBase . '/cod-deposit', $gatewayParams['tran_id']);
                 $result['deposit_only'] = true;
-                $result['deposit_amount'] = $depositAmount;
+                $result['deposit_amount'] = $deposit['amount'];
             }
+        } catch (\Throwable $e) {
+            $this->discard($sell);
+            throw new StorefrontOrderException($e->getMessage(), 502);
         }
+        $sell->update(['payment_url' => $url]);
+        $result['payment_url'] = $url;
 
         return $result;
     }
 
+    /** COD shipping deposit settings when enabled and the chosen gateway has credentials, else null. */
+    private function depositPlan(array $paySettings, float $shippingCost): ?array
+    {
+        $codDeposit = $paySettings['cod_shipping_deposit'] ?? [];
+        if (!(bool) ($codDeposit['enabled'] ?? false)) {
+            return null;
+        }
+        $gateway = $codDeposit['gateway'] ?? 'sslcommerz';
+        $credentials = $paySettings[$gateway] ?? [];
+        $hasCredentials = match ($gateway) {
+            'sslcommerz' => !empty($credentials['store_id']) && !empty($credentials['store_passwd']),
+            'portwallet' => !empty($credentials['app_key']) && !empty($credentials['app_secret']),
+            'bkash' => !empty($credentials['app_key']) && !empty($credentials['app_secret'])
+                && !empty($credentials['username']) && !empty($credentials['password']),
+            'nagad' => !empty($credentials['merchant_id']) && !empty($credentials['private_key']),
+            'stripe' => !empty($credentials['secret_key']),
+            'paypal' => !empty($credentials['client_id']) && !empty($credentials['client_secret']),
+            default => false,
+        };
+
+        return $hasCredentials ? ['gateway' => $gateway, 'amount' => (float) ($codDeposit['custom_amount'] ?? 0) ?: $shippingCost] : null;
+    }
+
+    private function findByIdempotencyKey(int $companyId, string $key): ?Sell
+    {
+        return Sell::where('company_id', $companyId)->where('idempotency_key', $key)->first();
+    }
+
+    /** The same response the first submit got (payment link only while the payment is still open). */
+    private function replay(Sell $sell): array
+    {
+        $sell->loadMissing('items');
+        $subtotal = (float) $sell->items->sum('total_price');
+        $discount = (float) $sell->discount;
+        $shipping = (float) $sell->shipping_cost;
+        $open = $sell->payment_status === 'pending_payment' && $sell->status !== 'Cancelled';
+        $depositOnly = $open && (float) $sell->shipping_deposit_amount > 0;
+
+        return [
+            'sell' => $sell,
+            'payment_url' => $open ? $sell->payment_url : null,
+            'deposit_only' => $depositOnly,
+            'deposit_amount' => $depositOnly ? (float) $sell->shipping_deposit_amount : null,
+            'subtotal' => $subtotal,
+            'discount' => $discount,
+            'shipping_cost' => $shipping,
+            'cod_fee' => max(0, round((float) $sell->amount - max(0, $subtotal - $discount) - $shipping, 2)),
+            'gateway_type' => $sell->method,
+            'replayed' => true,
+        ];
+    }
+
+    private function isUniqueViolation(QueryException $e): bool
+    {
+        return $e instanceof UniqueConstraintViolationException || (int) ($e->errorInfo[1] ?? 0) === 1062;
+    }
     /** Start a gateway payment and return its redirect URL (callback URLs per gateway as before). */
     private function initGateway(string $gateway, int $companyId, array $params, string $callbackBase, string $tranId): string
     {
@@ -470,11 +500,28 @@ class StorefrontCheckoutService
         return (new PayPalService($companyId))->initPayment($params);
     }
 
-    /** Undo a sell that could not be completed (stock back to its locations, rows removed). */
-    private function discard(Sell $sell, int $companyId, LocationStockService $locStock): void
+    /**
+     * Undo an order whose payment could not be started: stock back to where it came from, coupon use reverted,
+     * rows removed (idempotency key freed so the buyer can retry). Order row locked so this runs once.
+     */
+    private function discard(Sell $sell): void
     {
-        $locStock->reverseSale($companyId, $sell->id);
-        $sell->items()->delete();
-        $sell->delete();
+        DB::transaction(function () use ($sell) {
+            $locked = Sell::whereKey($sell->id)->lockForUpdate()->first();
+            if (!$locked) {
+                return;
+            }
+            if ($locked->stock_deducted) {
+                $this->reservations->lockProducts((int) $locked->company_id, $locked->items()->pluck('product_id')->all());
+                app(SellService::class)->restoreStock($locked);
+            }
+            foreach (CouponUsage::where('sell_id', $locked->id)->get() as $usage) {
+                Coupon::whereKey($usage->coupon_id)->where('times_used', '>', 0)->decrement('times_used');
+                $usage->delete();
+            }
+            $locked->update(['stock_deducted' => false, 'idempotency_key' => null]);
+            $locked->items()->delete();
+            $locked->delete();
+        }, 3);
     }
 }

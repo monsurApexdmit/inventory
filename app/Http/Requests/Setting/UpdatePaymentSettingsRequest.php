@@ -31,6 +31,8 @@ class UpdatePaymentSettingsRequest extends FormRequest
             'cod_limit' => ['sometimes', 'numeric', 'min:0'],
             'cod_fee' => ['sometimes', 'numeric', 'min:0'],
             'cod_phone_verify' => ['sometimes', 'in:new,always,never'],
+            // Minutes an unpaid online-gateway order holds its stock before it is cancelled and released
+            'payment_hold_minutes' => ['sometimes', 'integer', 'min:5', 'max:1440'],
         ];
         foreach (array_keys(self::METHODS) as $slug) {
             $rules["methods.$slug"] = ['sometimes', 'array'];

@@ -562,7 +562,7 @@ class SellService
     /**
      * Update sell status
      */
-    public function updateStatus(int $id, int $companyId, string $status): SellDTO
+    public function updateStatus(int $id, int $companyId, string $status, ?string $reason = null): SellDTO
     {
         $sell = $this->repository->findByIdAndCompany($id, $companyId);
         if (!$sell) {
@@ -595,18 +595,9 @@ class SellService
                 throw new HttpException(422, 'A delivered order cannot be cancelled. Use a return instead.');
             }
             \App\Support\Sensitive::require('void', 'You do not have permission to void sales');
-            DB::transaction(function () use ($sell, $id) {
-                // Put the stock back and stop chasing money for an order that will not happen
-                if ($sell->stock_deducted) {
-                    $this->restoreStock($sell);
-                }
-                $this->repository->update($id, [
-                    'status' => 'Cancelled',
-                    'stock_deducted' => false,
-                    'due_amount' => 0,
-                    'fulfillment_status' => 'unfulfilled',
-                ]);
-            });
+            // Put the stock back once (order row locked, so a double click or retry cannot restore it twice)
+            // and stop chasing money for an order that will not happen
+            app(OrderLifecycleService::class)->cancel($id, $reason ?? 'Cancelled by staff', [], false);
         } elseif ($status === 'Delivered' && $oldStatus !== 'Delivered') {
             DB::transaction(function () use ($sell, $id, $companyId) {
                 // Close out live shipments through the shipment service so tracking history and COD collection stay in sync
@@ -720,12 +711,20 @@ class SellService
             throw new HttpException(422, 'This order has customer returns and cannot be deleted.');
         }
 
-        // Restore stock if it was deducted
-        if ($sell->stock_deducted) {
-            $this->restoreStock($sell);
-        }
-
-        $this->repository->delete($id);
+        DB::transaction(function () use ($id) {
+            // Lock the order so a concurrent cancel/delete cannot restore the same stock twice
+            $locked = Sell::whereKey($id)->lockForUpdate()->first();
+            if (!$locked) {
+                return;
+            }
+            if ($locked->stock_deducted) {
+                app(\App\Services\Inventory\StockReservationService::class)
+                    ->lockProducts((int) $locked->company_id, $locked->items()->pluck('product_id')->all());
+                $this->restoreStock($locked);
+                $locked->update(['stock_deducted' => false]);
+            }
+            $this->repository->delete($id);
+        }, 3);
     }
 
     /**
@@ -1080,9 +1079,9 @@ class SellService
     }
 
     /**
-     * Restore stock when sell is deleted
+     * Put back the stock a sale took. Callers lock the order row and check/clear `stock_deducted` so it runs once.
      */
-    private function restoreStock(Sell $sell): void
+    public function restoreStock(Sell $sell): void
     {
         // Sales that took stock from a location give it back to that same location
         $reversed = app(\App\Services\Inventory\LocationStockService::class)->reverseSale((int) $sell->company_id, (int) $sell->id);

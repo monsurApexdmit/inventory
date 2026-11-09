@@ -190,6 +190,7 @@ class QuickOrderService
             'possible_duplicate' => $possibleDuplicate,
             'require_variant' => true,
             'campaign_link_name' => $linkName,
+            'idempotency_key' => $data['idempotencyKey'] ?? null,
         ]);
 
         RateLimiter::hit($phoneKey, 86400);

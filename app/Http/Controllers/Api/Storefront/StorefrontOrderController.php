@@ -106,7 +106,10 @@ class StorefrontOrderController extends Controller
             'pickup_location_id'       => 'nullable|integer',
             'transaction_id'           => 'nullable|string|max:100',
             'attribution'              => 'nullable|array',
+            'idempotency_key'          => 'nullable|string|max:100',
         ]);
+        // One order per checkout attempt: the client sends the same key on retries / double submits
+        $idempotencyKey = $request->header('Idempotency-Key') ?: $request->input('idempotency_key');
 
         // Order attribution (utm / click id / campaign link / referrer) — same rules as quick orders
         $attribution = $request->has('attribution')
@@ -128,6 +131,7 @@ class StorefrontOrderController extends Controller
                 'customer_name'      => $customer->name ?? ($request->input('shipping_address.name') ?: 'Guest Customer'),
                 'customer_email'     => $customer->email ?? $request->input('shipping_address.email'),
                 'attribution'        => $attribution,
+                'idempotency_key'    => is_string($idempotencyKey) ? $idempotencyKey : null,
                 'campaign_link_name' => !empty($attribution['campaign_link_id'])
                     ? \App\Models\CampaignLink::withTrashed()->whereKey($attribution['campaign_link_id'])->value('name') : null,
             ]);

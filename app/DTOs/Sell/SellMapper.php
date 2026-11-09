@@ -168,6 +168,8 @@ class SellMapper extends BaseMapper
             referrer: $model->referrer,
             isQuickOrder: (bool) $model->is_quick_order,
             possibleDuplicate: (bool) $model->possible_duplicate,
+            cancelReason: $model->cancel_reason,
+            stockHoldExpiresAt: $model->stock_hold_expires_at?->toIso8601String(),
         );
     }
 

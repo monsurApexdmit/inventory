@@ -21,10 +21,12 @@ return new class extends Migration
             $table->index('dorji_id');
         });
 
-        // How much of an assignment's dorji_charge has been paid out.
-        Schema::table('tailor_assignments', function (Blueprint $table) {
-            $table->decimal('paid_amount', 10, 2)->default(0)->after('dorji_charge');
-        });
+        // How much of an assignment's dorji_charge has been paid out (992001 may have added it already).
+        if (!Schema::hasColumn('tailor_assignments', 'paid_amount')) {
+            Schema::table('tailor_assignments', function (Blueprint $table) {
+                $table->decimal('paid_amount', 10, 2)->default(0)->after('dorji_charge');
+            });
+        }
 
         DB::table('tailor_payments')->where('notes', 'Advance payment')->update(['payment_type' => 'advance']);
         DB::table('tailor_payments')->whereNull('payment_type')->update(['payment_type' => 'payment']);

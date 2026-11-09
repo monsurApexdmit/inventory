@@ -275,7 +275,8 @@ class SellController extends Controller
         }
 
         try {
-            $dto = $this->sellService->updateStatus($id, $companyId, $request->validated()['status']);
+            $reason = trim((string) $request->input('reason', ''));
+            $dto = $this->sellService->updateStatus($id, $companyId, $request->validated()['status'], $reason !== '' ? mb_substr($reason, 0, 255) : null);
             return $this->success($dto->toArray(), 'Status updated successfully');
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             return $this->error($e->getMessage(), $e->getStatusCode());
