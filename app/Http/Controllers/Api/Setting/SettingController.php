@@ -114,7 +114,12 @@ class SettingController extends Controller
             'onlineStore' => ['sometimes', 'nullable', 'array'],
             'onlineStore.name' => ['nullable', 'string', 'max:255'],
             'onlineStore.slug' => ['nullable', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:[-.][a-z0-9]+)*$/'],
+            // Accent colour; empty = the theme's own accent
             'onlineStore.theme' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            // Storefront template (aura-shop src/templates + src/themes, admin lib/storeThemes.ts)
+            'onlineStore.themePreset' => ['nullable', 'string', 'in:' . implode(',', \App\Http\Controllers\Api\Storefront\StorefrontController::THEME_PRESETS)],
+            // Colours from the theme, or the brand colours in Company settings (default, as before themes)
+            'onlineStore.colorSource' => ['nullable', 'in:theme,brand'],
             'onlineStore.published' => ['nullable', 'boolean'],
             'onlineStore.apiUrl' => $url,
             'onlineStore.companyId' => ['nullable', 'string', 'max:50'],

@@ -19,6 +19,9 @@ use Illuminate\Http\Request;
 
 class StorefrontController extends Controller
 {
+    /** Storefront templates the admin can pick (onlineStore.themePreset): layouts + design tokens. The first is the default. */
+    public const THEME_PRESETS = ['editorial', 'market', 'luxe', 'single', 'fresh'];
+
     // GET /api/store/products?company_id=11&search=&category_id=&limit=20&page=1
     public function products(Request $request): JsonResponse
     {
@@ -493,6 +496,8 @@ class StorefrontController extends Controller
                 'name' => $str($o['name'] ?? '') ?: $str($business['businessName'] ?? ''),
                 'slug' => $str($o['slug'] ?? ''),
                 'theme' => $str($o['theme'] ?? ''),
+                'themePreset' => in_array($o['themePreset'] ?? null, self::THEME_PRESETS, true) ? $o['themePreset'] : self::THEME_PRESETS[0],
+                'colorSource' => ($o['colorSource'] ?? null) === 'theme' ? 'theme' : 'brand',
                 'published' => (bool) ($o['published'] ?? true),
                 'facebookPixelId' => $str($o['facebookPixelId'] ?? ''),
                 'tiktokPixelId' => $str($o['tiktokPixelId'] ?? ''),
