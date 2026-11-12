@@ -114,6 +114,7 @@ Route::prefix('store')->middleware('resolve_company')->group(function () {
     Route::get('/settings/homepage-hero', [StorefrontController::class, 'homepageHero']);
     Route::get('/settings/promo-banner',  [StorefrontController::class, 'promoBanner']);
     Route::get('/settings/homepage-sections', [StorefrontController::class, 'homepageSections']);
+    Route::get('/settings/template-content', [StorefrontController::class, 'templateContent']);
     Route::get('/stats',              [StorefrontController::class, 'stats']);
 
     // Public order tracking (no auth)

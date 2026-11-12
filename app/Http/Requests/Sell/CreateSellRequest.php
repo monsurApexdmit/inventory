@@ -61,6 +61,7 @@ class CreateSellRequest extends FormRequest
             'items.*.unitPrice' => 'required|numeric|min:0',
             'items.*.price' => 'nullable|numeric|min:0', // alias for unitPrice
             'items.*.discount' => 'nullable|numeric|min:0', // per-line discount amount
+            'items.*.priceOverride' => 'nullable|boolean', // staff typed this price at the counter: keep it
         ];
     }
 

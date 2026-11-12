@@ -498,6 +498,8 @@ class StorefrontController extends Controller
                 'theme' => $str($o['theme'] ?? ''),
                 'themePreset' => in_array($o['themePreset'] ?? null, self::THEME_PRESETS, true) ? $o['themePreset'] : self::THEME_PRESETS[0],
                 'colorSource' => ($o['colorSource'] ?? null) === 'theme' ? 'theme' : 'brand',
+                // Owner's default storefront language; shoppers can still switch
+                'language' => in_array($o['language'] ?? null, ['en', 'bn'], true) ? $o['language'] : 'en',
                 'published' => (bool) ($o['published'] ?? true),
                 'facebookPixelId' => $str($o['facebookPixelId'] ?? ''),
                 'tiktokPixelId' => $str($o['tiktokPixelId'] ?? ''),
@@ -732,6 +734,99 @@ class StorefrontController extends Controller
                 ],
                 'footer' => $footer === null ? null : [
                     'tagline' => $str($footer['tagline'] ?? ''),
+                ],
+            ],
+        ]);
+    }
+
+    // GET /api/store/settings/template-content?company_id=11
+    // Content blocks for the storefront templates (admin: Online store > Template content). Each block is
+    // null until saved once; the template then shows its own default. Templates use the blocks they have a place for.
+    public function templateContent(Request $request): JsonResponse
+    {
+        $companyId = $request->query('company_id');
+
+        if (!$companyId) {
+            return response()->json(['success' => false, 'message' => 'company_id is required'], 400);
+        }
+
+        $setting = Setting::where('company_id', $companyId)->first();
+        $c = data_get($setting?->business_settings, 'templateContent', []);
+        $c = is_array($c) ? $c : [];
+        $str = fn ($v) => is_string($v) ? trim($v) : '';
+        $list = fn ($v) => collect(is_array($v) ? $v : [])->filter(fn ($x) => is_array($x))->values();
+        $block = fn (string $key) => is_array($c[$key] ?? null) ? $c[$key] : null;
+        $on = fn (array $b) => (bool) ($b['enabled'] ?? true);
+
+        $announcement = $block('announcement');
+        $headerNote = $block('headerNote');
+        $promoTiles = $block('promoTiles');
+        $stats = $block('stats');
+        $testimonials = $block('testimonials');
+        $newsletter = $block('newsletter');
+        $cta = $block('cta');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'announcement' => $announcement === null ? null : [
+                    'enabled' => $on($announcement),
+                    'text' => $str($announcement['text'] ?? ''),
+                    'code' => $str($announcement['code'] ?? ''),
+                    'link' => $str($announcement['link'] ?? ''),
+                ],
+                'headerNote' => $headerNote === null ? null : [
+                    'enabled' => $on($headerNote),
+                    'label' => $str($headerNote['label'] ?? ''),
+                    'text' => $str($headerNote['text'] ?? ''),
+                ],
+                'promoTiles' => $promoTiles === null ? null : [
+                    'enabled' => $on($promoTiles),
+                    'items' => $list($promoTiles['items'] ?? [])
+                        ->filter(fn ($i) => $str($i['title'] ?? '') !== '')
+                        ->map(fn ($i, $k) => [
+                            'id' => $str($i['id'] ?? '') ?: 'tile-' . ($k + 1),
+                            'tag' => $str($i['tag'] ?? ''),
+                            'title' => $str($i['title'] ?? ''),
+                            'text' => $str($i['text'] ?? ''),
+                            'cta' => $str($i['cta'] ?? ''),
+                            'link' => $str($i['link'] ?? '') ?: '/shop',
+                            'imagePath' => $str($i['imagePath'] ?? '') ?: null,
+                        ])->values(),
+                ],
+                'stats' => $stats === null ? null : [
+                    'enabled' => $on($stats),
+                    'items' => $list($stats['items'] ?? [])
+                        ->filter(fn ($i) => $str($i['value'] ?? '') !== '')
+                        ->map(fn ($i) => ['value' => $str($i['value'] ?? ''), 'label' => $str($i['label'] ?? '')])->values(),
+                ],
+                'testimonials' => $testimonials === null ? null : [
+                    'enabled' => $on($testimonials),
+                    'title' => $str($testimonials['title'] ?? ''),
+                    'items' => $list($testimonials['items'] ?? [])
+                        ->filter(fn ($i) => $str($i['text'] ?? '') !== '')
+                        ->map(fn ($i) => [
+                            'name' => $str($i['name'] ?? ''),
+                            'text' => $str($i['text'] ?? ''),
+                            'rating' => max(1, min(5, (int) ($i['rating'] ?? 5))),
+                            'note' => $str($i['note'] ?? ''),
+                        ])->values(),
+                ],
+                'newsletter' => $newsletter === null ? null : [
+                    'enabled' => $on($newsletter),
+                    'title' => $str($newsletter['title'] ?? ''),
+                    'text' => $str($newsletter['text'] ?? ''),
+                ],
+                'cta' => $cta === null ? null : [
+                    'enabled' => $on($cta),
+                    'tag' => $str($cta['tag'] ?? ''),
+                    'title' => $str($cta['title'] ?? ''),
+                    'text' => $str($cta['text'] ?? ''),
+                    'cta' => $str($cta['cta'] ?? ''),
+                    'link' => $str($cta['link'] ?? '') ?: '/shop',
+                    'cta2' => $str($cta['cta2'] ?? ''),
+                    'link2' => $str($cta['link2'] ?? ''),
+                    'imagePath' => $str($cta['imagePath'] ?? '') ?: null,
                 ],
             ],
         ]);

@@ -431,11 +431,12 @@ class SellService
     /**
      * Server-side line pricing. Sets wholesale when the quantity qualifies and rejects a client
      * price below every currently valid price (e.g. an offer that has since expired).
-     * Custom lines without a product are left alone.
+     * Custom lines without a product, and lines whose price staff set by hand (priceOverride,
+     * only reachable through the staff POST /sells route), are left alone.
      */
     private function applyServerPrice(int $companyId, array &$item): void
     {
-        if (empty($item['productId'])) {
+        if (empty($item['productId']) || !empty($item['priceOverride'])) {
             return;
         }
         $product = Product::where('company_id', $companyId)->find((int) $item['productId']);
