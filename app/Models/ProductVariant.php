@@ -30,6 +30,9 @@ class ProductVariant extends Model
         'tracking_type',
         'sku',
         'barcode',
+        // Set by ProductService right after create; without these the update was silently dropped
+        'barcode_code',
+        'barcode_format',
     ];
 
     protected $casts = [
