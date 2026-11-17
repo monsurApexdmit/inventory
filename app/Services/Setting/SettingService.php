@@ -189,7 +189,7 @@ class SettingService
             'general' => $setting->general_settings ?? [],
             'tax' => $setting->tax_settings ?? [],
             'shipping' => $setting->shipping_settings ?? [],
-            'payment' => array_merge(['cod_limit' => 5000], $setting->payment_settings ?? []),
+            'payment' => array_merge(['cod_limit' => 5000, 'payment_hold_minutes' => 15], $setting->payment_settings ?? []),
             'business' => $setting->business_settings ?? [],
             'regional' => $setting->regional_settings ?? [],
             'notifications' => $setting->notification_settings ?? [],

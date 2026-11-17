@@ -223,6 +223,20 @@ class NotificationService
         $this->broadcastCreatedNotification($notification);
     }
 
+    /** A gateway payment arrived after the order's stock hold was released and the stock is gone: staff must refund. */
+    public function notifyPaidOrderNeedsRefund(int $companyId, string $invoiceNo): void
+    {
+        $notification = $this->createGated(
+            $companyId,
+            self::TYPE_ORDER_STATUS_CHANGED,
+            'Refund needed',
+            "Order {$invoiceNo} was paid after its payment window closed and the stock is no longer available. Refund the customer.",
+            ['invoiceNo' => $invoiceNo, 'oldStatus' => 'Cancelled', 'newStatus' => 'Cancelled', 'refundNeeded' => true]
+        );
+
+        $this->broadcastCreatedNotification($notification);
+    }
+
     public function notifyLowStock(int $companyId, string $productName, int $currentQty, int $threshold): void
     {
         $notification = $this->createGated(

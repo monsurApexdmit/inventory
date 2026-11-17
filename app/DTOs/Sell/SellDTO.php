@@ -84,6 +84,8 @@ class SellDTO extends BaseDTO
         public ?string $referrer = null,
         public bool $isQuickOrder = false,
         public bool $possibleDuplicate = false,
+        public ?string $cancelReason = null,
+        public ?string $stockHoldExpiresAt = null,
     ) {}
 
     public function toArray(): array
@@ -164,6 +166,8 @@ class SellDTO extends BaseDTO
             'referrer' => $this->referrer,
             'isQuickOrder' => $this->isQuickOrder,
             'possibleDuplicate' => $this->possibleDuplicate,
+            'cancelReason' => $this->cancelReason,
+            'stockHoldExpiresAt' => $this->stockHoldExpiresAt,
         ];
     }
 }

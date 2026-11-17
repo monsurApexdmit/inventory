@@ -80,9 +80,14 @@ class Sell extends Model
         'referrer',
         'is_quick_order',
         'possible_duplicate',
+        'idempotency_key',
+        'stock_hold_expires_at',
+        'cancel_reason',
+        'payment_url',
     ];
 
     protected $casts = [
+        'stock_hold_expires_at' => 'datetime',
         'amount' => 'float',
         'paid_amount' => 'float',
         'due_amount' => 'float',

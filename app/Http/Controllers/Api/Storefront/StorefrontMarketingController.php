@@ -65,7 +65,10 @@ class StorefrontMarketingController extends Controller
             return response()->json(['success' => false, 'message' => 'Store could not be resolved'], 400);
         }
         try {
-            $data = $this->quickOrders->place($companyId, $request->validated(), $request->getHost());
+            $input = $request->validated();
+            $key = $request->header('Idempotency-Key') ?: $request->input('idempotencyKey');
+            $input['idempotencyKey'] = is_string($key) && $key !== '' ? mb_substr($key, 0, 100) : null;
+            $data = $this->quickOrders->place($companyId, $input, $request->getHost());
         } catch (StorefrontOrderException $e) {
             return $e->toResponse(self::ERROR_KEYS);
         }
