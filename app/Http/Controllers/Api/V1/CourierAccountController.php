@@ -3,88 +3,83 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Shipping\StoreCourierAccountRequest;
+use App\Http\Requests\Shipping\UpdateCourierAccountRequest;
 use App\Http\Traits\ApiResponse;
-use App\Models\CourierAccount;
+use App\Services\Courier\CourierAccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
+/** Shipping methods → Courier integrations (contract: COURIER_API_CONTRACT.md §2). */
 class CourierAccountController extends Controller
 {
     use ApiResponse;
 
+    public function __construct(private readonly CourierAccountService $service)
+    {
+    }
+
+    private function companyId(Request $request): int
+    {
+        return (int) $request->attributes->get('auth_company_id');
+    }
+
     public function index(Request $request): JsonResponse
     {
-        $companyId = (int) $request->attributes->get('auth_company_id');
-
-        return $this->success(
-            CourierAccount::where('company_id', $companyId)->orderBy('provider')->get()
-                ->map(fn (CourierAccount $c) => $this->format($c))->all()
-        );
+        return $this->success($this->service->list($this->companyId($request)));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreCourierAccountRequest $request): JsonResponse
     {
-        $companyId = (int) $request->attributes->get('auth_company_id');
-
-        $data = $request->validate([
-            'provider'  => ['required', 'string', 'max:100', Rule::unique('courier_accounts')->where('company_id', $companyId)],
-            'accountId' => 'nullable|string|max:150',
-            'apiKey'    => 'nullable|string|max:500',
-            'isActive'  => 'boolean',
-        ]);
-
-        $c = CourierAccount::create([
-            'company_id' => $companyId,
-            'provider'   => $data['provider'],
-            'account_id' => $data['accountId'] ?? null,
-            'api_key'    => $data['apiKey'] ?? null,
-            'is_active'  => $data['isActive'] ?? true,
-        ]);
-
-        return $this->success($this->format($c), 'Courier account added', 201);
+        return $this->success($this->service->create($this->companyId($request), $request->validated()), 'Courier account added', 201);
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateCourierAccountRequest $request, int $id): JsonResponse
     {
-        $companyId = (int) $request->attributes->get('auth_company_id');
-        $c = CourierAccount::where('company_id', $companyId)->findOrFail($id);
-
-        $data = $request->validate([
-            'accountId' => 'nullable|string|max:150',
-            'apiKey'    => 'nullable|string|max:500',
-            'isActive'  => 'boolean',
-        ]);
-
-        $patch = [];
-        if (array_key_exists('accountId', $data)) $patch['account_id'] = $data['accountId'];
-        // Blank key means "keep the stored key".
-        if (!empty($data['apiKey'])) $patch['api_key'] = $data['apiKey'];
-        if (array_key_exists('isActive', $data)) $patch['is_active'] = $data['isActive'];
-        $c->update($patch);
-
-        return $this->success($this->format($c->fresh()), 'Courier account updated');
+        return $this->success($this->service->update($id, $this->companyId($request), $request->validated()), 'Courier account updated');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $companyId = (int) $request->attributes->get('auth_company_id');
-        CourierAccount::where('company_id', $companyId)->findOrFail($id)->delete();
+        $this->service->delete($id, $this->companyId($request));
 
         return $this->success(null, 'Courier account removed');
     }
 
-    private function format(CourierAccount $c): array
+    public function test(Request $request, int $id): JsonResponse
     {
-        $key = (string) ($c->api_key ?? '');
+        $result = $this->service->test($id, $this->companyId($request));
 
-        return [
-            'id'        => $c->id,
-            'provider'  => $c->provider,
-            'accountId' => $c->account_id,
-            'apiKey'    => $key === '' ? null : str_repeat('•', 8) . substr($key, -4),
-            'hasKey'    => $key !== '',
-            'isActive'  => $c->is_active,
-        ];
+        return $this->success($result, $result['message']);
+    }
+
+    public function setDefault(Request $request, int $id): JsonResponse
+    {
+        return $this->success($this->service->setDefault($id, $this->companyId($request)), 'Default courier updated');
+    }
+
+    public function stores(Request $request, int $id): JsonResponse
+    {
+        return $this->success($this->service->stores($id, $this->companyId($request)));
+    }
+
+    public function locations(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => 'required|string|in:city,zone,area',
+            'parentId' => 'nullable|integer|min:1',
+        ]);
+
+        return $this->success($this->service->locations($id, $this->companyId($request), $data['type'], isset($data['parentId']) ? (int) $data['parentId'] : null));
+    }
+
+    public function webhook(Request $request, int $id): JsonResponse
+    {
+        return $this->success($this->service->webhookInfo($id, $this->companyId($request)));
+    }
+
+    public function rotateWebhook(Request $request, int $id): JsonResponse
+    {
+        return $this->success($this->service->webhookInfo($id, $this->companyId($request), true), 'Webhook token changed — update it in the courier panel');
     }
 }

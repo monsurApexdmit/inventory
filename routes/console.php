@@ -11,3 +11,5 @@ Artisan::command('inspire', function () {
 \Illuminate\Support\Facades\Schedule::command('notifications:daily-summary')->dailyAt('06:00');
 // Unpaid online-gateway orders give their stock back once the payment hold expires
 \Illuminate\Support\Facades\Schedule::command('orders:release-expired')->everyMinute()->withoutOverlapping();
+// Courier (Pathao / Steadfast) parcel status safety net; webhooks deliver most updates instantly
+\Illuminate\Support\Facades\Schedule::command('couriers:sync')->everyFifteenMinutes()->withoutOverlapping();

@@ -34,6 +34,27 @@ class OrderShipment extends Model
         'weight',
         'dimensions',
         'notes',
+        // Courier API booking (Pathao / Steadfast)
+        'courier_account_id',
+        'courier_provider',
+        'consignment_id',
+        'courier_state',
+        'courier_status',
+        'courier_status_at',
+        'courier_payload',
+        'tracking_url',
+        'delivery_fee',
+        'courier_cod_collected',
+        'courier_store_id',
+        'pathao_city_id',
+        'pathao_city_name',
+        'pathao_zone_id',
+        'pathao_zone_name',
+        'pathao_area_id',
+        'pathao_area_name',
+        'booked_at',
+        'last_synced_at',
+        'sync_error',
     ];
 
     protected $casts = [
@@ -47,6 +68,12 @@ class OrderShipment extends Model
         'cod_collected_at' => 'datetime',
         'pickup_date' => 'date:Y-m-d',
         'weight' => 'float',
+        'courier_status_at' => 'datetime',
+        'courier_payload' => 'array',
+        'delivery_fee' => 'float',
+        'courier_cod_collected' => 'float',
+        'booked_at' => 'datetime',
+        'last_synced_at' => 'datetime',
     ];
 
     /**
@@ -82,6 +109,17 @@ class OrderShipment extends Model
     public function sell(): BelongsTo
     {
         return $this->belongsTo(Sell::class);
+    }
+
+    public function courierAccount(): BelongsTo
+    {
+        return $this->belongsTo(CourierAccount::class);
+    }
+
+    /** Booked through a courier API (has a consignment at Pathao / Steadfast). */
+    public function isCourierBooked(): bool
+    {
+        return $this->courier_account_id !== null && !empty($this->consignment_id);
     }
 
     public function trackingHistory(): HasMany

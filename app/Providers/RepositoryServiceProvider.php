@@ -35,6 +35,7 @@ use App\Repositories\Contracts\ICustomerRepository;
 use App\Repositories\Contracts\ICustomerReturnRepository;
 use App\Repositories\Contracts\IShippingAddressRepository;
 use App\Repositories\Contracts\IOrderShipmentRepository;
+use App\Repositories\Contracts\ICourierAccountRepository;
 use App\Repositories\Contracts\IVendorRepository;
 use App\Repositories\Contracts\IVendorReturnRepository;
 use App\Repositories\Contracts\IExpenseRepository;
@@ -80,6 +81,7 @@ use App\Repositories\Eloquent\CustomerRepository;
 use App\Repositories\Eloquent\CustomerReturnRepository;
 use App\Repositories\Eloquent\ShippingAddressRepository;
 use App\Repositories\Eloquent\OrderShipmentRepository;
+use App\Repositories\Eloquent\CourierAccountRepository;
 use App\Repositories\Eloquent\VendorRepository;
 use App\Repositories\Eloquent\VendorReturnRepository;
 use App\Repositories\Eloquent\ExpenseRepository;
@@ -146,6 +148,7 @@ class RepositoryServiceProvider extends ServiceProvider
         // Phase 7 bindings
         $this->app->bind(IShippingAddressRepository::class, ShippingAddressRepository::class);
         $this->app->bind(IOrderShipmentRepository::class, OrderShipmentRepository::class);
+        $this->app->bind(ICourierAccountRepository::class, CourierAccountRepository::class);
 
         // Phase 8 bindings
         $this->app->bind(ISalaryPaymentRepository::class, SalaryPaymentRepository::class);

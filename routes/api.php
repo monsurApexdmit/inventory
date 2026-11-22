@@ -597,6 +597,9 @@ Route::prefix('sells')->middleware(JwtAuthMiddleware::class)->group(function () 
     Route::get('/weekly-orders',       [SellController::class, 'weeklyOrders'])->middleware('check_permission:Orders.read');
     Route::get('/monthly-revenue',     [SellController::class, 'monthlyRevenue'])->middleware('check_permission:Orders.read');
     Route::get('/invoice/{invoiceNo}', [SellController::class, 'getByInvoice'])->middleware('check_permission:Orders.read');
+    // Courier API booking (COURIER_API_CONTRACT.md §3)
+    Route::post('/courier/bulk',       [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'bulk'])->middleware('check_permission:Orders.write');
+    Route::post('/{id}/courier',       [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'book'])->whereNumber('id')->middleware('check_permission:Orders.write');
     Route::get('/{id}',                [SellController::class, 'show'])->middleware('check_permission:Orders.read');
     Route::put('/{id}',                [SellController::class, 'update'])->middleware('check_permission:Orders.write');
     Route::patch('/{id}/status',       [SellController::class, 'updateStatus'])->middleware('check_permission:Orders.write');
@@ -645,7 +648,27 @@ Route::prefix('courier-accounts')->middleware(JwtAuthMiddleware::class)->group(f
     Route::post('/',       [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'store'])->middleware('check_permission:Shipping Methods.write');
     Route::put('/{id}',    [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'update'])->middleware('check_permission:Shipping Methods.write');
     Route::delete('/{id}', [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'destroy'])->middleware('check_permission:Shipping Methods.delete');
+    Route::post('/{id}/test',           [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'test'])->whereNumber('id')->middleware('check_permission:Shipping Methods.write');
+    Route::post('/{id}/default',        [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'setDefault'])->whereNumber('id')->middleware('check_permission:Shipping Methods.write');
+    Route::get('/{id}/stores',          [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'stores'])->whereNumber('id')->middleware('check_permission:Shipping Methods.read');
+    Route::get('/{id}/locations',       [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'locations'])->whereNumber('id')->middleware('check_permission:Shipping Methods.read');
+    Route::get('/{id}/webhook',         [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'webhook'])->whereNumber('id')->middleware('check_permission:Shipping Methods.read');
+    Route::post('/{id}/webhook/rotate', [\App\Http\Controllers\Api\V1\CourierAccountController::class, 'rotateWebhook'])->whereNumber('id')->middleware('check_permission:Shipping Methods.write');
 });
+
+// Courier booking helpers (no Shipping Methods permission needed) — COURIER_API_CONTRACT.md §3
+Route::prefix('courier')->middleware(JwtAuthMiddleware::class)->group(function () {
+    Route::get('/accounts',                [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'accounts'])->middleware('check_permission:Orders.read');
+    Route::get('/accounts/{id}/locations', [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'locations'])->whereNumber('id')->middleware('check_permission:Orders.read');
+    Route::get('/accounts/{id}/stores',    [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'stores'])->whereNumber('id')->middleware('check_permission:Orders.read');
+    Route::get('/quote',                   [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'quote'])->middleware('check_permission:Orders.write');
+    Route::get('/customer-risk',           [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'customerRisk'])->middleware('check_permission:Orders.read');
+});
+
+// Courier status callbacks (public; token in the URL, Steadfast also sends it as Bearer)
+Route::post('/webhooks/courier/{provider}/{token}', [\App\Http\Controllers\Api\V1\Shipping\CourierWebhookController::class, 'handle'])
+    ->where(['provider' => '[a-z]+', 'token' => '[A-Za-z0-9]{20,64}'])
+    ->middleware('throttle:240,1');
 
 Route::prefix('pages')->middleware(JwtAuthMiddleware::class)->group(function () {
     Route::get('/',        [ContentPageController::class, 'index'])->middleware('check_permission:Pages.read');
@@ -672,6 +695,9 @@ Route::prefix('shipments')->middleware(JwtAuthMiddleware::class)->group(function
     Route::get('/{id}',           [OrderShipmentController::class, 'show'])->middleware('check_permission:Shipments.read');
     Route::patch('/{id}/status',  [OrderShipmentController::class, 'updateStatus'])->middleware('check_permission:Shipments.write');
     Route::post('/{id}/tracking', [OrderShipmentController::class, 'addTracking'])->middleware('check_permission:Shipments.write');
+    Route::post('/{id}/courier/sync',   [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'sync'])->whereNumber('id')->middleware('check_permission:Shipments.write');
+    Route::post('/{id}/courier/cancel', [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'cancel'])->whereNumber('id')->middleware('check_permission:Shipments.write');
+    Route::get('/{id}/courier/tracking', [\App\Http\Controllers\Api\V1\Shipping\CourierController::class, 'tracking'])->whereNumber('id')->middleware('check_permission:Shipments.read');
 });
 
 // Public tracking endpoint (no auth)
