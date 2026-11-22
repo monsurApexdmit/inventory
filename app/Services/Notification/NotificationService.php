@@ -223,6 +223,25 @@ class NotificationService
         $this->broadcastCreatedNotification($notification);
     }
 
+    /** A courier (Pathao / Steadfast) reported a final parcel status: delivered, returned or cancelled. */
+    public function notifyCourierUpdate(int $companyId, string $invoiceNo, string $courier, string $state, ?string $trackingCode = null): void
+    {
+        [$title, $verb] = match ($state) {
+            'delivered' => ['Order delivered', 'was delivered'],
+            'partial_delivered' => ['Order partly delivered', 'was partly delivered'],
+            'returned' => ['Parcel returned', 'is being returned to you'],
+            'cancelled' => ['Courier booking cancelled', 'was cancelled at the courier'],
+            default => ['Courier update', 'changed status'],
+        };
+        $this->safely(fn () => $this->createGated(
+            $companyId,
+            self::TYPE_ORDER_STATUS_CHANGED,
+            $title,
+            "Order {$invoiceNo} {$verb} ({$courier}" . ($trackingCode ? " · {$trackingCode}" : '') . ')',
+            ['invoiceNo' => $invoiceNo, 'courier' => $courier, 'courierStatus' => $state, 'trackingCode' => $trackingCode]
+        ));
+    }
+
     /** A gateway payment arrived after the order's stock hold was released and the stock is gone: staff must refund. */
     public function notifyPaidOrderNeedsRefund(int $companyId, string $invoiceNo): void
     {

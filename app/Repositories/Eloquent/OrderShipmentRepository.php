@@ -48,6 +48,18 @@ class OrderShipmentRepository implements IOrderShipmentRepository
             $query->where('carrier', $filters['carrier']);
         }
 
+        // Courier API bookings: courierProvider=pathao|steadfast|manual, courierStatus=<state>[,<state>], courierAccountId
+        if (!empty($filters['courierProvider']) && is_string($filters['courierProvider'])) {
+            $p = strtolower($filters['courierProvider']);
+            $p === 'manual' ? $query->whereNull('courier_account_id') : $query->where('courier_provider', $p);
+        }
+        if (!empty($filters['courierStatus']) && is_string($filters['courierStatus'])) {
+            $query->whereIn('courier_state', array_filter(array_map('trim', explode(',', $filters['courierStatus']))));
+        }
+        if (!empty($filters['courierAccountId'])) {
+            $query->where('courier_account_id', (int) $filters['courierAccountId']);
+        }
+
         if (!empty($filters['start_date'])) {
             $query->whereDate('created_at', '>=', $filters['start_date']);
         }

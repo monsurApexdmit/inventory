@@ -38,6 +38,7 @@ class OrderShipmentDTO extends BaseDTO
         public readonly string $updatedAt,
         public readonly ?array $trackingHistory = null,
         public readonly ?array $sell = null,
+        public readonly ?array $courierBooking = null,
     ) {}
 
     public function toArray(): array
@@ -71,6 +72,7 @@ class OrderShipmentDTO extends BaseDTO
             'updatedAt' => $this->updatedAt,
             'trackingHistory' => $this->trackingHistory,
             'sell' => $this->sell,
+            'courierBooking' => $this->courierBooking,
         ];
     }
 }

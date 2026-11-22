@@ -78,6 +78,7 @@ class OrderShipmentMapper extends BaseMapper
             updatedAt: $this->formatTimestamp($model->updated_at),
             trackingHistory: $model->relationLoaded('trackingHistory') ? $this->formatTrackingHistory($model->trackingHistory) : null,
             sell: $sell,
+            courierBooking: CourierBookingMapper::toArray($model),
         );
     }
 

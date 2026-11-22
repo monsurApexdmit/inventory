@@ -26,9 +26,7 @@ class SellMapper extends BaseMapper
         // Map shipments if loaded
         $shipments = null;
         if ($model->relationLoaded('shipments') && $model->shipments->count() > 0) {
-            $shipmentsArray = $model->shipments->toArray();
-            $shipments = array_map(function ($shipment) {
-                $shipment = is_array($shipment) ? (object) $shipment : $shipment;
+            $shipments = $model->shipments->map(function (\App\Models\OrderShipment $shipment) {
                 return [
                     'id' => $shipment->id,
                     'trackingNumber' => $shipment->tracking_number,
@@ -41,8 +39,9 @@ class SellMapper extends BaseMapper
                     'codAmount' => isset($shipment->cod_amount) ? (float) $shipment->cod_amount : null,
                     'zone' => $shipment->zone ?? null,
                     'courier' => $shipment->courier ?? null,
+                    'courierBooking' => \App\DTOs\Shipping\CourierBookingMapper::toArray($shipment),
                 ];
-            }, $shipmentsArray);
+            })->values()->all();
         }
 
         // Map customer if loaded

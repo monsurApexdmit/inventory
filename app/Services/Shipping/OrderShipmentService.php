@@ -176,7 +176,7 @@ class OrderShipmentService
     }
 
     /** Record the COD cash against the order (once) and flag the shipment as collected. */
-    private function collectCod(OrderShipment $shipment, \App\Models\Sell $sell, string $method = 'COD', ?string $notes = null): void
+    private function collectCod(OrderShipment $shipment, \App\Models\Sell $sell, string $method = 'COD', ?string $notes = null, ?float $collected = null): void
     {
         if ($shipment->cod_collected) {
             return;
@@ -185,8 +185,9 @@ class OrderShipmentService
         $due = (float) $sell->due_amount;
         $cod = (float) $shipment->cod_amount;
         $amount = 0.0;
-        if ($due > 0) {
-            $amount = $cod > 0 ? min($cod, $due) : $due;
+        // $collected = what the courier reports it collected (partial delivery may collect less)
+        if ($due > 0 && ($collected === null || $collected > 0)) {
+            $amount = $collected !== null ? min($collected, $due) : ($cod > 0 ? min($cod, $due) : $due);
             $sell->payments()->create([
                 'company_id'     => $sell->company_id,
                 'direction'      => 'in',
@@ -275,7 +276,7 @@ class OrderShipmentService
      * Push a shipment status change onto its order: fulfillment stage, delivered status and
      * COD collection. Must run inside a transaction.
      */
-    private function syncSellWithShipment(OrderShipment $shipment, string $status): void
+    private function syncSellWithShipment(OrderShipment $shipment, string $status, ?float $codCollected = null, bool $collectCod = true): void
     {
         $sell = $shipment->sell()->lockForUpdate()->first();
         if (!$sell || $sell->status === 'Cancelled') {
@@ -296,9 +297,44 @@ class OrderShipmentService
         }
 
         $isCod = strcasecmp((string) $sell->method, 'COD') === 0 || (float) $shipment->cod_amount > 0;
-        if ($isCod) {
-            $this->collectCod($shipment, $sell);
+        if ($isCod && $collectCod) {
+            $this->collectCod($shipment, $sell, 'COD', $codCollected !== null ? 'COD collected by ' . ($shipment->carrier ?: 'courier') : null, $codCollected);
         }
+    }
+
+    /**
+     * Apply a status reported by a courier API (sync / webhook). Unlike updateStatus() this skips the manual
+     * transition rules (the courier is the source of truth) but never moves the shipment backwards, then runs
+     * the same order effects (fulfillment stage, Delivered + COD payment). Courier columns must already be
+     * set on $shipment by the caller. Returns true when the shipment status changed.
+     */
+    public function applyCourierStatus(OrderShipment $shipment, ?string $newStatus, string $description, ?float $codCollected = null, ?string $location = null, bool $collectCod = true): bool
+    {
+        return DB::transaction(function () use ($shipment, $newStatus, $description, $codCollected, $location, $collectCod) {
+            $from = (string) $shipment->status;
+            $changed = $newStatus !== null && $newStatus !== $from && $shipment->isOpen()
+                && (\App\Services\Courier\CourierStatusMapper::shipmentRank($newStatus) > \App\Services\Courier\CourierStatusMapper::shipmentRank($from));
+            if ($changed) {
+                $shipment->status = $newStatus;
+                if (in_array($newStatus, ['picked_up', 'in_transit', 'out_for_delivery'], true) && !$shipment->shipped_at) {
+                    $shipment->shipped_at = now();
+                }
+            }
+            if ($shipment->isDirty()) {
+                $shipment->save();
+            }
+            ShipmentTrackingHistory::create([
+                'shipment_id' => $shipment->id,
+                'status' => $changed ? $newStatus : $from,
+                'location' => $location,
+                'description' => mb_substr($description, 0, 250),
+                'event_time' => now(),
+            ]);
+            if ($changed && $shipment->sell_id) {
+                $this->syncSellWithShipment($shipment, $newStatus, $codCollected, $collectCod);
+            }
+            return $changed;
+        });
     }
 
     public function addTrackingEvent(int $id, int $companyId, array $data): OrderShipmentDTO
@@ -353,7 +389,7 @@ class OrderShipmentService
             'pending' => 'processing',
             'picked_up', 'in_transit', 'out_for_delivery' => 'shipped',
             'delivered' => 'delivered',
-            'failed', 'returned' => 'packed',
+            'failed', 'returned', 'cancelled' => 'packed',
             default => 'processing',
         };
     }
